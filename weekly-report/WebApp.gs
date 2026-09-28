@@ -13,20 +13,57 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+/* ---------- 캐시 ----------
+ * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 60초간 캐시한다 (팀 전체가 공유).
+ * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
+ */
+
+const CACHE_TTL = 60;
+const CK = {
+  members: ctx => 'members:' + ctx.thisWeek.key,
+  budget: 'budget',
+  board: 'board',
+  rules: 'rules',
+  owner: 'owner',
+};
+
+function cached_(key, build, ttl) {
+  const cache = CacheService.getDocumentCache();
+  try {
+    const hit = cache.get(key);
+    if (hit) return JSON.parse(hit);
+  } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
+  const value = build();
+  putCache_(key, value, ttl);
+  return value;
+}
+
+function putCache_(key, value, ttl) {
+  try {
+    CacheService.getDocumentCache().put(key, JSON.stringify(value), ttl || CACHE_TTL);
+  } catch (e) { /* 100KB 초과 등 캐시할 수 없으면 건너뛴다 */ }
+}
+
 /* ---------- 조회 ---------- */
 
 /** 화면 전체 데이터. google.script.run 은 Date를 넘길 수 없어 문자열로 변환한다. */
 function apiBootstrap() {
   const ctx = getContext();
   const ss = ctx.ss;
-  const me = currentMember_(ctx.members);
-  const report = ss.getSheetByName(SHEET.REPORT);
-  const comments = report ? readLeaderComments_(report, ctx.thisWeek.key) : {};
+  return Object.assign(baseData_(ctx), {
+    members: cached_(CK.members(ctx), () => readMembers_(ctx)),
+    budget: cached_(CK.budget, () => readBudget_(ss)),
+    board: cached_(CK.board, () => readBoard_(ss)),
+    rules: cached_(CK.rules, () => readRules_(ss)),
+  });
+}
 
+/** 매번 계산해도 가벼운 부분 (접속자, 주차) */
+function baseData_(ctx) {
   return {
     team: ctx.cfg[CFG.TEAM] || '',
-    sheetUrl: ss.getUrl(),
-    me: me,
+    sheetUrl: ctx.ss.getUrl(),
+    me: currentMember_(ctx.members),
     week: {
       key: ctx.thisWeek.key,
       thisLabel: ctx.thisWeek.label,
@@ -37,23 +74,50 @@ function apiBootstrap() {
       thisStart: ymd(ctx.thisWeek.start),
       thisEnd: ymd(ctx.thisWeek.end),
     },
-    members: ctx.members.filter(m => m.write).map(m => {
-      const input = readInput(ss, m.name);
-      return {
-        name: m.name,
-        hasSheet: input.exists,
-        done: input.done,
-        note: input.note,
-        thisWeek: input.thisWeek.map(toClientItem_),
-        nextWeek: input.nextWeek.map(toClientItem_),
-        comment: String(comments[m.name] || ''),
-      };
-    }),
-    budget: readBudget_(ss),
-    board: readBoard_(ss),
-    rules: readRules_(ss),
     ruleCategories: RULES.CATEGORIES,
   };
+}
+
+function readMembers_(ctx) {
+  const report = ctx.ss.getSheetByName(SHEET.REPORT);
+  const comments = report ? readLeaderComments_(report, ctx.thisWeek.key) : {};
+  return ctx.members.filter(m => m.write).map(m => readMember_(ctx, m.name, comments[m.name]));
+}
+
+function readMember_(ctx, name, comment) {
+  const input = readInput(ctx.ss, name);
+  return {
+    name: name,
+    hasSheet: input.exists,
+    done: input.done,
+    note: input.note,
+    thisWeek: input.thisWeek.map(toClientItem_),
+    nextWeek: input.nextWeek.map(toClientItem_),
+    comment: String(comment || ''),
+  };
+}
+
+/** 팀원 한 명만 다시 읽어 캐시를 고치고, 화면에 돌려줄 조각을 만든다 */
+function memberPatch_(ctx, name, comment) {
+  const key = CK.members(ctx);
+  const list = cached_(key, () => readMembers_(ctx));
+  const old = list.find(m => m.name === name);
+  const patch = readMember_(ctx, name, comment !== undefined ? comment : (old ? old.comment : ''));
+  const i = list.findIndex(m => m.name === name);
+  if (i >= 0) list[i] = patch; else list.push(patch);
+  putCache_(key, list);
+  return { memberPatch: patch };
+}
+
+/** 저장 후 바뀐 부분만 새로 읽어 캐시에 넣고 화면에 돌려준다 */
+function refreshPart_(part) {
+  const ss = SpreadsheetApp.getActive();
+  const readers = { budget: readBudget_, board: readBoard_, rules: readRules_ };
+  const value = readers[part](ss);
+  putCache_(CK[part], value);
+  const out = {};
+  out[part] = value;
+  return out;
 }
 
 function toClientItem_(item) {
@@ -69,11 +133,14 @@ function toClientItem_(item) {
 function currentMember_(members) {
   const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
   const m = members.find(x => x.email && x.email.toLowerCase() === email);
-  let isAdmin = false;
-  try {
-    const owner = SpreadsheetApp.getActive().getOwner();
-    isAdmin = !!owner && owner.getEmail().toLowerCase() === email;
-  } catch (e) { /* 공유 드라이브 등 소유자 조회 불가 */ }
+  // 소유자 조회는 느려서 6시간 캐시
+  const owner = cached_(CK.owner, () => {
+    try {
+      const o = SpreadsheetApp.getActive().getOwner();
+      return o ? o.getEmail().toLowerCase() : '';
+    } catch (e) { return ''; /* 공유 드라이브 등 소유자 조회 불가 */ }
+  }, 21600);
+  const isAdmin = !!owner && owner === email;
   return {
     email: email,
     name: m ? m.name : '',
@@ -137,7 +204,7 @@ function apiSaveMyWeek(payload) {
   if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
   sh.getRange(INPUT.NOTE_CELL).setValue(String(payload.note || '').trim());
   sh.getRange(INPUT.DONE_CELL).setValue(!!payload.done);
-  return apiBootstrap();
+  return memberPatch_(ctx, me.name);
 }
 
 function parseDue_(v) {
@@ -163,8 +230,9 @@ function apiSaveComment(name, comment) {
   const idx = names.findIndex(([v]) => String(v).trim() === name);
   if (idx < 0) throw new Error(`주간보고에서 ${name}님을 찾을 수 없습니다.`);
 
-  sh.getRange(REPORT.FIRST_ROW + idx, REPORT.COMMENT_COL).setValue(String(comment || '').trim());
-  return apiBootstrap();
+  const text = String(comment || '').trim();
+  sh.getRange(REPORT.FIRST_ROW + idx, REPORT.COMMENT_COL).setValue(text);
+  return memberPatch_(ctx, name, text);
 }
 
 /* ---------- 예산전용 ---------- */
@@ -173,8 +241,8 @@ function apiSubmitBudget(form) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
   const requester = me.name || String(form.requester || '').trim();
-  submitBudgetTransfer(Object.assign({}, form, { requester: requester }));
-  return apiBootstrap();
+  const id = submitBudgetTransfer(Object.assign({}, form, { requester: requester }));
+  return Object.assign(refreshPart_('budget'), { newId: id });
 }
 
 /** 신청 취소: 신청자 본인 또는 팀장·관리자. 취소한 건은 예산에서 빠진다. */
@@ -186,7 +254,7 @@ function apiCancelBudget(row, id) {
   if (String(v[BCOL.ID - 1]) !== id) throw new Error('신청 내역이 바뀌었습니다. 새로고침 후 다시 시도하세요.');
   if (String(v[BCOL.REQUESTER - 1]) !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 신청한 건만 취소할 수 있습니다.');
   sh.getRange(row, BCOL.CANCELED).setValue('Y');
-  return apiBootstrap();
+  return refreshPart_('budget');
 }
 
 /* ---------- 알림 ---------- */

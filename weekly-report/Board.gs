@@ -92,7 +92,7 @@ function apiAddPost(post) {
   } finally {
     lock.releaseLock();
   }
-  return apiBootstrap();
+  return refreshPart_('board');
 }
 
 function apiDeletePost(id) {
@@ -104,7 +104,7 @@ function apiDeletePost(id) {
   if (idx < 0) throw new Error('글을 찾을 수 없습니다.');
   if (rows[idx][2] !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인 글만 삭제할 수 있습니다.');
   sh.getRange(idx + 2, PCOL.DELETED).setValue('Y');
-  return apiBootstrap();
+  return refreshPart_('board');
 }
 
 function apiAddComment(id, body) {
@@ -114,5 +114,5 @@ function apiAddComment(id, body) {
   const text = String(body || '').trim();
   if (!text) throw new Error('댓글 내용을 입력해 주세요.');
   ctx.ss.getSheetByName(BOARD.COMMENTS).appendRow([String(id), new Date(), me.name, text]);
-  return apiBootstrap();
+  return refreshPart_('board');
 }

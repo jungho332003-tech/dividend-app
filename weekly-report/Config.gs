@@ -194,11 +194,14 @@ function getContext() {
 function readInput(ss, name) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
   if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [] };
-  const rows = sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 5).getValues();
+  // 작성완료·특이사항·업무 목록을 한 번에 읽는다 (시트 요청 1회)
+  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, 5).getValues();
+  const at = a1 => { const r = sh.getRange(a1); return v[r.getRow() - 1][r.getColumn() - 1]; };
+  const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
     exists: true,
-    done: sh.getRange(INPUT.DONE_CELL).getValue() === true,
-    note: String(sh.getRange(INPUT.NOTE_CELL).getValue() || '').trim(),
+    done: at(INPUT.DONE_CELL) === true,
+    note: String(at(INPUT.NOTE_CELL) || '').trim(),
     thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1] })),
     nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4] })),
   };

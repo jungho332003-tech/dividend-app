@@ -472,6 +472,18 @@
   }
   function fail(e) { toast(e && e.message ? e.message : String(e)); }
 
+  /** 서버가 돌려준 조각(바뀐 부분만)을 화면 데이터에 합친다 */
+  function applyData(data) {
+    if (!data) return;
+    if (data.memberPatch) {
+      const i = D.members.findIndex(m => m.name === data.memberPatch.name);
+      if (i >= 0) D.members[i] = data.memberPatch; else D.members.push(data.memberPatch);
+    }
+    ['members', 'budget', 'board', 'rules', 'me', 'week'].forEach(k => { if (data[k]) D[k] = data[k]; });
+  }
+
+  const fmtDue = iso => { const d = new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${DAY[d.getDay()]})`; };
+
   function load() {
     return call('apiBootstrap').then(data => { D = data; render(); }).catch(fail);
   }
@@ -1018,7 +1030,7 @@
       if (!post.title || !post.body) { $('#pErr').textContent = '제목과 내용을 입력해 주세요.'; $('#pErr').hidden = false; return; }
       $('#pOk').disabled = true;
       call('apiAddPost', post)
-        .then(data => { D = data; closeModal(); boardFilter = 'all'; openPost = null; page = 'board'; render(); toast('글을 등록했습니다.'); })
+        .then(data => { applyData(data); closeModal(); boardFilter = 'all'; openPost = null; page = 'board'; render(); toast('글을 등록했습니다.'); })
         .catch(err => { $('#pOk').disabled = false; $('#pErr').textContent = err.message || String(err); $('#pErr').hidden = false; });
     };
   }
@@ -1027,7 +1039,12 @@
     e.preventDefault();
     const text = $('#cmtIn').value.trim();
     if (!text) return;
-    call('apiAddComment', id, text).then(data => { D = data; render(); }).catch(fail);
+    const post = D.board.find(p => p.id === id);
+    const mine = { date: '방금', author: D.me.name, body: text };
+    post.comments.push(mine);
+    render();
+    call('apiAddComment', id, text).then(data => { applyData(data); render(); })
+      .catch(e => { post.comments.splice(post.comments.indexOf(mine), 1); render(); fail(e); });
   }
 
   function deletePost(id) {
@@ -1035,7 +1052,7 @@
       <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="delOk">삭제</button></div>`);
     $('#delOk').onclick = () => {
       $('#delOk').disabled = true;
-      call('apiDeletePost', id).then(data => { D = data; openPost = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+      call('apiDeletePost', id).then(data => { applyData(data); openPost = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
     };
   }
 
@@ -1127,7 +1144,7 @@
       $('#rOk').disabled = true;
       call('apiSaveRule', rule)
         .then(data => {
-          D = data; closeModal();
+          applyData(data); closeModal();
           const saved = id ? D.rules.find(x => x.id === id) : D.rules.slice().sort((a, b) => Number(b.id) - Number(a.id))[0];
           openRule = saved ? saved.id : null; ruleCat = 'all'; ruleQuery = ''; page = 'rules'; render();
           toast(id ? '기준을 수정했습니다. 개정 이력에 기록됩니다.' : '기준을 등록했습니다.');
@@ -1141,7 +1158,7 @@
       <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="rdOk">삭제</button></div>`);
     $('#rdOk').onclick = () => {
       $('#rdOk').disabled = true;
-      call('apiDeleteRule', id).then(data => { D = data; openRule = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+      call('apiDeleteRule', id).then(data => { applyData(data); openRule = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
     };
   }
 
@@ -1197,18 +1214,32 @@
         if (!draft[t.dataset.k].length) draft[t.dataset.k].push(blank());
         $(`#list-${t.dataset.k}`).innerHTML = itemsHtml(t.dataset.k);
       } else if (t.id === 'saveMine') {
-        saveMine(t);
+        saveMine();
       }
     };
   }
 
-  function saveMine(btn) {
+  /** 누르자마자 화면에 반영하고, 서버 저장은 뒤에서 한다. 실패하면 되돌리고 작성 내용을 살려둔다. */
+  function saveMine() {
     const out = list => list.filter(x => x.task.trim()).map(x => ({ task: x.task.trim(), due: x.cont ? '지속' : (x.dueIso || x.raw || '') }));
-    btn.disabled = true;
-    btn.textContent = '저장 중…';
-    call('apiSaveMyWeek', { thisWeek: out(draft.thisWeek), nextWeek: out(draft.nextWeek), note: draft.note, done: draft.done })
-      .then(data => { D = data; draft = null; render(); toast(D.members.find(m => m.name === D.me.name).done ? '저장했습니다. 작성완료로 표시됩니다.' : '저장했습니다. 다 쓰면 작성완료에 체크하세요.'); })
-      .catch(e => { btn.disabled = false; btn.textContent = '저장'; fail(e); });
+    const payload = { thisWeek: out(draft.thisWeek), nextWeek: out(draft.nextWeek), note: draft.note.trim(), done: draft.done };
+    const i = D.members.findIndex(m => m.name === D.me.name);
+    const before = D.members[i];
+    const keepDraft = draft;
+    const toItem = x => /^\d{4}-\d{2}-\d{2}$/.test(x.due) ? { task: x.task, due: fmtDue(x.due), dueIso: x.due } : { task: x.task, due: x.due, dueIso: '' };
+    D.members[i] = Object.assign({}, before, { done: payload.done, note: payload.note, thisWeek: payload.thisWeek.map(toItem), nextWeek: payload.nextWeek.map(toItem) });
+    draft = null;
+    render();
+    toast(payload.done ? '저장했습니다. 작성완료로 표시됩니다.' : '저장했습니다. 다 쓰면 작성완료에 체크하세요.');
+
+    call('apiSaveMyWeek', payload)
+      .then(data => { applyData(data); if (page !== 'weekly' || weeklyTab !== 'mine') render(); })
+      .catch(e => {
+        D.members[i] = before;
+        draft = keepDraft;
+        render();
+        toast(`저장하지 못했습니다. 작성 내용은 그대로 있으니 다시 저장해 주세요. (${e.message || e})`);
+      });
   }
 
   /* ================= 팀장 코멘트 ================= */
@@ -1234,10 +1265,13 @@
     cell.querySelector('[data-x="cancel"]').onclick = ev => { ev.stopPropagation(); cell.textContent = m.comment; };
     cell.querySelector('[data-x="save"]').onclick = ev => {
       ev.stopPropagation();
-      ev.target.disabled = true;
-      call('apiSaveComment', name, ta.value)
-        .then(data => { D = data; render(); toast(`${name}님 코멘트를 저장했습니다.`); })
-        .catch(err => { ev.target.disabled = false; fail(err); });
+      const before = m.comment;
+      m.comment = ta.value.trim();
+      render();
+      toast(`${name}님 코멘트를 저장했습니다.`);
+      call('apiSaveComment', name, m.comment)
+        .then(data => applyData(data))
+        .catch(err => { m.comment = before; render(); toast(`코멘트를 저장하지 못했습니다. (${err.message || err})`); });
     };
   }
 
@@ -1291,7 +1325,7 @@
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)
-        .then(data => { D = data; closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; render(); toast(`${D.budget.requests[0].id} 신청 완료. 예산에 반영했습니다.`); })
+        .then(data => { applyData(data); closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; render(); toast(`${data.newId || D.budget.requests[0].id} 신청 완료. 예산에 반영했습니다.`); })
         .catch(e2 => { $('#bSubmit').disabled = false; err.textContent = e2.message || String(e2); err.hidden = false; });
     };
   }
@@ -1303,7 +1337,7 @@
       <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" id="cxOk">신청 취소</button></div>`);
     $('#cxOk').onclick = () => {
       $('#cxOk').disabled = true;
-      call('apiCancelBudget', row, id).then(data => { D = data; closeModal(); render(); toast(`${id} 신청을 취소했습니다.`); }).catch(e => { closeModal(); fail(e); });
+      call('apiCancelBudget', row, id).then(data => { applyData(data); closeModal(); render(); toast(`${id} 신청을 취소했습니다.`); }).catch(e => { closeModal(); fail(e); });
     };
   }
 

@@ -109,7 +109,7 @@ function apiSaveRule(rule) {
   } finally {
     lock.releaseLock();
   }
-  return apiBootstrap();
+  return refreshPart_('rules');
 }
 
 function apiDeleteRule(id) {
@@ -122,5 +122,5 @@ function apiDeleteRule(id) {
   if (idx < 0) throw new Error('기준을 찾을 수 없습니다.');
   sh.getRange(idx + 2, RCOL.DELETED).setValue('Y');
   ctx.ss.getSheetByName(RULES.HISTORY).appendRow([String(id), new Date(), me.name || me.email, '삭제']);
-  return apiBootstrap();
+  return refreshPart_('rules');
 }

@@ -118,6 +118,7 @@ function submitBudgetTransfer(form) {
     const id = nextBudgetId_(sh, now);
     sh.getRange(sh.getLastRow() + 1, 1, 1, 7).setValues([[id, now, requester, from, to, amount, reason]]);
     SpreadsheetApp.flush();
+    try { CacheService.getDocumentCache().remove(CK.budget); } catch (e) { /* 캐시 없음 */ }
 
     const leaders = getLeaders();
     if (leaders.length) {
