@@ -5,6 +5,7 @@
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('📋 주간업무')
+    .addItem('🌐 업무관리 웹앱 열기', 'showWebAppLink')
     .addItem('💰 예산전용 신청', 'openBudgetForm')
     .addSeparator()
     .addItem('주간보고 새로고침', 'generateReport')
@@ -18,6 +19,14 @@ function onOpen() {
     .addToUi();
 }
 
+function showWebAppLink() {
+  const url = ScriptApp.getService().getUrl();
+  const html = url
+    ? `<p style="font-family:sans-serif">아래 주소를 팀원에게 공유하세요.</p><p><a href="${url}" target="_blank">${url}</a></p>`
+    : '<p style="font-family:sans-serif">아직 웹앱으로 배포되지 않았습니다. README의 "웹앱 배포" 순서를 따라 주세요.</p>';
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(html).setWidth(460).setHeight(160), '업무관리 웹앱');
+}
+
 /** 1단계: 설정/팀원/공휴일/예산 시트 생성 (이미 있으면 건너뜀) */
 function initialize() {
   const ss = SpreadsheetApp.getActive();
@@ -25,15 +34,17 @@ function initialize() {
 
   if (!ss.getSheetByName(SHEET.CONFIG)) {
     const sh = ss.insertSheet(SHEET.CONFIG);
-    sh.getRange(1, 1, 6, 2).setValues([
+    sh.getRange(1, 1, 7, 2).setValues([
       ['항목', '값'],
       [CFG.TEAM, '인사팀'],
       [CFG.MONDAY, mondayOf(new Date())],
       [CFG.DEADLINE, ''],
       [CFG.DEADLINE_HOUR, 14],
       [CFG.REMIND_HOURS, 3],
+      [CFG.CALENDAR, ''],
     ]);
     sh.getRange('B3').setNumberFormat('yyyy-mm-dd (ddd)');
+    sh.getRange('B7').setNote('구글 캘린더 > 설정 > 팀 캘린더 선택 > "캘린더 통합"의 캘린더 ID. 팀원에게 캘린더를 공유해야 합니다.');
     sh.getRange('B4').setNumberFormat('yyyy-mm-dd hh:mm').setNote('명절 등으로 이번 주만 마감이 다르면 입력. 예) 2026-09-23 14:00\n다음 주차로 넘어가면 자동으로 비워집니다.');
     styleHeader_(sh.getRange('A1:B1'));
     sh.setColumnWidth(1, 240).setColumnWidth(2, 200);
@@ -62,6 +73,7 @@ function initialize() {
   }
 
   setupBudgetSheets_(ss);
+  setupBoardSheets_(ss);
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');
@@ -69,8 +81,8 @@ function initialize() {
 
 // 공휴일 기본값 (정부 발표에 따라 변경될 수 있으니 확인 후 수정하세요)
 const DEFAULT_HOLIDAYS = [
-  ['2026-09-24', '추석'], ['2026-09-25', '추석'],
-  ['2026-10-05', '개천절 대체공휴일'], ['2026-10-09', '한글날'], ['2026-12-25', '성탄절'],
+  ['2026-09-24', '추석'], ['2026-09-25', '추석'], ['2026-09-26', '추석'],
+  ['2026-10-03', '개천절'], ['2026-10-05', '개천절 대체공휴일'], ['2026-10-09', '한글날'], ['2026-12-25', '성탄절'],
   ['2027-01-01', '신정'], ['2027-02-08', '설날'], ['2027-02-09', '설날 대체공휴일'],
   ['2027-03-01', '삼일절'], ['2027-05-05', '어린이날'], ['2027-05-13', '부처님오신날'],
   ['2027-08-16', '광복절 대체공휴일'], ['2027-09-14', '추석'], ['2027-09-15', '추석'],
@@ -104,6 +116,14 @@ function setupMembers() {
   // 예산전용: 신청 칸(A~G)은 경고만, 결재 칸(H~J)은 팀장만
   const budget = ss.getSheetByName(BUDGET.SHEET);
   protectSheetWithLeaderRange_(budget, budget.getRange(2, BCOL.STATUS, budget.getMaxRows() - 1, 3), leaders, true);
+
+  // 게시판: 누구나 글/댓글 작성 (직접 수정 시 경고만)
+  [BOARD.SHEET, BOARD.COMMENTS].forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+    sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
+    sh.protect().setDescription(`${name} 보호`).setWarningOnly(true);
+  });
 
   generateReport();
   const msg = missing.length ? `\n\n⚠️ 이메일이 없어 권한을 적용하지 못한 팀원: ${missing.join(', ')}` : '';

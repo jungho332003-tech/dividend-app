@@ -21,6 +21,7 @@ const CFG = {
   DEADLINE: '이번주 마감일시(비우면 자동)',
   DEADLINE_HOUR: '기본 마감 시각(시)',
   REMIND_HOURS: '미작성 알림(마감 몇 시간 전)',
+  CALENDAR: '팀 캘린더 ID(비우면 각자 기본 캘린더)',
 };
 
 // 팀원 입력시트 레이아웃

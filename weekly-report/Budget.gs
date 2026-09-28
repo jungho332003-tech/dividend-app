@@ -171,8 +171,13 @@ function onBudgetEdit(e) {
     return;
   }
   sh.getRange(row, BCOL.DONE_AT).setValue(new Date());
+  notifyBudgetDecision_(sh, row);
+}
 
+/** 결재 결과를 신청자에게 메일로 알린다 */
+function notifyBudgetDecision_(sh, row) {
   const v = sh.getRange(row, 1, 1, 10).getValues()[0];
+  const status = String(v[BCOL.STATUS - 1]);
   const requester = getMembers().find(m => m.name === String(v[BCOL.REQUESTER - 1]).trim());
   if (!requester || !requester.email) return;
 
