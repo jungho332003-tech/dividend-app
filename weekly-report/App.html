@@ -278,12 +278,10 @@
   .track { height: 14px; display: flex; gap: 2px; }
   .seg { height: 100%; }
   .seg.avail { background: var(--accent); border-radius: 0; }
-  .seg.pend { background: repeating-linear-gradient(135deg, var(--accent) 0 2px, transparent 2px 5px); border: 1px solid var(--accent); }
   .track .seg:last-child { border-radius: 0 4px 4px 0; }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12px; margin-top: 12px; }
   .sw { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; margin-right: 4px; border-radius: 2px; }
   .sw.avail { background: var(--accent); }
-  .sw.pend { background: repeating-linear-gradient(135deg, var(--accent) 0 2px, transparent 2px 5px); border: 1px solid var(--accent); }
   .tip {
     position: fixed; z-index: 60; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--line);
     box-shadow: var(--shadow); border-radius: 8px; padding: 8px 10px; font-size: 12px; min-width: 170px;
@@ -409,7 +407,7 @@
     <nav class="nav" id="nav" aria-label="메뉴">
       <button data-page="dash"><span class="ni"><i class="ico">◧</i>대시보드</span></button>
       <button data-page="weekly"><span class="ni"><i class="ico">☰</i>주간업무보고</span><span id="cReport"></span></button>
-      <button data-page="budget"><span class="ni"><i class="ico">₩</i>예산전용</span><span id="cBudget"></span></button>
+      <button data-page="budget"><span class="ni"><i class="ico">₩</i>예산전용</span></button>
       <button data-page="calendar"><span class="ni"><i class="ico">▦</i>일정</span></button>
       <button data-page="board"><span class="ni"><i class="ico">✎</i>공유게시판</span><span id="cBoard"></span></button>
       <button data-page="rules"><span class="ni"><i class="ico">§</i>회사 기준</span></button>
@@ -482,7 +480,8 @@
   function stats() {
     const members = D.members;
     const done = members.filter(m => m.done).length;
-    const pendingReq = D.budget.requests.filter(r => !r.status);
+    const ym = `${now().getFullYear()}-${String(now().getMonth() + 1).padStart(2, '0')}`;
+    const monthReq = D.budget.requests.filter(r => r.date.slice(0, 7) === ym);
     const off = members.filter(m => m.note);
     const deadline = new Date(D.week.deadlineIso);
     const ms = deadline - now();
@@ -490,7 +489,7 @@
     if (ms <= 0) left = { big: '마감', sub: `${D.week.deadlineText} 마감됨` };
     else if (ms < 864e5) left = { big: `${Math.ceil(ms / 36e5)}시간`, sub: `${D.week.deadlineText}까지` };
     else left = { big: `D-${Math.ceil(ms / 864e5)}`, sub: `${D.week.deadlineText}까지` };
-    return { done, total: members.length, pendingReq, off, left, overdue: ms <= 0 };
+    return { done, total: members.length, monthReq, off, left, overdue: ms <= 0 };
   }
 
   function mineMember() { return D.members.find(m => m.name === D.me.name); }
@@ -508,7 +507,6 @@
     const newPosts = D.board.filter(p => daysAgo(p.date) < 3).length;
     $('#cBoard').outerHTML = `<span id="cBoard">${newPosts ? `<span class="count soft" title="최근 3일 새 글">N ${newPosts}</span>` : ''}</span>`;
     $('#cReport').outerHTML = `<span id="cReport" class="count ${s.total - s.done ? '' : 'soft'}" title="작성완료 미체크">${s.total - s.done ? s.total - s.done : '✓'}</span>`;
-    $('#cBudget').outerHTML = `<span id="cBudget">${s.pendingReq.length ? `<span class="count" title="결재대기">${s.pendingReq.length}</span>` : ''}</span>`;
     document.querySelectorAll('#nav button').forEach(b => {
       if (b.dataset.page === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
@@ -525,7 +523,7 @@
     dash() {
       const s = stats();
       const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
-      const pendAmt = s.pendingReq.reduce((a, r) => a + r.amount, 0);
+      const monthAmt = s.monthReq.reduce((a, r) => a + r.amount, 0);
 
       const memberRows = D.members.map(m => `
         <div class="list-row">
@@ -546,7 +544,7 @@
       const recent = D.budget.requests.slice(0, 4).map(r => `
         <div class="list-row">
           <span class="who">${esc(r.req)}</span>
-          ${statusChip(r.status)}
+          <span class="chip plain">${esc(r.date.slice(5, 10))}</span>
           <span class="meta">${esc(r.from)} → ${esc(r.to)} · <b>${won(r.amount)}원</b></span>
         </div>`).join('') || '<div class="empty">신청 내역이 없습니다.</div>';
 
@@ -584,10 +582,10 @@
             <span class="value">${s.done}<small> / ${s.total}명</small></span>
             <div class="meter" role="img" aria-label="작성률 ${pct}%"><i style="width:${pct}%"></i></div>
           </div>
-          <div class="kpi ${s.pendingReq.length ? 'alert' : ''}">
-            <span class="label">예산전용 결재대기</span>
-            <span class="value">${s.pendingReq.length}<small>건</small></span>
-            <span class="sub">${s.pendingReq.length ? `${won(pendAmt)}원` : '대기 중인 건 없음'}</span>
+          <div class="kpi">
+            <span class="label">이번 달 예산전용</span>
+            <span class="value">${s.monthReq.length}<small>건</small></span>
+            <span class="sub">${s.monthReq.length ? `${won(monthAmt)}원 · ${esc(s.monthReq.map(r => r.req).filter((v, i, a) => a.indexOf(v) === i).join(', '))}` : '신청 없음'}</span>
           </div>
           <div class="kpi">
             <span class="label">휴무·특이사항</span>
@@ -609,7 +607,7 @@
 
         <div class="grid-2">
           <section class="panel">
-            <div class="panel-head"><h2>예산 과목별 전용가능액</h2><span>막대 길이 = 현재예산</span></div>
+            <div class="panel-head"><h2>예산 과목별 현재예산</h2><span>원</span></div>
             ${budgetBars()}
           </section>
           <section class="panel">
@@ -648,7 +646,7 @@
 
     budget() {
       const tabs = `<div class="subtabs" role="tablist">
-        <button role="tab" aria-selected="${budgetTab === 'list'}" onclick="setTab('budget','list')">신청·결재</button>
+        <button role="tab" aria-selected="${budgetTab === 'list'}" onclick="setTab('budget','list')">신청 내역</button>
         <button role="tab" aria-selected="${budgetTab === 'status'}" onclick="setTab('budget','status')">예산현황</button>
       </div>`;
       return tabs + (budgetTab === 'list' ? VIEWS.budgetList() : VIEWS.accounts());
@@ -739,37 +737,30 @@
     },
 
     budgetList() {
-      const list = D.budget.requests.filter(r =>
-        budgetFilter === 'all' ? true : budgetFilter === 'pend' ? !r.status : r.status === budgetFilter);
-      const counts = {
-        all: D.budget.requests.length,
-        pend: D.budget.requests.filter(r => !r.status).length,
-        '승인': D.budget.requests.filter(r => r.status === '승인').length,
-        '반려': D.budget.requests.filter(r => r.status === '반려').length,
-      };
-      const f = (key, label) => `<button aria-pressed="${budgetFilter === key}" onclick="setFilter('${key}')">${label} ${counts[key]}</button>`;
-      const rows = list.map(r => `
-        <tr>
+      const mineOnly = budgetFilter === 'mine';
+      const list = D.budget.requests.filter(r => !mineOnly || r.req === D.me.name);
+      const f = (key, label, n) => `<button aria-pressed="${budgetFilter === key}" onclick="setFilter('${key}')">${label} ${n}</button>`;
+      const rows = list.map(r => {
+        const canCancel = r.req === D.me.name || D.me.isLeader || D.me.isAdmin;
+        return `<tr>
           <td class="nowrap">${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">${esc(r.date)}</span></td>
-          <td class="nowrap">${esc(r.req)}</td>
+          <td class="nowrap strong">${esc(r.req)}</td>
           <td class="nowrap">${esc(r.from)} → ${esc(r.to)}</td>
           <td class="num strong">${won(r.amount)}</td>
           <td>${esc(r.reason)}</td>
-          <td class="nowrap">${statusChip(r.status)}${r.doneAt ? `<br><span style="color:var(--muted);font-size:12px">${esc(r.doneAt)}</span>` : ''}</td>
-          <td>${r.status ? esc(r.opinion) : (D.me.isLeader
-            ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small primary" onclick="openDecide(${r.row}, '${esc(r.id)}', '승인')">승인</button><button class="btn small danger" onclick="openDecide(${r.row}, '${esc(r.id)}', '반려')">반려</button></div>`
-            : '<span style="color:var(--muted)">팀장 결재 대기</span>')}</td>
-        </tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 신청이 없습니다.</td></tr>';
+          <td class="nowrap">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" class="empty">신청 내역이 없습니다.</td></tr>';
       return `
         <div class="head">
-          <div><h1>예산전용</h1><p>신청하면 팀장님께 결재 요청 메일이 가고, 결재 결과는 신청자에게 메일로 알려드립니다.</p></div>
+          <div><h1>예산전용</h1><p>신청하면 바로 예산에 반영되고 팀장님께 알림 메일이 갑니다. 잘못 신청한 건은 취소하세요.</p></div>
           <div class="head-actions"><button class="btn primary" onclick="openBudgetForm()">예산전용 신청</button></div>
         </div>
         <section class="panel">
-          <div class="panel-head"><div class="filters">${f('all', '전체')}${f('pend', '결재대기')}${f('승인', '승인')}${f('반려', '반려')}</div></div>
+          <div class="panel-head"><div class="filters">${f('all', '전체', D.budget.requests.length)}${D.me.name ? f('mine', '내 신청', D.budget.requests.filter(r => r.req === D.me.name).length) : ''}</div></div>
           <div class="table-wrap">
             <table class="t">
-              <thead><tr><th>신청번호</th><th>신청자</th><th>전출 → 전입</th><th class="num">금액(원)</th><th>사유</th><th>결재</th><th>팀장 의견</th></tr></thead>
+              <thead><tr><th>신청번호</th><th>신청자</th><th>전출 → 전입</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -780,20 +771,20 @@
       const a = D.budget.accounts;
       const sum = k => a.reduce((s, x) => s + x[k], 0);
       const rows = a.map(x => `
-        <tr><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inOk)}</td><td class="num">${won(x.outOk)}</td>
-        <td class="num">${won(x.current)}</td><td class="num">${won(x.pending)}</td><td class="num strong">${won(x.available)}</td></tr>`).join('');
+        <tr><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inAmt)}</td><td class="num">${won(x.outAmt)}</td>
+        <td class="num strong">${won(x.current)}</td></tr>`).join('');
       return `
-        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (승인 건만) · 전용가능액 = 현재예산 − 결재대기 전출</p></div></div>
+        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (취소한 건 제외)</p></div></div>
         <section class="panel">
-          <div class="panel-head"><h2>과목별 전용가능액</h2><span>막대 길이 = 현재예산</span></div>
+          <div class="panel-head"><h2>과목별 현재예산</h2><span>원</span></div>
           ${budgetBars()}
         </section>
         <section class="panel">
           <div class="table-wrap">
             <table class="t">
-              <thead><tr><th>과목명</th><th class="num">편성액</th><th class="num">전입(승인)</th><th class="num">전출(승인)</th><th class="num">현재예산</th><th class="num">결재대기 전출</th><th class="num">전용가능액</th></tr></thead>
+              <thead><tr><th>과목명</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th></tr></thead>
               <tbody>${rows}</tbody>
-              <tfoot><tr><td class="strong">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inOk'))}</td><td class="num">${won(sum('outOk'))}</td><td class="num strong">${won(sum('current'))}</td><td class="num">${won(sum('pending'))}</td><td class="num strong">${won(sum('available'))}</td></tr></tfoot>
+              <tfoot><tr><td class="strong">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inAmt'))}</td><td class="num">${won(sum('outAmt'))}</td><td class="num strong">${won(sum('current'))}</td></tr></tfoot>
             </table>
           </div>
         </section>`;
@@ -821,7 +812,7 @@
   function byDay(events) {
     const map = {};
     events.forEach(ev => eventDays(ev).forEach(k => (map[k] = map[k] || []).push(ev)));
-    Object.values(map).forEach(list => list.sort((a, b) => (b.kind === 'holiday') - (a.kind === 'holiday') || (b.allDay - a.allDay) || String(a.start).localeCompare(String(b.start))));
+    Object.values(map).forEach(list => list.sort((a, b) => (b.kind === 'holiday') - (a.kind === 'holiday') || (b.allDay - a.allDay) || (parseD(a.start) - parseD(b.start))));
     return map;
   }
   function timeText(ev) {
@@ -1154,27 +1145,18 @@
     };
   }
 
-  function statusChip(st) {
-    if (st === '승인') return '<span class="chip ok">✓ 승인</span>';
-    if (st === '반려') return '<span class="chip no">✕ 반려</span>';
-    return '<span class="chip pend">● 결재대기</span>';
-  }
-
   function budgetBars() {
     const a = D.budget.accounts;
     if (!a.length) return '<div class="empty">[예산과목] 시트에 과목을 등록하세요.</div>';
     const max = Math.max(...a.map(x => x.current), 1);
-    const rows = a.map((x, i) => {
-      const avail = Math.max(x.available, 0) / max * 100;
-      const pend = Math.max(x.pending, 0) / max * 100;
-      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(x.name)} 현재예산 ${won(x.current)}원, 결재대기 ${won(x.pending)}원, 전용가능액 ${won(x.available)}원">
+    return `<div class="bars" id="bars">${a.map((x, i) => {
+      const w = Math.max(x.current, 0) / max * 100;
+      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(x.name)} 현재예산 ${won(x.current)}원">
         <span class="nm">${esc(x.name)}</span>
-        <span class="track">${avail ? `<span class="seg avail" style="width:${avail}%"></span>` : ''}${pend ? `<span class="seg pend" style="width:${pend}%"></span>` : ''}</span>
-        <span class="val">${won(x.available)}</span>
+        <span class="track">${w ? `<span class="seg avail" style="width:${w}%"></span>` : ''}</span>
+        <span class="val">${won(x.current)}</span>
       </div>`;
-    }).join('');
-    return `<div class="bars" id="bars">${rows}</div>
-      <div class="legend"><span><i class="sw avail"></i>전용가능액 (오른쪽 숫자, 원)</span><span><i class="sw pend"></i>결재대기 전출</span></div>`;
+    }).join('')}</div>`;
   }
 
   /* ================= 내 주간업무 편집 ================= */
@@ -1276,7 +1258,7 @@
       : `<div class="fld"><label for="bReq">신청자</label><select class="field-in" id="bReq"><option value="">선택</option>${D.members.map(m => `<option>${esc(m.name)}</option>`).join('')}</select></div>`;
     openModal(`
       <h3>예산전용 신청</h3>
-      <p class="sub">전출과목의 예산을 줄여 전입과목으로 옮깁니다. 팀장님 결재 후 반영됩니다.</p>
+      <p class="sub">전출과목의 예산을 줄여 전입과목으로 옮깁니다. 신청하면 바로 반영됩니다.</p>
       <form class="form" id="bForm" novalidate>
         ${reqField}
         <div class="two">
@@ -1290,7 +1272,7 @@
       </form>`);
     $('#bFrom').onchange = () => {
       const a = D.budget.accounts.find(x => x.name === $('#bFrom').value);
-      $('#bHint').textContent = a ? `전용가능액 ${won(a.available)}원` : '';
+      $('#bHint').textContent = a ? `현재예산 ${won(a.current)}원` : '';
     };
     $('#bAmt').oninput = e => { const n = e.target.value.replace(/[^0-9]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
     $('#bForm').onsubmit = e => {
@@ -1305,32 +1287,23 @@
       let msg = '';
       if (!form.requester || !form.from || !form.to || !form.amount || !form.reason) msg = '모든 항목을 입력해 주세요.';
       else if (form.from === form.to) msg = '전출과목과 전입과목이 같습니다.';
-      else if (a && Number(form.amount) > a.available) msg = `전용가능액을 초과합니다. (${form.from} 전용가능액 ${won(a.available)}원)`;
+      else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${form.from} 현재예산 ${won(a.current)}원)`;
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)
-        .then(data => { D = data; closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; render(); toast(`${D.budget.requests[0].id} 신청 완료. 팀장님께 결재 요청 메일을 보냈습니다.`); })
+        .then(data => { D = data; closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; render(); toast(`${D.budget.requests[0].id} 신청 완료. 예산에 반영했습니다.`); })
         .catch(e2 => { $('#bSubmit').disabled = false; err.textContent = e2.message || String(e2); err.hidden = false; });
     };
   }
 
-  function openDecide(row, id, status) {
+  function cancelBudget(row, id) {
     const r = D.budget.requests.find(x => x.row === row);
-    openModal(`
-      <h3>${esc(id)} ${status}</h3>
-      <p class="sub">${esc(r.req)} · ${esc(r.from)} → ${esc(r.to)} · <b>${won(r.amount)}원</b><br>${esc(r.reason)}</p>
-      <div class="form">
-        <div class="fld"><label for="dOp">팀장 의견 ${status === '반려' ? '(반려 사유)' : '(선택)'}</label><textarea class="field-in" id="dOp"></textarea></div>
-        <div class="msg err" id="dErr" hidden></div>
-        <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="dOk">${status}</button></div>
-      </div>`);
-    $('#dOp').focus();
-    $('#dOk').onclick = () => {
-      if (status === '반려' && !$('#dOp').value.trim()) { $('#dErr').textContent = '반려 사유를 적어주세요.'; $('#dErr').hidden = false; return; }
-      $('#dOk').disabled = true;
-      call('apiDecideBudget', row, id, status, $('#dOp').value)
-        .then(data => { D = data; closeModal(); render(); toast(`${id} ${status}. ${r.req}님께 결과 메일을 보냈습니다.`); })
-        .catch(e => { $('#dOk').disabled = false; $('#dErr').textContent = e.message || String(e); $('#dErr').hidden = false; });
+    openModal(`<h3>${esc(id)} 신청을 취소할까요?</h3>
+      <p class="sub">${esc(r.req)} · ${esc(r.from)} → ${esc(r.to)} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" id="cxOk">신청 취소</button></div>`);
+    $('#cxOk').onclick = () => {
+      $('#cxOk').disabled = true;
+      call('apiCancelBudget', row, id).then(data => { D = data; closeModal(); render(); toast(`${id} 신청을 취소했습니다.`); }).catch(e => { closeModal(); fail(e); });
     };
   }
 
@@ -1357,11 +1330,9 @@
     const tip = $('#tip');
     tip.innerHTML = `<b>${esc(a.name)}</b>
       <div><span>편성액</span>${won(a.budget)}</div>
-      <div><span>전입(승인)</span>+${won(a.inOk)}</div>
-      <div><span>전출(승인)</span>−${won(a.outOk)}</div>
-      <div><span>현재예산</span>${won(a.current)}</div>
-      <div><span>결재대기 전출</span>${won(a.pending)}</div>
-      <div><span>전용가능액</span><b style="margin:0">${won(a.available)}</b></div>`;
+      <div><span>전입</span>+${won(a.inAmt)}</div>
+      <div><span>전출</span>−${won(a.outAmt)}</div>
+      <div><span>현재예산</span><b style="margin:0">${won(a.current)}</b></div>`;
     tip.hidden = false;
     const w = tip.offsetWidth, h = tip.offsetHeight;
     tip.style.left = Math.min(x + 14, window.innerWidth - w - 8) + 'px';

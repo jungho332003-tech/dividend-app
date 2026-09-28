@@ -156,22 +156,20 @@ function hourlyCheck() {
   }
 }
 
+// onBudgetEdit: 예전 버전(결재 기능)에서 만든 트리거도 정리한다
 const TRIGGER_HANDLERS = ['hourlyCheck', 'weeklyStart', 'onBudgetEdit'];
 
 /** 3단계: 자동 실행 트리거 등록 (다시 실행해도 중복 생성되지 않음) */
 function setupTriggers() {
-  const ss = SpreadsheetApp.getActive();
   ScriptApp.getProjectTriggers()
     .filter(t => TRIGGER_HANDLERS.indexOf(t.getHandlerFunction()) >= 0)
     .forEach(t => ScriptApp.deleteTrigger(t));
 
   ScriptApp.newTrigger('hourlyCheck').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('weeklyStart').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).create();
-  ScriptApp.newTrigger('onBudgetEdit').forSpreadsheet(ss).onEdit().create();
 
   SpreadsheetApp.getUi().alert(
     '자동 실행을 켰습니다.\n\n' +
     '· 매주 월요일 7시: 다음 주차로 넘기기(이월)\n' +
-    '· 매시간: 보고서 새로고침 / 마감 전 미작성 알림 / 마감 후 팀장 메일\n' +
-    '· 예산전용 결재(승인/반려) 시 신청자에게 메일');
+    '· 매시간: 보고서 새로고침 / 마감 전 미작성 알림 / 마감 후 팀장 메일');
 }

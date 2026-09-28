@@ -114,9 +114,11 @@ function setupMembers() {
   const report = ss.getSheetByName(SHEET.REPORT) || ss.insertSheet(SHEET.REPORT, 0);
   protectSheetWithLeaderRange_(report, report.getRange(REPORT.FIRST_ROW, REPORT.COMMENT_COL, report.getMaxRows() - REPORT.FIRST_ROW + 1, 1), leaders, false);
 
-  // 예산전용: 신청 칸(A~G)은 경고만, 결재 칸(H~J)은 팀장만
+  // 예산전용: 웹앱·메뉴로 신청 (직접 수정 시 경고만)
   const budget = ss.getSheetByName(BUDGET.SHEET);
-  protectSheetWithLeaderRange_(budget, budget.getRange(2, BCOL.STATUS, budget.getMaxRows() - 1, 3), leaders, true);
+  budget.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
+  budget.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
+  budget.protect().setDescription(`${BUDGET.SHEET} 보호`).setWarningOnly(true);
 
   // 회사 기준: 팀장·관리자만 수정
   [RULES.SHEET, RULES.HISTORY].forEach(name => {

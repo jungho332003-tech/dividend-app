@@ -76,7 +76,7 @@
 
     function showAvailable() {
       const a = accounts.find(x => x.name === document.getElementById('from').value);
-      document.getElementById('fromHint').textContent = a ? `전용가능액 ${a.available.toLocaleString()}원` : '';
+      document.getElementById('fromHint').textContent = a ? `현재예산 ${a.current.toLocaleString()}원` : '';
     }
 
     function formatAmount(el) {
@@ -99,7 +99,7 @@
         .withSuccessHandler(id => {
           const m = document.getElementById('msg');
           m.className = 'ok';
-          m.textContent = `신청되었습니다. (신청번호 ${id}) 팀장님께 결재 요청 메일이 발송되었습니다.`;
+          m.textContent = `신청되었습니다. (신청번호 ${id}) 예산에 바로 반영됩니다.`;
           document.getElementById('f').querySelectorAll('input, textarea, select').forEach(el => el.disabled = true);
         })
         .withFailureHandler(showError)

@@ -85,29 +85,16 @@ function currentMember_(members) {
 }
 
 function readBudget_(ss) {
-  const accSh = ss.getSheetByName(BUDGET.ACCOUNTS);
-  const accRows = accSh && accSh.getLastRow() >= 2
-    ? accSh.getRange(2, 1, accSh.getLastRow() - 1, 7).getValues().filter(r => String(r[0]).trim())
-    : [];
-
   const reqSh = ss.getSheetByName(BUDGET.SHEET);
   const reqRows = reqSh && reqSh.getLastRow() >= 2
-    ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, 10).getValues()
+    ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, 8).getValues()
     : [];
 
   return {
-    accounts: accRows.map(r => ({
-      name: String(r[0]).trim(),
-      budget: Number(r[1]) || 0,
-      inOk: Number(r[2]) || 0,
-      outOk: Number(r[3]) || 0,
-      current: Number(r[4]) || 0,
-      pending: Number(r[5]) || 0,
-      available: Number(r[6]) || 0,
-    })),
+    accounts: getAccounts_(),
     requests: reqRows
       .map((r, i) => ({ r: r, row: i + 2 }))
-      .filter(x => String(x.r[0]).trim())
+      .filter(x => String(x.r[0]).trim() && String(x.r[BCOL.CANCELED - 1]).toUpperCase() !== 'Y')
       .map(x => ({
         row: x.row,
         id: String(x.r[0]),
@@ -117,9 +104,6 @@ function readBudget_(ss) {
         to: String(x.r[4]),
         amount: Number(x.r[5]) || 0,
         reason: String(x.r[6]),
-        status: String(x.r[7] || ''),
-        opinion: String(x.r[8] || ''),
-        doneAt: x.r[9] instanceof Date ? fmt(x.r[9], 'yyyy-MM-dd HH:mm') : String(x.r[9] || ''),
       }))
       .reverse(),
   };
@@ -193,20 +177,15 @@ function apiSubmitBudget(form) {
   return apiBootstrap();
 }
 
-/** 팀장 결재: 시트에서 결재 칸을 바꾼 것과 같은 효과 (웹앱에서의 수정은 onEdit 트리거가 돌지 않으므로 메일도 여기서 보낸다) */
-function apiDecideBudget(row, id, status, opinion) {
+/** 신청 취소: 신청자 본인 또는 팀장·관리자. 취소한 건은 예산에서 빠진다. */
+function apiCancelBudget(row, id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
-  if (!me.isLeader) throw new Error('팀장만 결재할 수 있습니다.');
-  if (BUDGET.DECISIONS.indexOf(status) < 0) throw new Error('승인 또는 반려를 선택하세요.');
-
   const sh = ctx.ss.getSheetByName(BUDGET.SHEET);
-  const v = sh.getRange(row, 1, 1, 10).getValues()[0];
+  const v = sh.getRange(row, 1, 1, 8).getValues()[0];
   if (String(v[BCOL.ID - 1]) !== id) throw new Error('신청 내역이 바뀌었습니다. 새로고침 후 다시 시도하세요.');
-  if (String(v[BCOL.STATUS - 1] || '')) throw new Error(`이미 ${v[BCOL.STATUS - 1]}된 건입니다.`);
-
-  sh.getRange(row, BCOL.STATUS, 1, 3).setValues([[status, String(opinion || '').trim(), new Date()]]);
-  notifyBudgetDecision_(sh, row);
+  if (String(v[BCOL.REQUESTER - 1]) !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 신청한 건만 취소할 수 있습니다.');
+  sh.getRange(row, BCOL.CANCELED).setValue('Y');
   return apiBootstrap();
 }
 
