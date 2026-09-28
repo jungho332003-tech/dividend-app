@@ -187,6 +187,31 @@
   .cmt-form { display: flex; gap: 6px; }
   .cmt-form input { flex: 1; min-width: 0; }
 
+  /* 회사 기준 */
+  .rules-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .cats { display: flex; flex-direction: column; gap: 2px; }
+  .cats button { display: flex; justify-content: space-between; gap: 8px; background: none; border: 0; border-radius: 7px; padding: 8px 10px; cursor: pointer; text-align: left; color: var(--ink-2); }
+  .cats button:hover { background: var(--panel-2); }
+  .cats button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
+  .cats button span { color: var(--muted); font-size: 12px; }
+  .search { width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
+  .rule { border-top: 1px solid var(--line); }
+  .rule:first-child { border-top: 0; }
+  .rule-head { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 4px; background: none; border: 0; cursor: pointer; text-align: left; }
+  .rule-head:hover { background: var(--panel-2); }
+  .rule-title { font-weight: 600; font-size: 15px; }
+  .rule-sum { grid-column: 1 / -1; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rule-date { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .rule-body { padding: 0 4px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .rule-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); background: var(--panel-2); border-radius: 8px; padding: 8px 12px; }
+  .rule-meta b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .rule-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 76ch; line-height: 1.7; }
+  .hist { font-size: 13px; }
+  .hist summary { cursor: pointer; color: var(--muted); }
+  .hist ol { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .hist li span { color: var(--muted); margin-right: 8px; }
+  mark { background: var(--pend-bg); color: inherit; border-radius: 2px; }
+
   .count { font-size: 11px; font-weight: 700; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-ink); }
   .count.soft { background: var(--panel-2); color: var(--muted); }
   .me { border-top: 1px solid var(--line); padding: 12px 8px 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
@@ -352,6 +377,9 @@
     .me { display: none; }
     .edit-cols { grid-template-columns: minmax(0, 1fr); }
     .cal-layout { grid-template-columns: minmax(0, 1fr); }
+    .rules-layout { grid-template-columns: minmax(0, 1fr); }
+    .cats { flex-direction: row; overflow-x: auto; }
+    .cats button { white-space: nowrap; }
   }
   @media (max-width: 520px) {
     .kpi .value { font-size: 24px; }
@@ -384,6 +412,7 @@
       <button data-page="budget"><span class="ni"><i class="ico">₩</i>예산전용</span><span id="cBudget"></span></button>
       <button data-page="calendar"><span class="ni"><i class="ico">▦</i>일정</span></button>
       <button data-page="board"><span class="ni"><i class="ico">✎</i>공유게시판</span><span id="cBoard"></span></button>
+      <button data-page="rules"><span class="ni"><i class="ico">§</i>회사 기준</span></button>
     </nav>
     <div class="me" id="meBox"></div>
   </aside>
@@ -421,6 +450,9 @@
   let budgetTab = 'list';
   let boardFilter = 'all';
   let openPost = null;
+  let ruleCat = 'all';
+  let ruleQuery = '';
+  let openRule = null;
   let draft = null;
   let calMonth = null;       // 보고 있는 달의 1일
   let calSel = null;         // 선택한 날짜 key
@@ -525,6 +557,13 @@
           <span class="meta">${esc(p.author)} · ${esc(p.date.slice(5, 10))}</span>
         </div>`).join('') || '<div class="empty">게시글이 없습니다.</div>';
 
+      const rulePreview = D.rules.slice().sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 3).map(r => `
+        <div class="list-row" style="cursor:pointer" onclick="openRule='${esc(r.id)}';ruleCat='all';ruleQuery='';go('rules')">
+          <span class="chip plain">${esc(r.category)}</span>
+          <span class="who" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.title)}</span>
+          <span class="meta">${esc(r.updated.slice(5))} 개정${r.history[0] ? ` · ${esc(r.history[0].note)}` : ''}</span>
+        </div>`).join('') || '<div class="empty">등록된 기준이 없습니다.</div>';
+
       return `
         <div class="head">
           <div><h1>대시보드</h1><p>${esc(D.week.thisLabel)} · ${esc(D.team)}</p></div>
@@ -584,10 +623,16 @@
             <div class="panel-head"><h2>이번 주 기한 업무</h2><span>${esc(D.week.thisLabel)}</span></div>
             <div>${dueRows}</div>
           </section>
-          <section class="panel">
-            <div class="panel-head"><h2>공유게시판</h2><button class="btn small" onclick="go('board')">전체 보기</button></div>
-            <div class="list">${boardPreview}</div>
-          </section>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <section class="panel">
+              <div class="panel-head"><h2>공유게시판</h2><button class="btn small" onclick="go('board')">전체 보기</button></div>
+              <div class="list">${boardPreview}</div>
+            </section>
+            <section class="panel">
+              <div class="panel-head"><h2>최근 개정된 회사 기준</h2><button class="btn small" onclick="go('rules')">전체 보기</button></div>
+              <div class="list">${rulePreview}</div>
+            </section>
+          </div>
         </div>`;
     },
 
@@ -611,6 +656,7 @@
 
     calendar() { return VIEWS.calendar(); },
     board() { return VIEWS.board(); },
+    rules() { return VIEWS.rules(); },
   };
 
   Object.assign(VIEWS, {
@@ -999,6 +1045,112 @@
     $('#delOk').onclick = () => {
       $('#delOk').disabled = true;
       call('apiDeletePost', id).then(data => { D = data; openPost = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+    };
+  }
+
+  /* ================= 회사 기준 ================= */
+  function hl(text) {
+    const t = esc(text);
+    if (!ruleQuery) return t;
+    const q = esc(ruleQuery).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return t.replace(new RegExp(q, 'gi'), m => `<mark>${m}</mark>`);
+  }
+  function filteredRules() {
+    const q = ruleQuery.trim().toLowerCase();
+    return D.rules
+      .filter(r => ruleCat === 'all' || r.category === ruleCat)
+      .filter(r => !q || (r.title + ' ' + r.body + ' ' + r.category).toLowerCase().includes(q))
+      .sort((a, b) => D.ruleCategories.indexOf(a.category) - D.ruleCategories.indexOf(b.category) || a.title.localeCompare(b.title, 'ko'));
+  }
+  function ruleListHtml() {
+    const canEdit = D.me.isLeader || D.me.isAdmin;
+    const list = filteredRules();
+    return list.map(r => {
+      const open = openRule === r.id || (ruleQuery && list.length <= 2);
+      const first = r.body.split('\n').find(l => l.trim() && !/^\(.*\)$/.test(l.trim())) || '';
+      return `<article class="rule">
+        <button class="rule-head" onclick="toggleRule('${esc(r.id)}')" aria-expanded="${open}">
+          <span class="rule-title">${hl(r.title)}</span>
+          <span class="rule-date">${ruleCat === 'all' ? `<span class="chip plain">${esc(r.category)}</span> ` : ''}시행 ${esc(r.effective)}</span>
+          ${open ? '' : `<span class="rule-sum">${hl(first)}</span>`}
+        </button>
+        ${open ? `<div class="rule-body">
+          <div class="rule-meta"><span><b>시행일</b>${esc(r.effective)}</span><span><b>담당</b>${esc(r.owner || '-')}</span><span><b>최종 개정</b>${esc(r.updated)} (${esc(r.editor)})</span></div>
+          <div class="rule-text">${hl(r.body)}</div>
+          ${r.link ? `<a class="post-link" href="${esc(r.link)}" target="_blank" rel="noopener">📄 원문 보기</a>` : ''}
+          ${r.history.length ? `<details class="hist"><summary>개정 이력 ${r.history.length}건</summary><ol>${r.history.map(h => `<li><span>${esc(h.date)} · ${esc(h.editor)}</span>${esc(h.note)}</li>`).join('')}</ol></details>` : ''}
+          ${canEdit ? `<div style="display:flex;gap:6px"><button class="btn small" onclick="openRuleForm('${esc(r.id)}')">수정</button><button class="btn small danger" onclick="deleteRule('${esc(r.id)}')">삭제</button></div>` : ''}
+        </div>` : ''}
+      </article>`;
+    }).join('') || `<div class="empty">${ruleQuery ? `"${esc(ruleQuery)}"에 해당하는 기준이 없습니다.` : '등록된 기준이 없습니다.'}</div>`;
+  }
+
+  VIEWS.rules = function () {
+    const canEdit = D.me.isLeader || D.me.isAdmin;
+    const cats = ['all'].concat(D.ruleCategories);
+    const cnt = c => c === 'all' ? D.rules.length : D.rules.filter(r => r.category === c).length;
+    return `
+      <div class="head">
+        <div><h1>회사 기준</h1><p>급여·근태·복리후생 등 회사 기준을 한곳에서 확인하세요. 개정되면 이력이 남습니다.</p></div>
+        <div class="head-actions">${canEdit ? '<button class="btn primary" onclick="openRuleForm()">기준 등록</button>' : ''}</div>
+      </div>
+      <div class="rules-layout">
+        <section class="panel" style="padding:10px">
+          <div class="cats">${cats.filter(c => c === 'all' || cnt(c)).map(c => `<button aria-pressed="${ruleCat === c}" onclick="ruleCat='${c}';openRule=null;render()">${c === 'all' ? '전체' : c}<span>${cnt(c)}</span></button>`).join('')}</div>
+        </section>
+        <section class="panel">
+          <input class="search" id="ruleSearch" type="search" placeholder="검색 (예: 연차, 출장, 경조사, 최저임금)" value="${esc(ruleQuery)}" aria-label="회사 기준 검색">
+          <div id="ruleList">${ruleListHtml()}</div>
+        </section>
+      </div>`;
+  };
+  document.addEventListener('input', e => {
+    if (e.target.id === 'ruleSearch') { ruleQuery = e.target.value; $('#ruleList').innerHTML = ruleListHtml(); }
+  });
+  function toggleRule(id) { openRule = openRule === id ? null : id; $('#ruleList').innerHTML = ruleListHtml(); }
+
+  function openRuleForm(id) {
+    const r = id ? D.rules.find(x => x.id === id) : { category: ruleCat !== 'all' ? ruleCat : D.ruleCategories[0], title: '', body: '', effective: '', owner: '', link: '' };
+    openModal(`
+      <h3>${id ? '기준 수정' : '기준 등록'}</h3>
+      <p class="sub">팀원 모두가 보는 기준입니다. 원문이 있으면 구글 드라이브 링크를 함께 올려주세요.</p>
+      <form class="form" id="rForm" novalidate>
+        <div class="two">
+          <div class="fld"><label for="rCat">분류</label><select class="field-in" id="rCat">${D.ruleCategories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+          <div class="fld"><label for="rEff">시행일</label><input class="field-in" type="date" id="rEff" value="${esc(r.effective)}"></div>
+        </div>
+        <div class="fld"><label for="rTitle">제목</label><input class="field-in" id="rTitle" value="${esc(r.title)}"></div>
+        <div class="fld"><label for="rBody">내용</label><textarea class="field-in" id="rBody" style="min-height:200px">${esc(r.body)}</textarea></div>
+        <div class="two">
+          <div class="fld"><label for="rOwner">담당</label><input class="field-in" id="rOwner" value="${esc(r.owner)}"></div>
+          <div class="fld"><label for="rLink">원문 링크</label><input class="field-in" id="rLink" value="${esc(r.link)}" placeholder="https://drive.google.com/..."></div>
+        </div>
+        ${id ? '<div class="fld"><label for="rNote">개정 내용 (이력에 남습니다)</label><input class="field-in" id="rNote" placeholder="예) 숙박비 상한 8만원 → 10만원"></div>' : ''}
+        <div class="msg err" id="rErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="rOk">${id ? '저장' : '등록'}</button></div>
+      </form>`);
+    $('#rForm').onsubmit = e => {
+      e.preventDefault();
+      const rule = { id: id || '', category: $('#rCat').value, effective: $('#rEff').value, title: $('#rTitle').value.trim(), body: $('#rBody').value.trim(), owner: $('#rOwner').value.trim(), link: $('#rLink').value.trim(), changeNote: $('#rNote') ? $('#rNote').value.trim() : '' };
+      if (!rule.title || !rule.body) { $('#rErr').textContent = '제목과 내용을 입력해 주세요.'; $('#rErr').hidden = false; return; }
+      $('#rOk').disabled = true;
+      call('apiSaveRule', rule)
+        .then(data => {
+          D = data; closeModal();
+          const saved = id ? D.rules.find(x => x.id === id) : D.rules.slice().sort((a, b) => Number(b.id) - Number(a.id))[0];
+          openRule = saved ? saved.id : null; ruleCat = 'all'; ruleQuery = ''; page = 'rules'; render();
+          toast(id ? '기준을 수정했습니다. 개정 이력에 기록됩니다.' : '기준을 등록했습니다.');
+        })
+        .catch(err => { $('#rOk').disabled = false; $('#rErr').textContent = err.message || String(err); $('#rErr').hidden = false; });
+    };
+  }
+
+  function deleteRule(id) {
+    openModal(`<h3>이 기준을 삭제할까요?</h3><p class="sub">목록에서 사라지고, 시트와 개정 이력에는 기록이 남습니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="rdOk">삭제</button></div>`);
+    $('#rdOk').onclick = () => {
+      $('#rdOk').disabled = true;
+      call('apiDeleteRule', id).then(data => { D = data; openRule = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
     };
   }
 

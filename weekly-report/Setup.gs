@@ -74,6 +74,7 @@ function initialize() {
 
   setupBudgetSheets_(ss);
   setupBoardSheets_(ss);
+  setupRuleSheets_(ss);
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');
@@ -116,6 +117,12 @@ function setupMembers() {
   // 예산전용: 신청 칸(A~G)은 경고만, 결재 칸(H~J)은 팀장만
   const budget = ss.getSheetByName(BUDGET.SHEET);
   protectSheetWithLeaderRange_(budget, budget.getRange(2, BCOL.STATUS, budget.getMaxRows() - 1, 3), leaders, true);
+
+  // 회사 기준: 팀장·관리자만 수정
+  [RULES.SHEET, RULES.HISTORY].forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (sh) protectSheet_(sh, leaders);
+  });
 
   // 게시판: 누구나 글/댓글 작성 (직접 수정 시 경고만)
   [BOARD.SHEET, BOARD.COMMENTS].forEach(name => {

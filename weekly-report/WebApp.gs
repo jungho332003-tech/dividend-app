@@ -51,6 +51,8 @@ function apiBootstrap() {
     }),
     budget: readBudget_(ss),
     board: readBoard_(ss),
+    rules: readRules_(ss),
+    ruleCategories: RULES.CATEGORIES,
   };
 }
 
