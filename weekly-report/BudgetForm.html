@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: 'Malgun Gothic', sans-serif; font-size: 13px; color: #222; margin: 0; padding: 4px 8px; }
+    label { display: block; font-weight: bold; margin: 12px 0 4px; }
+    select, input, textarea { width: 100%; box-sizing: border-box; padding: 7px; font-size: 13px; border: 1px solid #bbb; border-radius: 4px; }
+    textarea { height: 90px; resize: vertical; }
+    .hint { color: #666; font-size: 12px; margin-top: 4px; min-height: 16px; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
+    .actions { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; }
+    button { padding: 8px 18px; font-size: 13px; border-radius: 4px; border: 1px solid #bbb; background: #fff; cursor: pointer; }
+    button.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+    button:disabled { opacity: .5; cursor: default; }
+    #msg { margin-top: 12px; padding: 8px; border-radius: 4px; display: none; }
+    #msg.err { display: block; background: #fde2e2; color: #a11; }
+    #msg.ok { display: block; background: #e3f4e1; color: #1b5e20; }
+  </style>
+</head>
+<body>
+  <form id="f" onsubmit="submitForm(event)">
+    <label>신청자</label>
+    <select name="requester" id="requester" required></select>
+
+    <div class="row">
+      <div>
+        <label>전출과목 (감액)</label>
+        <select name="from" id="from" required onchange="showAvailable()"></select>
+        <div class="hint" id="fromHint"></div>
+      </div>
+      <div>
+        <label>전입과목 (증액)</label>
+        <select name="to" id="to" required></select>
+      </div>
+    </div>
+
+    <label>금액 (원)</label>
+    <input name="amount" id="amount" inputmode="numeric" placeholder="예) 500,000" required oninput="formatAmount(this)">
+
+    <label>사유</label>
+    <textarea name="reason" required placeholder="전용이 필요한 사유를 적어주세요"></textarea>
+
+    <div id="msg"></div>
+
+    <div class="actions">
+      <button type="button" onclick="google.script.host.close()">닫기</button>
+      <button type="submit" class="primary" id="submitBtn">신청</button>
+    </div>
+  </form>
+
+  <script>
+    let accounts = [];
+
+    function option(value, text) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = text;
+      return o;
+    }
+
+    google.script.run.withSuccessHandler(data => {
+      accounts = data.accounts;
+      const req = document.getElementById('requester');
+      req.appendChild(option('', '선택'));
+      data.members.forEach(n => req.appendChild(option(n, n)));
+      if (data.me) req.value = data.me;
+
+      ['from', 'to'].forEach(id => {
+        const sel = document.getElementById(id);
+        sel.appendChild(option('', '선택'));
+        accounts.forEach(a => sel.appendChild(option(a.name, a.name)));
+      });
+    }).withFailureHandler(showError).getBudgetFormData();
+
+    function showAvailable() {
+      const a = accounts.find(x => x.name === document.getElementById('from').value);
+      document.getElementById('fromHint').textContent = a ? `전용가능액 ${a.available.toLocaleString()}원` : '';
+    }
+
+    function formatAmount(el) {
+      const n = el.value.replace(/[^0-9]/g, '');
+      el.value = n ? Number(n).toLocaleString() : '';
+    }
+
+    function showError(err) {
+      const m = document.getElementById('msg');
+      m.className = 'err';
+      m.textContent = err.message || err;
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    function submitForm(e) {
+      e.preventDefault();
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('msg').className = '';
+      google.script.run
+        .withSuccessHandler(id => {
+          const m = document.getElementById('msg');
+          m.className = 'ok';
+          m.textContent = `신청되었습니다. (신청번호 ${id}) 팀장님께 결재 요청 메일이 발송되었습니다.`;
+          document.getElementById('f').querySelectorAll('input, textarea, select').forEach(el => el.disabled = true);
+        })
+        .withFailureHandler(showError)
+        .submitBudgetTransfer(e.target);
+    }
+  </script>
+</body>
+</html>
