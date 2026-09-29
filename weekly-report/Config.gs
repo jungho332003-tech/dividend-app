@@ -22,6 +22,7 @@ const CFG = {
   DEADLINE_HOUR: '기본 마감 시각(시)',
   REMIND_HOURS: '미작성 알림(마감 몇 시간 전)',
   CALENDAR: '팀 캘린더 ID(비우면 각자 기본 캘린더)',
+  DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
 };
 
 // 팀원 입력시트 레이아웃

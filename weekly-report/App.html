@@ -212,6 +212,37 @@
   .hist li span { color: var(--muted); margin-right: 8px; }
   mark { background: var(--pend-bg); color: inherit; border-radius: 2px; }
 
+  /* 첨부 파일 */
+  .drop {
+    border: 1.5px dashed var(--line-strong); border-radius: 8px; padding: 14px 12px; text-align: center; color: var(--muted);
+    cursor: pointer; font-size: 13px; background: var(--panel-2);
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); color: var(--accent-2); background: var(--accent-soft); }
+  .drop u { color: var(--accent-2); }
+  .files { display: flex; flex-direction: column; gap: 6px; }
+  .files:empty { display: none; }
+  .files.inline { flex-direction: row; flex-wrap: wrap; margin-top: 6px; }
+  .file {
+    display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 10px; align-items: center; max-width: 520px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 6px; background: var(--panel); color: var(--ink); text-decoration: none;
+  }
+  a.file:hover { border-color: var(--accent); }
+  .files.inline .file { grid-template-columns: auto minmax(0, 1fr); padding: 3px 8px 3px 3px; gap: 6px; font-size: 12px; max-width: 260px; }
+  .ext { font-size: 10px; font-weight: 700; letter-spacing: .02em; text-align: center; border-radius: 5px; padding: 7px 0; background: var(--panel-2); color: var(--muted); }
+  .files.inline .ext { padding: 2px 5px; font-size: 9.5px; }
+  .ext.pdf { background: var(--warn-bg); color: var(--warn-ink); }
+  .ext.xls { background: var(--ok-bg); color: var(--ok-ink); }
+  .ext.doc { background: var(--accent-soft); color: var(--accent-2); }
+  .ext.img, .ext.ppt { background: var(--pend-bg); color: var(--pend-ink); }
+  .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .fs { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+  .file.up { opacity: .75; }
+  .file.up .fs::after { content: " · 업로드 중…"; color: var(--accent-2); }
+  .file.err { border-color: var(--warn-ink); }
+  .file.err .fs { color: var(--warn-ink); }
+  .clip { color: var(--muted); font-size: 13px; margin-left: 4px; }
+  .sub-label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; margin-bottom: -6px; }
+
   .count { font-size: 11px; font-weight: 700; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-ink); }
   .count.soft { background: var(--panel-2); color: var(--muted); }
   .me { border-top: 1px solid var(--line); padding: 12px 8px 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
@@ -433,7 +464,7 @@
       } else if (window.MockApi) {
         setTimeout(() => {
           try { resolve(JSON.parse(JSON.stringify(window.MockApi[fn](...args)))); } catch (e) { reject(e); }
-        }, 120);
+        }, (MockApi.delay && MockApi.delay[fn]) || 120);
       } else {
         reject(new Error('서버에 연결할 수 없습니다.'));
       }
@@ -759,7 +790,7 @@
           <td class="nowrap strong">${esc(r.req)}</td>
           <td class="nowrap">${esc(r.from)} → ${esc(r.to)}</td>
           <td class="num strong">${won(r.amount)}</td>
-          <td>${esc(r.reason)}</td>
+          <td>${esc(r.reason)}${filesView(r.files, true)}</td>
           <td class="nowrap">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
         </tr>`;
       }).join('') || '<tr><td colspan="6" class="empty">신청 내역이 없습니다.</td></tr>';
@@ -979,11 +1010,12 @@
       return `<article class="post">
         <button class="post-head" onclick="togglePost('${esc(p.id)}')" aria-expanded="${open}">
           <span class="chip cat-${esc(p.category)}">${esc(p.category)}</span>
-          <span class="post-title">${p.pinned ? '<span class="pin">📌</span>' : ''}${esc(p.title)}${p.comments.length ? `<span class="cc">[${p.comments.length}]</span>` : ''}</span>
+          <span class="post-title">${p.pinned ? '<span class="pin">📌</span>' : ''}${esc(p.title)}${p.files && p.files.length ? '<span class="clip" title="첨부 파일">📎</span>' : ''}${p.comments.length ? `<span class="cc">[${p.comments.length}]</span>` : ''}</span>
           <span class="post-meta">${esc(p.author)} · ${esc(p.date.slice(0, 10))}</span>
         </button>
         ${open ? `<div class="post-body">
           <div class="post-text">${esc(p.body)}</div>
+          ${filesView(p.files)}
           ${p.link ? `<a class="post-link" href="${esc(p.link)}" target="_blank" rel="noopener">🔗 ${esc(p.link)}</a>` : ''}
           <div class="comments">
             ${p.comments.map(c => `<div class="cmt"><b>${esc(c.author)}<span>${esc(c.date)}</span></b><p>${esc(c.body)}</p></div>`).join('')}
@@ -1020,14 +1052,17 @@
         </div>
         <div class="fld"><label for="pTitle">제목</label><input class="field-in" id="pTitle"></div>
         <div class="fld"><label for="pBody">내용</label><textarea class="field-in" id="pBody" style="min-height:140px"></textarea></div>
-        <div class="fld"><label for="pLink">링크 (선택)</label><input class="field-in" id="pLink" placeholder="구글 드라이브 파일 등 공유 링크"></div>
+        ${uploaderHtml('post', '첨부 파일')}
+        <div class="fld"><label for="pLink">링크 (선택)</label><input class="field-in" id="pLink" placeholder="10MB가 넘는 파일은 드라이브에 올리고 링크를 붙여주세요"></div>
         <div class="msg err" id="pErr" hidden></div>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="pOk">등록</button></div>
       </form>`);
+    initUploader('post', 'board');
     $('#pForm').onsubmit = e => {
       e.preventDefault();
-      const post = { category: $('#pCat').value, title: $('#pTitle').value.trim(), body: $('#pBody').value.trim(), link: $('#pLink').value.trim(), pinned: !!($('#pPin') && $('#pPin').checked) };
+      const post = { category: $('#pCat').value, title: $('#pTitle').value.trim(), body: $('#pBody').value.trim(), link: $('#pLink').value.trim(), pinned: !!($('#pPin') && $('#pPin').checked), files: uploadedFiles('post') };
       if (!post.title || !post.body) { $('#pErr').textContent = '제목과 내용을 입력해 주세요.'; $('#pErr').hidden = false; return; }
+      if (uploadsBusy('post')) { $('#pErr').textContent = BUSY_MSG; $('#pErr').hidden = false; return; }
       $('#pOk').disabled = true;
       call('apiAddPost', post)
         .then(data => { applyData(data); closeModal(); boardFilter = 'all'; openPost = null; page = 'board'; render(); toast('글을 등록했습니다.'); })
@@ -1078,13 +1113,14 @@
       const first = r.body.split('\n').find(l => l.trim() && !/^\(.*\)$/.test(l.trim())) || '';
       return `<article class="rule">
         <button class="rule-head" onclick="toggleRule('${esc(r.id)}')" aria-expanded="${open}">
-          <span class="rule-title">${hl(r.title)}</span>
+          <span class="rule-title">${hl(r.title)}${r.files && r.files.length ? '<span class="clip" title="첨부 파일">📎</span>' : ''}</span>
           <span class="rule-date">${ruleCat === 'all' ? `<span class="chip plain">${esc(r.category)}</span> ` : ''}시행 ${esc(r.effective)}</span>
           ${open ? '' : `<span class="rule-sum">${hl(first)}</span>`}
         </button>
         ${open ? `<div class="rule-body">
           <div class="rule-meta"><span><b>시행일</b>${esc(r.effective)}</span><span><b>담당</b>${esc(r.owner || '-')}</span><span><b>최종 개정</b>${esc(r.updated)} (${esc(r.editor)})</span></div>
           <div class="rule-text">${hl(r.body)}</div>
+          ${r.files && r.files.length ? `<div class="sub-label">첨부 파일</div>${filesView(r.files)}` : ''}
           ${r.link ? `<a class="post-link" href="${esc(r.link)}" target="_blank" rel="noopener">📄 원문 보기</a>` : ''}
           ${r.history.length ? `<details class="hist"><summary>개정 이력 ${r.history.length}건</summary><ol>${r.history.map(h => `<li><span>${esc(h.date)} · ${esc(h.editor)}</span>${esc(h.note)}</li>`).join('')}</ol></details>` : ''}
           ${canEdit ? `<div style="display:flex;gap:6px"><button class="btn small" onclick="openRuleForm('${esc(r.id)}')">수정</button><button class="btn small danger" onclick="deleteRule('${esc(r.id)}')">삭제</button></div>` : ''}
@@ -1131,16 +1167,19 @@
         <div class="fld"><label for="rBody">내용</label><textarea class="field-in" id="rBody" style="min-height:200px">${esc(r.body)}</textarea></div>
         <div class="two">
           <div class="fld"><label for="rOwner">담당</label><input class="field-in" id="rOwner" value="${esc(r.owner)}"></div>
-          <div class="fld"><label for="rLink">원문 링크</label><input class="field-in" id="rLink" value="${esc(r.link)}" placeholder="https://drive.google.com/..."></div>
+          <div class="fld"><label for="rLink">원문 링크 (선택)</label><input class="field-in" id="rLink" value="${esc(r.link)}" placeholder="https://drive.google.com/..."></div>
         </div>
+        ${uploaderHtml('rule', '첨부 파일 (규정 원문 PDF 등)')}
         ${id ? '<div class="fld"><label for="rNote">개정 내용 (이력에 남습니다)</label><input class="field-in" id="rNote" placeholder="예) 숙박비 상한 8만원 → 10만원"></div>' : ''}
         <div class="msg err" id="rErr" hidden></div>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="rOk">${id ? '저장' : '등록'}</button></div>
       </form>`);
+    initUploader('rule', 'rules', r.files);
     $('#rForm').onsubmit = e => {
       e.preventDefault();
-      const rule = { id: id || '', category: $('#rCat').value, effective: $('#rEff').value, title: $('#rTitle').value.trim(), body: $('#rBody').value.trim(), owner: $('#rOwner').value.trim(), link: $('#rLink').value.trim(), changeNote: $('#rNote') ? $('#rNote').value.trim() : '' };
+      const rule = { id: id || '', category: $('#rCat').value, effective: $('#rEff').value, title: $('#rTitle').value.trim(), body: $('#rBody').value.trim(), owner: $('#rOwner').value.trim(), link: $('#rLink').value.trim(), changeNote: $('#rNote') ? $('#rNote').value.trim() : '', files: uploadedFiles('rule') };
       if (!rule.title || !rule.body) { $('#rErr').textContent = '제목과 내용을 입력해 주세요.'; $('#rErr').hidden = false; return; }
+      if (uploadsBusy('rule')) { $('#rErr').textContent = BUSY_MSG; $('#rErr').hidden = false; return; }
       $('#rOk').disabled = true;
       call('apiSaveRule', rule)
         .then(data => {
@@ -1161,6 +1200,86 @@
       call('apiDeleteRule', id).then(data => { applyData(data); openRule = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
     };
   }
+
+  /* ================= 첨부 파일 ================= */
+  const MAX_FILE = 10 * 1024 * 1024;
+  const UP = {};
+  function fileSize(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`; }
+  function extOf(name) { const m = /\.([a-z0-9]+)$/i.exec(name || ''); return m ? m[1].toUpperCase().slice(0, 4) : 'FILE'; }
+  function extClass(ext) {
+    ext = ext.toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xls';
+    if (['doc', 'docx', 'hwp', 'hwpx', 'txt'].includes(ext)) return 'doc';
+    if (['ppt', 'pptx'].includes(ext)) return 'ppt';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext)) return 'img';
+    return '';
+  }
+  function fileRow(f, opts) {
+    opts = opts || {};
+    const ext = extOf(f.name);
+    const inner = `<span class="ext ${extClass(ext)}">${esc(ext)}</span>
+      <span class="fn">${esc(f.name)}${opts.inline ? '' : `<span class="fs">${opts.msg ? esc(opts.msg) : fileSize(f.size || 0)}</span>`}</span>${opts.tail || ''}`;
+    return opts.link
+      ? `<a class="file" href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.name)} (${fileSize(f.size || 0)})">${inner}</a>`
+      : `<div class="file ${opts.status || ''}">${inner}</div>`;
+  }
+  function filesView(files, inline) {
+    return files && files.length ? `<div class="files ${inline ? 'inline' : ''}">${files.map(f => fileRow(f, { link: true, inline })).join('')}</div>` : '';
+  }
+
+  function uploaderHtml(key, label) {
+    return `<div class="fld"><label for="drop-${key}">${label}</label>
+      <div class="drop" id="drop-${key}" tabindex="0" role="button">파일을 끌어다 놓거나 <u>눌러서 선택</u> · 한 파일 10MB 이하</div>
+      <input type="file" id="file-${key}" multiple hidden>
+      <div class="files" id="up-${key}"></div></div>`;
+  }
+  function initUploader(key, area, existing) {
+    UP[key] = { area, items: (existing || []).map(f => ({ status: 'done', f })) };
+    const drop = $('#drop-' + key), input = $('#file-' + key);
+    drop.onclick = () => input.click();
+    drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } };
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); addFiles(key, e.dataTransfer.files); };
+    input.onchange = () => { addFiles(key, input.files); input.value = ''; };
+    drawUploader(key);
+  }
+  function addFiles(key, list) {
+    Array.from(list).forEach(file => {
+      const it = { status: 'up', f: { name: file.name, size: file.size } };
+      UP[key].items.push(it);
+      if (file.size > MAX_FILE) { it.status = 'err'; it.msg = '10MB를 넘어 올릴 수 없습니다'; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        call('apiUploadFile', { name: file.name, mimeType: file.type, data: String(reader.result).split(',')[1], area: UP[key].area })
+          .then(f => { it.status = 'done'; it.f = f; })
+          .catch(e => { it.status = 'err'; it.msg = e.message || String(e); })
+          .then(() => drawUploader(key));
+      };
+      reader.onerror = () => { it.status = 'err'; it.msg = '파일을 읽지 못했습니다'; drawUploader(key); };
+      reader.readAsDataURL(file);
+    });
+    drawUploader(key);
+  }
+  function drawUploader(key) {
+    const el = $('#up-' + key);
+    if (!el) return;
+    el.innerHTML = UP[key].items.map((it, i) => fileRow(it.f, {
+      status: it.status === 'done' ? '' : it.status,
+      msg: it.status === 'err' ? it.msg : '',
+      tail: `<button type="button" class="icon-btn" onclick="removeUpload('${key}', ${i})" aria-label="${esc(it.f.name)} 첨부 빼기">×</button>`,
+    })).join('');
+  }
+  function removeUpload(key, i) { UP[key].items.splice(i, 1); drawUploader(key); }
+  function uploadsBusy(key) { return !!UP[key] && UP[key].items.some(it => it.status === 'up'); }
+  function uploadedFiles(key) { return UP[key] ? UP[key].items.filter(it => it.status === 'done').map(it => it.f) : []; }
+  const BUSY_MSG = '파일을 올리는 중입니다. 업로드가 끝난 뒤 다시 눌러주세요.';
+
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a.file[href^="#demo"]');
+    if (a) { e.preventDefault(); toast('예시 화면이라 파일을 열 수 없습니다. 실제로는 구글 드라이브에서 열립니다.'); }
+  });
 
   function budgetBars() {
     const a = D.budget.accounts;
@@ -1301,6 +1420,7 @@
         </div>
         <div class="fld"><label for="bAmt">금액 (원)</label><input class="field-in" id="bAmt" inputmode="numeric" placeholder="예) 500,000"></div>
         <div class="fld"><label for="bReason">사유</label><textarea class="field-in" id="bReason" placeholder="전용이 필요한 사유"></textarea></div>
+        ${uploaderHtml('budget', '증빙 첨부 (선택) · 견적서, 품의서 등')}
         <div class="msg err" id="bErr" hidden></div>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="bSubmit">신청</button></div>
       </form>`);
@@ -1309,12 +1429,14 @@
       $('#bHint').textContent = a ? `현재예산 ${won(a.current)}원` : '';
     };
     $('#bAmt').oninput = e => { const n = e.target.value.replace(/[^0-9]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
+    initUploader('budget', 'budget');
     $('#bForm').onsubmit = e => {
       e.preventDefault();
       const form = {
         requester: D.me.name || ($('#bReq') && $('#bReq').value) || '',
         from: $('#bFrom').value, to: $('#bTo').value,
         amount: $('#bAmt').value.replace(/,/g, ''), reason: $('#bReason').value.trim(),
+        files: uploadedFiles('budget'),
       };
       const err = $('#bErr');
       const a = D.budget.accounts.find(x => x.name === form.from);
@@ -1322,6 +1444,7 @@
       if (!form.requester || !form.from || !form.to || !form.amount || !form.reason) msg = '모든 항목을 입력해 주세요.';
       else if (form.from === form.to) msg = '전출과목과 전입과목이 같습니다.';
       else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${form.from} 현재예산 ${won(a.current)}원)`;
+      else if (uploadsBusy('budget')) msg = BUSY_MSG;
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)

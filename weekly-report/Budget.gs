@@ -13,7 +13,7 @@ const BUDGET = {
   ACCOUNT_ROWS: 50,
 };
 
-const BCOL = { ID: 1, DATE: 2, REQUESTER: 3, FROM: 4, TO: 5, AMOUNT: 6, REASON: 7, CANCELED: 8 };
+const BCOL = { ID: 1, DATE: 2, REQUESTER: 3, FROM: 4, TO: 5, AMOUNT: 6, REASON: 7, CANCELED: 8, FILES: 9 };
 
 function setupBudgetSheets_(ss) {
   if (!ss.getSheetByName(BUDGET.SHEET)) {
@@ -31,6 +31,8 @@ function setupBudgetSheets_(ss) {
     sh.setFrozenRows(1);
     sh.getRange('H1').setNote('Y면 취소된 건으로 예산에 반영되지 않습니다.');
   }
+
+  ensureHeader_(ss.getSheetByName(BUDGET.SHEET), BCOL.FILES, '증빙 첨부');
 
   if (!ss.getSheetByName(BUDGET.ACCOUNTS)) {
     const sh = ss.insertSheet(BUDGET.ACCOUNTS);
@@ -116,7 +118,7 @@ function submitBudgetTransfer(form) {
     const sh = ss.getSheetByName(BUDGET.SHEET);
     const now = new Date();
     const id = nextBudgetId_(sh, now);
-    sh.getRange(sh.getLastRow() + 1, 1, 1, 7).setValues([[id, now, requester, from, to, amount, reason]]);
+    sh.getRange(sh.getLastRow() + 1, 1, 1, BCOL.FILES).setValues([[id, now, requester, from, to, amount, reason, '', filesToCell_(form.files)]]);
     SpreadsheetApp.flush();
     try { CacheService.getDocumentCache().remove(CK.budget); } catch (e) { /* 캐시 없음 */ }
 
@@ -128,7 +130,8 @@ function submitBudgetTransfer(form) {
         htmlBody:
           `<b>${requester}</b>님이 예산전용을 신청했습니다.<br><br>` +
           `신청번호: ${id}<br>전출과목: ${from}<br>전입과목: ${to}<br>` +
-          `금액: <b>${amount.toLocaleString()}원</b><br>사유: ${escapeHtml_(reason)}<br><br>` +
+          `금액: <b>${amount.toLocaleString()}원</b><br>사유: ${escapeHtml_(reason)}<br>` +
+          filesFromCell_(filesToCell_(form.files)).map(f => `첨부: <a href="${f.url}">${escapeHtml_(f.name)}</a><br>`).join('') + '<br>' +
           `<a href="${sheetUrl(ss, sh)}">예산전용 시트 열기</a>`,
       });
     }

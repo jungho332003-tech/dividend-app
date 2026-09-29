@@ -34,7 +34,7 @@ function initialize() {
 
   if (!ss.getSheetByName(SHEET.CONFIG)) {
     const sh = ss.insertSheet(SHEET.CONFIG);
-    sh.getRange(1, 1, 7, 2).setValues([
+    sh.getRange(1, 1, 8, 2).setValues([
       ['항목', '값'],
       [CFG.TEAM, '인사팀'],
       [CFG.MONDAY, mondayOf(new Date())],
@@ -42,7 +42,9 @@ function initialize() {
       [CFG.DEADLINE_HOUR, 14],
       [CFG.REMIND_HOURS, 3],
       [CFG.CALENDAR, ''],
+      [CFG.DRIVE_FOLDER, ''],
     ]);
+    sh.getRange('B8').setNote('드라이브에서 폴더를 열었을 때 주소 .../folders/ 뒤의 값. 팀원에게 편집자로 공유해야 합니다.');
     sh.getRange('B3').setNumberFormat('yyyy-mm-dd (ddd)');
     sh.getRange('B7').setNote('구글 캘린더 > 설정 > 팀 캘린더 선택 > "캘린더 통합"의 캘린더 ID. 팀원에게 캘린더를 공유해야 합니다.');
     sh.getRange('B4').setNumberFormat('yyyy-mm-dd hh:mm').setNote('명절 등으로 이번 주만 마감이 다르면 입력. 예) 2026-09-23 14:00\n다음 주차로 넘어가면 자동으로 비워집니다.');

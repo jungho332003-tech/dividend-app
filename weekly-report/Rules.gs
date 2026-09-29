@@ -13,7 +13,7 @@ const RULES = {
   CATEGORIES: ['인사·근태', '급여·수당', '복리후생', '출장·경비', '교육', '기타'],
 };
 
-const RCOL = { ID: 1, CATEGORY: 2, TITLE: 3, BODY: 4, EFFECTIVE: 5, OWNER: 6, LINK: 7, UPDATED: 8, EDITOR: 9, DELETED: 10 };
+const RCOL = { ID: 1, CATEGORY: 2, TITLE: 3, BODY: 4, EFFECTIVE: 5, OWNER: 6, LINK: 7, UPDATED: 8, EDITOR: 9, DELETED: 10, FILES: 11 };
 
 function setupRuleSheets_(ss) {
   if (!ss.getSheetByName(RULES.SHEET)) {
@@ -27,6 +27,7 @@ function setupRuleSheets_(ss) {
     [50, 90, 220, 480, 100, 80, 200, 130, 80, 70].forEach((w, i) => sh.setColumnWidth(i + 1, w));
     sh.setFrozenRows(1);
   }
+  ensureHeader_(ss.getSheetByName(RULES.SHEET), RCOL.FILES, '첨부');
   if (!ss.getSheetByName(RULES.HISTORY)) {
     const sh = ss.insertSheet(RULES.HISTORY);
     sh.getRange(1, 1, 1, 4).setValues([['번호', '일시', '수정자', '개정 내용']]);
@@ -55,7 +56,7 @@ function readRules_(ss) {
     });
   }
 
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 10).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, RCOL.FILES).getValues()
     .filter(r => String(r[0]) && String(r[RCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .map(r => ({
       id: String(r[0]),
@@ -67,6 +68,7 @@ function readRules_(ss) {
       link: String(r[6] || ''),
       updated: r[7] instanceof Date ? fmt(r[7], 'yyyy-MM-dd') : String(r[7] || '').slice(0, 10),
       editor: String(r[8] || ''),
+      files: filesFromCell_(r[RCOL.FILES - 1]),
       history: (history[String(r[0])] || []).reverse(),
     }));
 }
@@ -100,10 +102,11 @@ function apiSaveRule(rule) {
     const idx = id ? ids.indexOf(id) : -1;
     if (idx >= 0) {
       sh.getRange(idx + 2, RCOL.CATEGORY, 1, values.length).setValues([values]);
+      sh.getRange(idx + 2, RCOL.FILES).setValue(filesToCell_(rule.files));
       hsh.appendRow([id, now, editor, String(rule.changeNote || '').trim() || '내용 수정']);
     } else {
       id = String((ids.length ? Math.max.apply(null, ids.map(Number).filter(n => !isNaN(n))) : 0) + 1);
-      sh.getRange(last + 1, 1, 1, values.length + 1).setValues([[id].concat(values)]);
+      sh.getRange(last + 1, 1, 1, RCOL.FILES).setValues([[id].concat(values, ['', filesToCell_(rule.files)])]);
       hsh.appendRow([id, now, editor, String(rule.changeNote || '').trim() || '최초 등록']);
     }
   } finally {

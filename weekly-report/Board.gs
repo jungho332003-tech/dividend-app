@@ -11,7 +11,7 @@ const BOARD = {
   CATEGORIES: ['공지', '자료', '일반'],
 };
 
-const PCOL = { ID: 1, DATE: 2, AUTHOR: 3, CATEGORY: 4, TITLE: 5, BODY: 6, LINK: 7, PINNED: 8, DELETED: 9 };
+const PCOL = { ID: 1, DATE: 2, AUTHOR: 3, CATEGORY: 4, TITLE: 5, BODY: 6, LINK: 7, PINNED: 8, DELETED: 9, FILES: 10 };
 
 function setupBoardSheets_(ss) {
   if (!ss.getSheetByName(BOARD.SHEET)) {
@@ -23,6 +23,7 @@ function setupBoardSheets_(ss) {
     [70, 130, 80, 60, 260, 420, 200, 70, 70].forEach((w, i) => sh.setColumnWidth(i + 1, w));
     sh.setFrozenRows(1);
   }
+  ensureHeader_(ss.getSheetByName(BOARD.SHEET), PCOL.FILES, '첨부');
   if (!ss.getSheetByName(BOARD.COMMENTS)) {
     const sh = ss.insertSheet(BOARD.COMMENTS);
     sh.getRange(1, 1, 1, 4).setValues([['글번호', '작성일시', '작성자', '내용']]);
@@ -53,7 +54,7 @@ function readBoard_(ss) {
     });
   }
 
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, PCOL.FILES).getValues()
     .filter(r => String(r[0]) && String(r[PCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .map(r => ({
       id: String(r[0]),
@@ -64,6 +65,7 @@ function readBoard_(ss) {
       body: String(r[5]),
       link: String(r[6] || ''),
       pinned: String(r[7]).toUpperCase() === 'Y',
+      files: filesFromCell_(r[PCOL.FILES - 1]),
       comments: comments[String(r[0])] || [],
     }))
     .sort((a, b) => (b.pinned - a.pinned) || b.date.localeCompare(a.date));
@@ -88,7 +90,7 @@ function apiAddPost(post) {
     const last = sh.getLastRow();
     const ids = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => Number(v) || 0) : [];
     const id = (ids.length ? Math.max.apply(null, ids) : 0) + 1;
-    sh.getRange(last + 1, 1, 1, 9).setValues([[id, new Date(), me.name, category, title, body, String(post.link || '').trim(), pinned ? 'Y' : '', '']]);
+    sh.getRange(last + 1, 1, 1, PCOL.FILES).setValues([[id, new Date(), me.name, category, title, body, String(post.link || '').trim(), pinned ? 'Y' : '', '', filesToCell_(post.files)]]);
   } finally {
     lock.releaseLock();
   }

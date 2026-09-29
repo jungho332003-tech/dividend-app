@@ -154,7 +154,7 @@ function currentMember_(members) {
 function readBudget_(ss) {
   const reqSh = ss.getSheetByName(BUDGET.SHEET);
   const reqRows = reqSh && reqSh.getLastRow() >= 2
-    ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, 8).getValues()
+    ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, BCOL.FILES).getValues()
     : [];
 
   return {
@@ -171,6 +171,7 @@ function readBudget_(ss) {
         to: String(x.r[4]),
         amount: Number(x.r[5]) || 0,
         reason: String(x.r[6]),
+        files: filesFromCell_(x.r[BCOL.FILES - 1]),
       }))
       .reverse(),
   };
