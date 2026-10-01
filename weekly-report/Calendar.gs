@@ -15,6 +15,7 @@ function getTeamCalendar_() {
 
 /** startIso ~ endIso 사이 일정 + 공휴일 + 주간보고 마감 */
 function apiCalendar(startIso, endIso) {
+  requireMenu_(currentMember_(getMembers()), 'calendar');
   const start = new Date(startIso);
   const end = new Date(endIso);
   const cal = getTeamCalendar_();
@@ -56,6 +57,7 @@ function apiAddEvent(ev) {
   if (!title || !m) throw new Error('제목과 날짜를 입력해 주세요.');
 
   const me = currentMember_(getMembers());
+  requireMenu_(me, 'calendar');
   const cal = getTeamCalendar_();
   const opts = {
     location: String(ev.location || '').trim(),

@@ -17,6 +17,7 @@ const FILES = {
 function apiUploadFile(file) {
   const me = currentMember_(getMembers());
   if (!me.name && !me.isAdmin) throw new Error('[팀원] 시트에 등록된 사람만 파일을 올릴 수 있습니다.');
+  requireMenu_(me, { board: 'board', rules: 'rules', budget: 'budget' }[file.area] || 'board');
 
   const name = String(file.name || '').trim() || '첨부파일';
   const bytes = Utilities.base64Decode(String(file.data || ''));

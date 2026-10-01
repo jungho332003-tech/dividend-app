@@ -54,10 +54,11 @@ function initialize() {
 
   if (!ss.getSheetByName(SHEET.MEMBERS)) {
     const sh = ss.insertSheet(SHEET.MEMBERS);
-    const rows = [['순서', '이름', '이메일', '역할', '작성대상(Y/N)'], [0, '팀장', '', '팀장', 'N']];
-    for (let i = 1; i <= 8; i++) rows.push([i, `팀원${i}`, '', '팀원', 'Y']);
-    sh.getRange(1, 1, rows.length, 5).setValues(rows);
-    styleHeader_(sh.getRange('A1:E1'));
+    const rows = [['순서', '이름', '이메일', '역할', '작성대상(Y/N)', '관리자(Y/N)'], [0, '팀장', '', '팀장', 'N', 'N']];
+    for (let i = 1; i <= 8; i++) rows.push([i, `팀원${i}`, '', '팀원', 'Y', 'N']);
+    sh.getRange(1, 1, rows.length, 6).setValues(rows);
+    styleHeader_(sh.getRange('A1:F1'));
+    sh.getRange('F2:F50').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['Y', 'N']).build());
     sh.getRange('D2:D50').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['팀원', '팀장']).build());
     sh.getRange('E2:E50').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['Y', 'N']).build());
     sh.setColumnWidth(2, 120).setColumnWidth(3, 240).setColumnWidth(5, 110);
@@ -77,6 +78,8 @@ function initialize() {
   setupBudgetSheets_(ss);
   setupBoardSheets_(ss);
   setupRuleSheets_(ss);
+  setupMenuSheet_(ss);
+  ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');
@@ -93,28 +96,36 @@ const DEFAULT_HOLIDAYS = [
   ['2027-12-27', '성탄절 대체공휴일'],
 ];
 
-/** 2단계: 팀원별 입력시트 생성 + 시트 보호(본인만 편집) */
+/** 2단계: 팀원별 입력시트 생성 + 시트 보호(본인만 편집). 웹앱 관리 메뉴의 "권한 적용"도 같은 일을 한다. */
 function setupMembers() {
   const ctx = getContext();
+  const missing = applyProtections_(ctx);
+  const msg = missing.length ? `\n\n⚠️ 이메일이 없어 권한을 적용하지 못한 팀원: ${missing.join(', ')}` : '';
+  SpreadsheetApp.getUi().alert(`입력시트와 권한을 적용했습니다.\n스프레드시트를 팀원 전원에게 "편집자"로 공유해야 입력할 수 있습니다.\n(웹앱 관리 메뉴의 "권한 한 번에 적용"을 쓰면 공유까지 자동으로 합니다.)${msg}`);
+}
+
+/** 입력시트 생성 + 시트 보호. 이메일이 없어 잠그지 못한 팀원 이름 목록을 돌려준다. */
+function applyProtections_(ctx) {
   const ss = ctx.ss;
   const leaders = getLeaders(ctx.members).map(m => m.email);
+  const admins = ctx.members.filter(m => m.admin && m.email).map(m => m.email);
   const missing = [];
 
   ctx.members.filter(m => m.write).forEach(m => {
     const sh = setupInputSheet_(ss, m.name, ctx);
-    if (m.email) protectSheet_(sh, [m.email]);
+    if (m.email) protectSheet_(sh, [m.email].concat(admins));
     else missing.push(m.name);
   });
 
   // 관리 시트: 관리자만
-  [SHEET.CONFIG, SHEET.MEMBERS, SHEET.HOLIDAYS, BUDGET.ACCOUNTS].forEach(name => {
+  [SHEET.CONFIG, SHEET.MEMBERS, SHEET.HOLIDAYS, BUDGET.ACCOUNTS, MENU_SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
-    if (sh) protectSheet_(sh, []);
+    if (sh) protectSheet_(sh, admins);
   });
 
   // 주간보고: 관리자만, 단 팀장 코멘트 칸은 팀장 편집 가능
   const report = ss.getSheetByName(SHEET.REPORT) || ss.insertSheet(SHEET.REPORT, 0);
-  protectSheetWithLeaderRange_(report, report.getRange(REPORT.FIRST_ROW, REPORT.COMMENT_COL, report.getMaxRows() - REPORT.FIRST_ROW + 1, 1), leaders, false);
+  protectSheetWithLeaderRange_(report, report.getRange(REPORT.FIRST_ROW, REPORT.COMMENT_COL, report.getMaxRows() - REPORT.FIRST_ROW + 1, 1), leaders.concat(admins), false, admins);
 
   // 예산전용: 웹앱·메뉴로 신청 (직접 수정 시 경고만)
   const budget = ss.getSheetByName(BUDGET.SHEET);
@@ -125,7 +136,7 @@ function setupMembers() {
   // 회사 기준: 팀장·관리자만 수정
   [RULES.SHEET, RULES.HISTORY].forEach(name => {
     const sh = ss.getSheetByName(name);
-    if (sh) protectSheet_(sh, leaders);
+    if (sh) protectSheet_(sh, leaders.concat(admins));
   });
 
   // 게시판: 누구나 글/댓글 작성 (직접 수정 시 경고만)
@@ -136,9 +147,8 @@ function setupMembers() {
     sh.protect().setDescription(`${name} 보호`).setWarningOnly(true);
   });
 
-  generateReport();
-  const msg = missing.length ? `\n\n⚠️ 이메일이 없어 권한을 적용하지 못한 팀원: ${missing.join(', ')}` : '';
-  SpreadsheetApp.getUi().alert(`입력시트와 권한을 적용했습니다.\n스프레드시트를 팀원 전원에게 "편집자"로 공유해야 입력할 수 있습니다.${msg}`);
+  buildReport_(ctx);
+  return missing;
 }
 
 function setupInputSheet_(ss, name, ctx) {
@@ -198,7 +208,7 @@ function protectSheet_(sh, editors) {
 /**
  * 시트는 관리자만(warningOnly면 경고만), leaderRange는 팀장만 편집.
  */
-function protectSheetWithLeaderRange_(sh, leaderRange, leaders, warningOnly) {
+function protectSheetWithLeaderRange_(sh, leaderRange, leaders, warningOnly, admins) {
   sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
   sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
 
@@ -206,7 +216,7 @@ function protectSheetWithLeaderRange_(sh, leaderRange, leaders, warningOnly) {
   if (warningOnly) {
     sp.setWarningOnly(true);
   } else {
-    restrictEditors_(sp, []);
+    restrictEditors_(sp, admins || []);
     sp.setUnprotectedRanges([leaderRange]);
   }
 

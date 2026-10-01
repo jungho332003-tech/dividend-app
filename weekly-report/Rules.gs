@@ -79,6 +79,7 @@ function readRules_(ss) {
 function apiSaveRule(rule) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'rules');
   if (!me.isLeader && !me.isAdmin) throw new Error('회사 기준은 팀장 또는 관리자만 등록·수정할 수 있습니다.');
 
   const title = String(rule.title || '').trim();
@@ -118,6 +119,7 @@ function apiSaveRule(rule) {
 function apiDeleteRule(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'rules');
   if (!me.isLeader && !me.isAdmin) throw new Error('팀장 또는 관리자만 삭제할 수 있습니다.');
   const sh = ctx.ss.getSheetByName(RULES.SHEET);
   const ids = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 1).getValues().map(([v]) => String(v));

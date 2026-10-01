@@ -142,11 +142,11 @@ function setConfigValue(key, value) {
   sh.appendRow([key, value]);
 }
 
-/** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) */
+/** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -154,6 +154,7 @@ function getMembers() {
       email: String(r[2]).trim(),
       role: String(r[3]).trim(),
       write: String(r[4]).trim().toUpperCase() !== 'N',
+      admin: String(r[5]).trim().toUpperCase() === 'Y',
     }))
     .sort((a, b) => a.order - b.order);
 }

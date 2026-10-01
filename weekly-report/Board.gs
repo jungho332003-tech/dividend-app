@@ -74,6 +74,7 @@ function readBoard_(ss) {
 function apiAddPost(post) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'board');
   if (!me.name) throw new Error('[팀원] 시트에 등록된 사람만 글을 쓸 수 있습니다.');
 
   const title = String(post.title || '').trim();
@@ -100,6 +101,7 @@ function apiAddPost(post) {
 function apiDeletePost(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'board');
   const sh = ctx.ss.getSheetByName(BOARD.SHEET);
   const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 3).getValues();
   const idx = rows.findIndex(r => String(r[0]) === String(id));
@@ -112,6 +114,7 @@ function apiDeletePost(id) {
 function apiAddComment(id, body) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'board');
   if (!me.name) throw new Error('[팀원] 시트에 등록된 사람만 댓글을 쓸 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('댓글 내용을 입력해 주세요.');

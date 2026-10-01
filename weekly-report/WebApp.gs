@@ -50,11 +50,14 @@ function putCache_(key, value, ttl) {
 function apiBootstrap() {
   const ctx = getContext();
   const ss = ctx.ss;
-  return Object.assign(baseData_(ctx), {
-    members: cached_(CK.members(ctx), () => readMembers_(ctx)),
-    budget: cached_(CK.budget, () => readBudget_(ss)),
-    board: cached_(CK.board, () => readBoard_(ss)),
-    rules: cached_(CK.rules, () => readRules_(ss)),
+  const base = baseData_(ctx);
+  const can = k => base.me.menus.indexOf(k) >= 0;
+  // 권한 없는 메뉴의 데이터는 아예 보내지 않는다
+  return Object.assign(base, {
+    members: can('weekly') ? cached_(CK.members(ctx), () => readMembers_(ctx)) : [],
+    budget: can('budget') ? cached_(CK.budget, () => readBudget_(ss)) : { accounts: [], requests: [] },
+    board: can('board') ? cached_(CK.board, () => readBoard_(ss)) : [],
+    rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
   });
 }
 
@@ -140,8 +143,8 @@ function currentMember_(members) {
       return o ? o.getEmail().toLowerCase() : '';
     } catch (e) { return ''; /* 공유 드라이브 등 소유자 조회 불가 */ }
   }, 21600);
-  const isAdmin = !!owner && owner === email;
-  return {
+  const isAdmin = (!!owner && owner === email) || !!(m && m.admin);
+  const me = {
     email: email,
     name: m ? m.name : '',
     role: m ? m.role : '',
@@ -149,6 +152,8 @@ function currentMember_(members) {
     isLeader: !!(m && m.role === '팀장'),
     isAdmin: isAdmin,
   };
+  me.menus = allowedMenus_(me);
+  return me;
 }
 
 function readBudget_(ss) {
@@ -186,6 +191,7 @@ function readBudget_(ss) {
 function apiSaveMyWeek(payload) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'weekly');
   if (!me.writer) throw new Error('작성 대상 팀원으로 등록되어 있지 않습니다. 관리자에게 [팀원] 시트 등록을 요청하세요.');
 
   const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name);
@@ -220,6 +226,7 @@ function parseDue_(v) {
 function apiSaveComment(name, comment) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'weekly');
   if (!me.isLeader) throw new Error('팀장만 코멘트를 남길 수 있습니다.');
 
   const sh = ctx.ss.getSheetByName(SHEET.REPORT);
@@ -241,6 +248,7 @@ function apiSaveComment(name, comment) {
 function apiSubmitBudget(form) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'budget');
   const requester = me.name || String(form.requester || '').trim();
   const id = submitBudgetTransfer(Object.assign({}, form, { requester: requester }));
   return Object.assign(refreshPart_('budget'), { newId: id });
@@ -250,6 +258,7 @@ function apiSubmitBudget(form) {
 function apiCancelBudget(row, id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireMenu_(me, 'budget');
   const sh = ctx.ss.getSheetByName(BUDGET.SHEET);
   const v = sh.getRange(row, 1, 1, 8).getValues()[0];
   if (String(v[BCOL.ID - 1]) !== id) throw new Error('신청 내역이 바뀌었습니다. 새로고침 후 다시 시도하세요.');

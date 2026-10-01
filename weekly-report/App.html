@@ -271,7 +271,7 @@
   .panel-head span { color: var(--muted); font-size: 12px; }
 
   /* 지표 */
-  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
   .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
   .kpi .label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
   .kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
@@ -395,7 +395,7 @@
   .loading { color: var(--muted); padding: 40px 0; text-align: center; }
 
   @media (max-width: 1080px) {
-    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
     .grid-2 { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 860px) {
@@ -442,6 +442,7 @@
       <button data-page="calendar"><span class="ni"><i class="ico">▦</i>일정</span></button>
       <button data-page="board"><span class="ni"><i class="ico">✎</i>공유게시판</span><span id="cBoard"></span></button>
       <button data-page="rules"><span class="ni"><i class="ico">§</i>회사 기준</span></button>
+      <button data-page="admin" hidden><span class="ni"><i class="ico">⚙</i>관리</span><span id="cAdmin"></span></button>
     </nav>
     <div class="me" id="meBox"></div>
   </aside>
@@ -541,7 +542,7 @@
   function render() {
     $('#brandTeam').textContent = `${D.team} 업무관리`;
     $('#brandWeek').textContent = D.week.thisLabel;
-    const role = D.me.isLeader ? '팀장' : D.me.writer ? '팀원' : D.me.isAdmin ? '관리자' : '조회';
+    const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
     $('#meBox').innerHTML = D.me.name
       ? `<b>${esc(D.me.name)} · ${role}</b><span>${esc(D.me.email)}</span>`
       : `<b>등록되지 않은 사용자</b><span>${esc(D.me.email || '')}</span>`;
@@ -550,19 +551,33 @@
     const newPosts = D.board.filter(p => daysAgo(p.date) < 3).length;
     $('#cBoard').outerHTML = `<span id="cBoard">${newPosts ? `<span class="count soft" title="최근 3일 새 글">N ${newPosts}</span>` : ''}</span>`;
     $('#cReport').outerHTML = `<span id="cReport" class="count ${s.total - s.done ? '' : 'soft'}" title="작성완료 미체크">${s.total - s.done ? s.total - s.done : '✓'}</span>`;
+    const issues = A ? A.members.filter(m => m.email && needsAttention(m.name)).length : 0;
+    $('#cAdmin').outerHTML = `<span id="cAdmin">${issues ? `<span class="count" title="권한 확인 필요">${issues}</span>` : ''}</span>`;
+    // 권한 있는 메뉴만 보이게
+    const allowed = ['dash', 'weekly', 'budget', 'calendar', 'board', 'rules', 'admin'].filter(can);
+    if (!can(page)) page = allowed[0] || 'none';
     document.querySelectorAll('#nav button').forEach(b => {
+      b.hidden = !can(b.dataset.page);
       if (b.dataset.page === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
 
     $('#main').innerHTML = PAGES[page]();
     if (page === 'weekly' && weeklyTab === 'mine') bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = null;
-    if (page === 'dash' && !upcoming) loadUpcoming();
+    if (page === 'dash' && !upcoming && can('calendar')) loadUpcoming();
+    if (page === 'admin' && !A) loadAdmin();
     if (page === 'calendar') loadMonth();
     renderDemoBar();
   }
 
+  function can(k) { return !!(D && D.me.menus && D.me.menus.indexOf(k) >= 0); }
+
   const VIEWS = {};
   const PAGES = {
+    none() {
+      return `<div class="head"><div><h1>접근 권한이 없습니다</h1></div></div>
+        <div class="notice">${D.me.name ? '볼 수 있는 메뉴가 없습니다.' : `${esc(D.me.email || '이 계정')}은(는) [팀원] 시트에 등록되어 있지 않습니다.`} 관리자에게 등록과 권한을 요청하세요.</div>`;
+    },
+    admin() { return VIEWS.admin(); },
     dash() {
       const s = stats();
       const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
@@ -605,76 +620,76 @@
           <span class="meta">${esc(r.updated.slice(5))} 개정${r.history[0] ? ` · ${esc(r.history[0].note)}` : ''}</span>
         </div>`).join('') || '<div class="empty">등록된 기준이 없습니다.</div>';
 
+      const W = can('weekly'), B = can('budget'), C = can('calendar'), BO = can('board'), R = can('rules');
+      const kpis = [
+        W && `<div class="kpi ${s.overdue && s.done < s.total ? 'alert' : ''}">
+            <span class="label">주간보고 마감</span>
+            <span class="value">${s.left.big}</span>
+            <span class="sub">${esc(s.left.sub)}</span>
+          </div>`,
+        W && `<div class="kpi">
+            <span class="label">작성완료</span>
+            <span class="value">${s.done}<small> / ${s.total}명</small></span>
+            <div class="meter" role="img" aria-label="작성률 ${pct}%"><i style="width:${pct}%"></i></div>
+          </div>`,
+        B && `<div class="kpi">
+            <span class="label">이번 달 예산전용</span>
+            <span class="value">${s.monthReq.length}<small>건</small></span>
+            <span class="sub">${s.monthReq.length ? `${won(monthAmt)}원 · ${esc(s.monthReq.map(r => r.req).filter((v, i, a) => a.indexOf(v) === i).join(', '))}` : '신청 없음'}</span>
+          </div>`,
+        W && `<div class="kpi">
+            <span class="label">휴무·특이사항</span>
+            <span class="value">${s.off.length}<small>명</small></span>
+            <span class="sub">${s.off.map(m => esc(m.name)).join(', ') || '없음'}</span>
+          </div>`,
+      ].filter(Boolean);
+
+      // 권한 있는 패널만 골라 두 칸씩 배치
+      const panels = [
+        W && `<section class="panel">
+            <div class="panel-head"><h2>팀원 작성현황</h2><button class="btn small" onclick="setTab('weekly','team', true)">주간보고 보기</button></div>
+            <div class="list">${memberRows}</div>
+          </section>`,
+        C && `<section class="panel">
+            <div class="panel-head"><h2>다가오는 일정</h2><button class="btn small" onclick="go('calendar')">캘린더</button></div>
+            <div class="agenda" id="upcoming">${upcomingHtml()}</div>
+          </section>`,
+        B && `<section class="panel">
+            <div class="panel-head"><h2>예산 과목별 현재예산</h2><span>원</span></div>
+            ${budgetBars()}
+          </section>`,
+        B && `<section class="panel">
+            <div class="panel-head"><h2>최근 예산전용</h2><button class="btn small" onclick="setTab('budget','list', true)">전체 보기</button></div>
+            <div class="list">${recent}</div>
+          </section>`,
+        W && `<section class="panel">
+            <div class="panel-head"><h2>이번 주 기한 업무</h2><span>${esc(D.week.thisLabel)}</span></div>
+            <div>${dueRows}</div>
+          </section>`,
+        (BO || R) && `<div style="display:flex;flex-direction:column;gap:16px">
+            ${BO ? `<section class="panel">
+              <div class="panel-head"><h2>공유게시판</h2><button class="btn small" onclick="go('board')">전체 보기</button></div>
+              <div class="list">${boardPreview}</div>
+            </section>` : ''}
+            ${R ? `<section class="panel">
+              <div class="panel-head"><h2>최근 개정된 회사 기준</h2><button class="btn small" onclick="go('rules')">전체 보기</button></div>
+              <div class="list">${rulePreview}</div>
+            </section>` : ''}
+          </div>`,
+      ].filter(Boolean);
+      let rowsHtml = '';
+      for (let i = 0; i < panels.length; i += 2) rowsHtml += `<div class="grid-2">${panels[i]}${panels[i + 1] || ''}</div>`;
+
       return `
         <div class="head">
           <div><h1>대시보드</h1><p>${esc(D.week.thisLabel)} · ${esc(D.team)}</p></div>
           <div class="head-actions">
-            ${(D.me.isLeader || D.me.isAdmin) && s.total - s.done ? '<button class="btn" onclick="remind()">미작성자 알림 보내기</button>' : ''}
-            <button class="btn primary" onclick="openBudgetForm()">예산전용 신청</button>
+            ${W && (D.me.isLeader || D.me.isAdmin) && s.total - s.done ? '<button class="btn" onclick="remind()">미작성자 알림 보내기</button>' : ''}
+            ${B ? '<button class="btn primary" onclick="openBudgetForm()">예산전용 신청</button>' : ''}
           </div>
         </div>
-
-        <section class="kpis" aria-label="이번 주 요약">
-          <div class="kpi ${s.overdue && s.done < s.total ? 'alert' : ''}">
-            <span class="label">주간보고 마감</span>
-            <span class="value">${s.left.big}</span>
-            <span class="sub">${esc(s.left.sub)}</span>
-          </div>
-          <div class="kpi">
-            <span class="label">작성완료</span>
-            <span class="value">${s.done}<small> / ${s.total}명</small></span>
-            <div class="meter" role="img" aria-label="작성률 ${pct}%"><i style="width:${pct}%"></i></div>
-          </div>
-          <div class="kpi">
-            <span class="label">이번 달 예산전용</span>
-            <span class="value">${s.monthReq.length}<small>건</small></span>
-            <span class="sub">${s.monthReq.length ? `${won(monthAmt)}원 · ${esc(s.monthReq.map(r => r.req).filter((v, i, a) => a.indexOf(v) === i).join(', '))}` : '신청 없음'}</span>
-          </div>
-          <div class="kpi">
-            <span class="label">휴무·특이사항</span>
-            <span class="value">${s.off.length}<small>명</small></span>
-            <span class="sub">${s.off.map(m => esc(m.name)).join(', ') || '없음'}</span>
-          </div>
-        </section>
-
-        <div class="grid-2">
-          <section class="panel">
-            <div class="panel-head"><h2>팀원 작성현황</h2><button class="btn small" onclick="setTab('weekly','team', true)">주간보고 보기</button></div>
-            <div class="list">${memberRows}</div>
-          </section>
-          <section class="panel">
-            <div class="panel-head"><h2>다가오는 일정</h2><button class="btn small" onclick="go('calendar')">캘린더</button></div>
-            <div class="agenda" id="upcoming">${upcomingHtml()}</div>
-          </section>
-        </div>
-
-        <div class="grid-2">
-          <section class="panel">
-            <div class="panel-head"><h2>예산 과목별 현재예산</h2><span>원</span></div>
-            ${budgetBars()}
-          </section>
-          <section class="panel">
-            <div class="panel-head"><h2>최근 예산전용</h2><button class="btn small" onclick="setTab('budget','list', true)">전체 보기</button></div>
-            <div class="list">${recent}</div>
-          </section>
-        </div>
-
-        <div class="grid-2">
-          <section class="panel">
-            <div class="panel-head"><h2>이번 주 기한 업무</h2><span>${esc(D.week.thisLabel)}</span></div>
-            <div>${dueRows}</div>
-          </section>
-          <div style="display:flex;flex-direction:column;gap:16px">
-            <section class="panel">
-              <div class="panel-head"><h2>공유게시판</h2><button class="btn small" onclick="go('board')">전체 보기</button></div>
-              <div class="list">${boardPreview}</div>
-            </section>
-            <section class="panel">
-              <div class="panel-head"><h2>최근 개정된 회사 기준</h2><button class="btn small" onclick="go('rules')">전체 보기</button></div>
-              <div class="list">${rulePreview}</div>
-            </section>
-          </div>
-        </div>`;
+        ${kpis.length ? `<section class="kpis" aria-label="이번 주 요약">${kpis.join('')}</section>` : ''}
+        ${rowsHtml || '<div class="notice">대시보드에 표시할 메뉴 권한이 없습니다. 관리자에게 문의하세요.</div>'}`;
     },
 
     weekly() {
@@ -1201,6 +1216,215 @@
     };
   }
 
+  /* ================= 관리 (관리자 전용) ================= */
+  let A = null;          // 서버에서 받은 관리 데이터
+  let aDraft = null;     // 편집 중인 팀원 목록
+  let aDirty = false;
+  let menuDraft = null;
+  let adminTab = 'members';
+
+  function loadAdmin() {
+    call('apiAdminData').then(setAdmin).catch(fail);
+  }
+  function setAdmin(data) {
+    A = data;
+    aDraft = A.members.map(m => Object.assign({}, m));
+    menuDraft = JSON.parse(JSON.stringify(A.menuAccess));
+    aDirty = false;
+    if (page === 'admin') render();
+  }
+
+  const ACCESS = {
+    sheet: { owner: ['ok', '소유자'], editor: ['ok', '편집'], viewer: ['pend', '보기만'], none: ['no', '없음'] },
+    input: { ok: ['ok', '본인 전용'], missing: ['no', '없음'], unprotected: ['pend', '잠금 안 됨'], 'n/a': ['plain', '작성 안 함'] },
+    folder: { owner: ['ok', '소유자'], editor: ['ok', '편집'], viewer: ['pend', '보기만'], none: ['no', '없음'], 'n/a': ['plain', '설정 필요'] },
+    calendar: { owner: ['ok', '소유자'], writer: ['ok', '일정 변경'], reader: ['pend', '보기만'], freeBusyReader: ['pend', '바쁨만'], none: ['no', '없음'], 'n/a': ['plain', '설정 필요'] },
+  };
+  function accessChip(kind, v) {
+    const [cls, label] = (ACCESS[kind][v] || ['plain', '–']);
+    return `<span class="chip ${cls}">${cls === 'ok' ? '✓ ' : cls === 'no' ? '✕ ' : ''}${label}</span>`;
+  }
+  function needsAttention(name) {
+    const st = A && A.status.people[name];
+    if (!st) return true;
+    return ['sheet', 'input', 'folder', 'calendar'].some(k => { const c = (ACCESS[k][st[k]] || ['plain'])[0]; return c === 'no' || c === 'pend'; });
+  }
+
+  VIEWS.admin = function () {
+    if (!A) return '<div class="loading">관리 정보를 불러오는 중… (시트·폴더·캘린더 공유 상태를 확인합니다)</div>';
+    const tab = (k, label) => `<button role="tab" aria-selected="${adminTab === k}" onclick="adminTab='${k}';render()">${label}</button>`;
+    const body = { members: adminMembers, menus: adminMenus, settings: adminSettings, guide: adminGuide }[adminTab]();
+    return `<div class="subtabs" role="tablist">${tab('members', '팀원·권한')}${tab('menus', '메뉴 권한')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
+  };
+
+  function adminMembers() {
+    const res = A.status.resources;
+    const resLine = (label, x) => `<span>${x.ok ? '<span class="chip ok">✓</span>' : '<span class="chip pend">!</span>'} <b>${label}</b> ${esc(x.ok ? x.name : x.error)}</span>`;
+    const issues = aDraft.filter(m => m.email && needsAttention(m.name)).length;
+    const noEmail = aDraft.filter(m => m.name && !m.email).length;
+    const sel = (i, v) => `<select class="field-in" style="padding:5px 6px;min-width:76px" onchange="aEdit(${i},'role',this.value)">${A.roles.map(r => `<option ${r === v ? 'selected' : ''}>${r}</option>`).join('')}</select>`;
+    const chk = (i, k, v, label) => `<label style="display:flex;justify-content:center"><input type="checkbox" class="check" ${v ? 'checked' : ''} onchange="aEdit(${i},'${k}',this.checked)" aria-label="${label}"></label>`;
+    const rows = aDraft.map((m, i) => {
+      const st = A.status.people[m.name];
+      const saved = A.members.some(x => x.name === m.name && x.email === m.email);
+      return `<tr>
+        <td><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
+        <td><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일"></td>
+        <td>${sel(i, m.role)}</td>
+        <td>${chk(i, 'write', m.write, '주간보고 작성')}</td>
+        <td>${chk(i, 'admin', m.admin, '관리자')}</td>
+        ${st && saved ? `<td>${accessChip('sheet', st.sheet)}</td><td>${accessChip('input', st.input)}</td><td>${accessChip('folder', st.folder)}</td><td>${accessChip('calendar', st.calendar)}</td>`
+          : `<td colspan="4"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
+        <td><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">×</button></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="head">
+        <div><h1>팀원·권한</h1><p>팀원을 등록하고 "권한 한 번에 적용"을 누르면 시트·첨부 폴더·캘린더 공유와 시트 잠금을 자동으로 합니다.</p></div>
+        <div class="head-actions">
+          <button class="btn" onclick="A=null;render()">상태 새로고침</button>
+          <button class="btn primary" onclick="applyAll()">권한 한 번에 적용</button>
+        </div>
+      </div>
+      <section class="panel">
+        <div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px">${resLine('스프레드시트', res.sheet)}${resLine('첨부 폴더', res.folder)}${resLine('팀 캘린더', res.calendar)}</div>
+        <p style="margin:10px 0 0;font-size:13px;color:${issues || noEmail ? 'var(--warn-ink)' : 'var(--ok-ink)'}">
+          ${issues || noEmail ? `확인이 필요한 사람 ${issues}명${noEmail ? ` · 이메일 없는 사람 ${noEmail}명` : ''}. "권한 한 번에 적용"을 누르면 대부분 해결됩니다.` : '✓ 모든 팀원의 권한이 정상입니다.'}
+        </p>
+      </section>
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="t">
+            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <button class="btn small add" onclick="aAdd()">+ 팀원 추가</button>
+      </section>
+      <div class="save-bar" id="aBar" ${aDirty ? '' : 'hidden'}><div class="left">변경사항이 있습니다. 저장해야 반영됩니다.</div>
+        <div style="display:flex;gap:8px"><button class="btn" onclick="setAdmin(A)">되돌리기</button><button class="btn primary" id="aSave" onclick="saveMembers()">변경사항 저장</button></div></div>`;
+  }
+
+  function aEdit(i, k, v) {
+    aDraft[i][k] = v;
+    aDirty = true;
+    const bar = $('#aBar');
+    if (bar) bar.hidden = false;
+  }
+  function aAdd() {
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false });
+    aDirty = true;
+    render();
+    const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');
+    inputs[inputs.length - 1].focus();
+  }
+  function saveMembers(after) {
+    const list = aDraft.filter(m => m.name.trim()).map((m, i) => Object.assign({}, m, { order: i + 1 }));
+    const btn = $('#aSave');
+    if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+    return call('apiSaveMembers', list)
+      .then(data => { setAdmin(data); load(); toast('팀원 목록을 저장했습니다.'); if (after) after(); })
+      .catch(e => { if (btn) { btn.disabled = false; btn.textContent = '변경사항 저장'; } fail(e); });
+  }
+  function aRemove(i) {
+    const m = aDraft[i];
+    const saved = A.members.some(x => x.name === m.name);
+    if (!saved) { aDraft.splice(i, 1); render(); return; }
+    openModal(`<h3>${esc(m.name)}님을 팀원에서 뺄까요?</h3>
+      <p class="sub">팀원 목록에서 지우고 저장합니다. 입력시트와 지난 기록은 시트에 남습니다.</p>
+      ${m.email ? `<label style="display:flex;gap:8px;align-items:center;margin-bottom:14px"><input type="checkbox" class="check" id="rvk" checked> 스프레드시트·첨부 폴더·팀 캘린더 접근도 해제 (${esc(m.email)})</label>` : ''}
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="rmOk">빼기</button></div>`);
+    $('#rmOk').onclick = () => {
+      const revoke = $('#rvk') && $('#rvk').checked;
+      $('#rmOk').disabled = true;
+      aDraft.splice(i, 1);
+      saveMembers(() => {
+        if (!revoke) { closeModal(); return; }
+        call('apiRevokeAccess', m.email).then(res => { setAdmin(res.data); showLog(`${m.name}님 접근 해제`, res.log); }).catch(e => { closeModal(); fail(e); });
+      });
+    };
+  }
+  function applyAll() {
+    const run = () => {
+      openModal(`<h3>권한을 적용하는 중…</h3><p class="sub">시트·첨부 폴더·캘린더 공유와 시트 잠금을 처리하고 있습니다. 인원에 따라 10~30초 걸릴 수 있습니다.</p>`);
+      call('apiApplyPermissions').then(res => { setAdmin(res.data); showLog('권한 적용 결과', res.log); }).catch(e => { closeModal(); fail(e); });
+    };
+    if (aDirty) saveMembers(run); else run();
+  }
+  function showLog(title, log) {
+    openModal(`<h3>${esc(title)}</h3>
+      <div class="list" style="margin:10px 0 16px">${log.map(l => `<div class="list-row" style="grid-template-columns:24px minmax(0,1fr)"><span>${l.ok ? '✓' : '⚠️'}</span><span class="meta" style="color:${l.ok ? 'var(--ink)' : 'var(--warn-ink)'}">${esc(l.text)}</span></div>`).join('')}</div>
+      <div class="modal-actions"><button class="btn primary" onclick="closeModal()">확인</button></div>`);
+  }
+
+  function adminMenus() {
+    const rows = A.menus.map(m => `<tr><td class="strong">${esc(m.label)}</td>
+      ${A.roles.map(r => `<td style="text-align:center"><input type="checkbox" class="check" ${menuDraft[r][m.key] !== false ? 'checked' : ''} onchange="menuDraft['${r}']['${m.key}']=this.checked;$('#mSave').disabled=false" aria-label="${r} ${esc(m.label)}"></td>`).join('')}
+      <td style="text-align:center"><input type="checkbox" class="check" checked disabled aria-label="관리자 ${esc(m.label)}"></td></tr>`).join('');
+    return `
+      <div class="head"><div><h1>메뉴 권한</h1><p>역할마다 볼 수 있는 메뉴를 정합니다. 끈 메뉴는 화면에서 숨겨지고, 서버에서도 해당 기능과 데이터가 막힙니다.</p></div></div>
+      <section class="panel">
+        <div class="table-wrap"><table class="t" style="max-width:560px">
+          <thead><tr><th>메뉴</th>${A.roles.map(r => `<th style="text-align:center">${r}</th>`).join('')}<th style="text-align:center">관리자</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <p style="color:var(--muted);font-size:13px;margin:12px 0">· 관리자는 항상 모든 메뉴와 [관리] 메뉴를 봅니다.<br>· 대시보드에는 볼 수 있는 메뉴의 요약만 나옵니다. 예) 예산전용을 끄면 대시보드의 예산 칸도 숨겨집니다.</p>
+        <button class="btn primary" id="mSave" disabled onclick="saveMenus()">저장</button>
+      </section>`;
+  }
+  function saveMenus() {
+    $('#mSave').disabled = true;
+    call('apiSaveMenuAccess', menuDraft).then(data => { A.menuAccess = data.menuAccess; menuDraft = JSON.parse(JSON.stringify(data.menuAccess)); load(); toast('메뉴 권한을 저장했습니다. 팀원은 새로고침하면 반영됩니다.'); })
+      .catch(e => { $('#mSave').disabled = false; fail(e); });
+  }
+
+  function adminSettings() {
+    const st = A.settings, res = A.status.resources;
+    const status = x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ 연결됨: ${esc(x.name)}` : esc(x.error)}</div>`;
+    return `
+      <div class="head"><div><h1>설정</h1><p>[설정] 시트를 직접 고치지 않아도 여기서 바꿀 수 있습니다.</p></div></div>
+      <section class="panel" style="max-width:640px">
+        <form class="form" id="sForm" novalidate>
+          <div class="fld"><label for="sTeam">팀명</label><input class="field-in" id="sTeam" value="${esc(st.team)}"></div>
+          <div class="two">
+            <div class="fld"><label for="sHour">주간보고 마감 시각 (매주 목요일)</label><select class="field-in" id="sHour">${Array.from({ length: 13 }, (_, i) => i + 8).map(h => `<option value="${h}" ${h === st.deadlineHour ? 'selected' : ''}>${h < 12 ? '오전' : '오후'} ${h > 12 ? h - 12 : h}시</option>`).join('')}</select></div>
+            <div class="fld"><label for="sRemind">미작성 알림</label><select class="field-in" id="sRemind">${[0, 1, 2, 3, 4, 6, 24].map(h => `<option value="${h}" ${h === st.remindHours ? 'selected' : ''}>${h ? `마감 ${h}시간 전` : '보내지 않음'}</option>`).join('')}</select></div>
+          </div>
+          <div class="fld"><label for="sCal">팀 캘린더 ID</label><input class="field-in" id="sCal" value="${esc(st.calendarId)}" placeholder="예) abcd1234@group.calendar.google.com">${status(res.calendar)}</div>
+          <div class="fld"><label for="sFolder">첨부 폴더 (폴더 주소 또는 ID)</label><input class="field-in" id="sFolder" value="${esc(st.folderId)}" placeholder="https://drive.google.com/drive/folders/... 를 그대로 붙여넣어도 됩니다">${status(res.folder)}</div>
+          <div class="msg err" id="sErr" hidden></div>
+          <div><button class="btn primary" id="sOk">저장</button></div>
+        </form>
+      </section>`;
+  }
+  document.addEventListener('submit', e => {
+    if (e.target.id !== 'sForm') return;
+    e.preventDefault();
+    const s2 = { team: $('#sTeam').value, deadlineHour: $('#sHour').value, remindHours: $('#sRemind').value, calendarId: $('#sCal').value, folderId: $('#sFolder').value };
+    $('#sOk').disabled = true;
+    call('apiSaveSettings', s2).then(data => { setAdmin(data); load(); toast('설정을 저장했습니다.'); })
+      .catch(err => { $('#sOk').disabled = false; $('#sErr').textContent = err.message || String(err); $('#sErr').hidden = false; });
+  });
+
+  function adminGuide() {
+    const url = A.webAppUrl || '(아직 웹앱으로 배포되지 않았습니다)';
+    const msg = `[${D.team} 업무관리 안내]\n아래 주소로 접속해 주세요. (회사 구글 계정으로 로그인)\n${url}\n\n· 처음 접속하면 "권한 검토" 화면이 한 번 나옵니다. "허용"을 눌러주세요.\n· "Google에서 확인하지 않은 앱" 경고가 나오면 "고급 → 이동"을 누르면 됩니다.\n· 주간업무는 매주 목요일 오후 ${A.settings.deadlineHour > 12 ? A.settings.deadlineHour - 12 : A.settings.deadlineHour}시까지 작성해 주세요.`;
+    return `
+      <div class="head"><div><h1>접속 안내</h1><p>팀원에게 보낼 주소와 안내 문구입니다.</p></div></div>
+      <section class="panel" style="max-width:720px;display:flex;flex-direction:column;gap:12px">
+        <div class="fld"><label for="gUrl">웹앱 주소</label><div style="display:flex;gap:6px"><input class="field-in" id="gUrl" value="${esc(url)}" readonly><button class="btn" onclick="copyText('gUrl')">복사</button></div></div>
+        <div class="fld"><label for="gMsg">안내 문구 (메신저·메일에 붙여넣기)</label><textarea class="field-in" id="gMsg" style="min-height:190px">${esc(msg)}</textarea></div>
+        <div><button class="btn primary" onclick="copyText('gMsg')">안내 문구 복사</button></div>
+      </section>`;
+  }
+  function copyText(id) {
+    const el = $('#' + id);
+    const done = () => toast('복사했습니다.');
+    try {
+      navigator.clipboard.writeText(el.value).then(done, () => { el.select(); toast('선택했습니다. Ctrl+C로 복사하세요.'); });
+    } catch (e) { el.select(); toast('선택했습니다. Ctrl+C로 복사하세요.'); }
+  }
+
   /* ================= 첨부 파일 ================= */
   const MAX_FILE = 10 * 1024 * 1024;
   const UP = {};
@@ -1514,7 +1738,7 @@
     bar.hidden = false;
     bar.innerHTML = `<b>예시 화면</b><span>모든 이름·금액은 예시 데이터입니다.</span>
       <label>보는 사람 <select id="demoUser">${MockApi.users().map(u => `<option value="${esc(u.email)}" ${u.email === D.me.email ? 'selected' : ''}>${esc(u.name)} (${esc(u.role)})</option>`).join('')}</select></label>`;
-    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); draft = null; upcoming = null; calCache = {}; load(); };
+    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); draft = null; upcoming = null; calCache = {}; A = null; load(); };
   }
 
   load();
