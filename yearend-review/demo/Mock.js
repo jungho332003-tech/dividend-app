@@ -65,9 +65,32 @@ window.MockApi = (function () {
     person({ no: '14', dept: '생산팀', empNo: '20230102', name: '남궁별', subgroup: '정규직', payArea: '공장', rank: '사원', phone: '010-2201-1114', email: 'byul.namgung@example.com', owner: '박지호', owner2: '최유나', prevWork: '다라물산, 마바테크', prevCount: '2' }),
     person({ no: '15', dept: '품질팀', empNo: '20240205', name: '전시우', subgroup: '정규직', payArea: '공장', rank: '사원', phone: '010-2201-1115', email: 'siwoo.jeon@example.com', owner: '', owner2: '' }),
     person({ no: '16', dept: '품질팀', empNo: '20240819', name: '홍나래', subgroup: '계약직', payArea: '공장', rank: '사원', phone: '010-2201-1116', email: 'narae.hong@example.com', owner: '', owner2: '', ehr: true }),
+    // 17~30: 담당자들이 자주 만나는 연말정산 응대 사례
+    person({ no: '17', dept: '인사팀', empNo: '20120905', name: '노승현', subgroup: '정규직', payArea: '본사', rank: '차장', phone: '010-2201-1117', email: 'seunghyun.noh@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, note1: '모친 기본공제 신청 — 형(타사 재직)도 공제 신청했다고 함. 형제 중 한 명만 가능, 본인과 형 협의 결과 회신 대기' }),
+    person({ no: '18', dept: '재무팀', empNo: '20170814', name: '구하늘', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1118', email: 'haneul.koo@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, note1: '맞벌이 — 자녀 2명 중 첫째만 본인 공제, 둘째는 배우자 회사에서 공제. 자녀 교육비도 공제받는 쪽으로 맞춤 확인' }),
+    person({ no: '19', dept: '해외영업팀', empNo: '20230310', name: '리밍', subgroup: '정규직', payArea: '본사', rank: '대리', phone: '010-2201-1119', email: 'liming@example.com', owner: '김도현', owner2: '한서준', ehr: true, arrived: true, note1: '외국인 근로자 — 단일세율 적용 신청 여부 문의. 일반 정산과 비교해 안내 후 본인 선택 받기로 함', fix1: '외국인등록증 사본 받음' }),
+    person({ no: '20', dept: '영업2팀', empNo: '20261201', name: '차서윤', subgroup: '정규직', payArea: '지사', rank: '사원', phone: '010-2201-1120', email: 'seoyun.cha@example.com', owner: '김도현', owner2: '한서준', note1: '2026.12 입사 — 종전근무지 없음(첫 직장) 확인. 간소화 자료 제출 방법 안내 필요' }),
+    person({ no: '21', dept: '개발팀', empNo: '20150603', name: '석준기', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1121', email: 'jungi.seok@example.com', owner: '이수민', owner2: '최유나', ehr: true, arrived: true, mortApply: true, mortNts: false, mortPrev: 'X (2026-08-20 신규 차입)', missing: '장기주택저당차입금 이자상환증명서(간소화 자료에 없음), 주택 취득 시 등기사항증명서', note1: '2026년 8월 신규 차입 — 기준시가·차입 시기 요건 확인 필요' }),
+    person({ no: '22', dept: '개발팀', empNo: '20181107', name: '어지민', subgroup: '정규직', payArea: '본사', rank: '대리', phone: '010-2201-1122', email: 'jimin.eo@example.com', owner: '이수민', owner2: '최유나', ehr: true, arrived: true, verified: true, review2: true, note1: '배우자 난임시술비 — 간소화 자료에 난임시술로 구분돼 있는지 확인함', note2: '의료비 공제율 구분 확인 완료' }),
+    person({ no: '23', dept: '총무팀', empNo: '20080225', name: '하정우', subgroup: '정규직', payArea: '본사', rank: '부장', phone: '010-2201-1123', email: 'jungwoo.ha@example.com', owner: '이수민', owner2: '한서준', ehr: true, arrived: true, verified: true, note1: '대학생 자녀 교육비 — 장학금 받은 금액 빼고 공제. 학자금 대출 상환분은 자녀 본인 공제라 제외 안내' }),
+    person({ no: '24', dept: '총무팀', empNo: '20160418', name: '편은지', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1124', email: 'eunji.pyeon@example.com', owner: '이수민', owner2: '한서준', ehr: true, arrived: true, verified: true, review2: true, note1: '정치자금 기부금 10만원 + 고향사랑기부금 — 간소화 자료로 확인' }),
+    person({ no: '25', dept: '마케팅팀', empNo: '20210927', name: '탁수빈', subgroup: '정규직', payArea: '본사', rank: '사원', phone: '010-2201-1125', email: 'subin.tak@example.com', owner: '박지호', owner2: '한서준', ehr: true, arrived: true, rentApply: true, rent: '7,800,000', savingApply: true, saving: '3,000,000', savingNts: true, note1: '월세 + 주택청약 — 무주택 세대주 여부 주민등록등본으로 확인 중' }),
+    person({ no: '26', dept: '생산팀', empNo: '20070516', name: '마동철', subgroup: '정규직', payArea: '공장', rank: '차장', phone: '010-2201-1126', email: 'dongcheol.ma@example.com', owner: '박지호', owner2: '최유나', manual: true, arrived: true, missing: '부친 장애인증명서, 부친 의료비 영수증(요양병원)', note1: '수기 제출 — 부친(82세) 경로우대·장애인 추가공제 신청' }),
+    person({ no: '27', dept: '생산팀', empNo: '20190722', name: '선우진', subgroup: '정규직', payArea: '공장', rank: '대리', phone: '010-2201-1127', email: 'woojin.sunwoo@example.com', owner: '박지호', owner2: '최유나', leave: true, note1: '육아휴직 중 (2026.06~) — 우편·메일로 서류 받기로 함' }),
+    person({ no: '28', dept: '품질팀', empNo: '20260302', name: '봉예린', subgroup: '계약직', payArea: '공장', rank: '사원', phone: '010-2201-1128', email: 'yerin.bong@example.com', owner: '박지호', owner2: '한서준', prevWork: '사아물류, 자차유통', prevCount: '2', ehr: true, arrived: true, missing: '두 번째 종전근무지(자차유통) 원천징수영수증', note1: '2026.03 입사 — 종전근무지 2곳, 1곳 서류만 제출' }),
+    person({ no: '29', dept: '연구소', empNo: '20140811', name: '피정민', subgroup: '정규직', payArea: '연구소', rank: '책임', phone: '010-2201-1129', email: 'jungmin.pi@example.com', owner: '', owner2: '', ehr: true, arrived: true, note1: '연금저축·IRP 납입 — 연간 한도 문의' }),
+    person({ no: '30', dept: '연구소', empNo: '20220103', name: '도아름', subgroup: '정규직', payArea: '연구소', rank: '선임', phone: '010-2201-1130', email: 'areum.do@example.com', owner: '', owner2: '', ehr: true, note1: '배우자 카드 사용분 공제 문의 — 배우자 소득 확인 필요' }),
   ];
 
   const logs = [
+    { date: '2027-02-04 09:40', empNo: '20120905', name: '노승현', author: '김도현', kind: '전화', body: '모친 중복공제 — 형과 상의 후 2/5까지 누가 공제할지 알려주기로 함' },
+    { date: '2027-02-04 09:05', empNo: '20150603', name: '석준기', author: '이수민', kind: '보완요청', body: '이자상환증명서·등기사항증명서 요청 메일 발송' },
+    { date: '2027-02-03 17:50', empNo: '20230310', name: '리밍', author: '김도현', kind: '방문', body: '단일세율과 일반 정산 비교표 보여주고 설명함. 본인이 일반 정산 선택' },
+    { date: '2027-02-03 15:30', empNo: '20260302', name: '봉예린', author: '박지호', kind: '메신저', body: '자차유통 원천징수영수증은 이전 회사 인사팀에 요청 중이라고 함' },
+    { date: '2027-02-03 13:20', empNo: '20070516', name: '마동철', author: '박지호', kind: '전화', body: '부친 장애인증명서는 주민센터 아닌 병원 발급 서류도 된다고 안내' },
+    { date: '2027-02-02 16:10', empNo: '20080225', name: '하정우', author: '이수민', kind: '메일', body: '학자금 대출 상환분은 자녀 본인 공제라 부모 교육비에서 뺀다고 안내' },
+    { date: '2027-02-02 11:45', empNo: '20190722', name: '선우진', author: '박지호', kind: '메일', body: '휴직자 서류 제출 안내 메일 (회신용 주소 포함)' },
+    { date: '2027-02-01 10:20', empNo: '20220103', name: '도아름', author: '박지호', kind: '전화', body: '배우자 연 소득 100만원 넘으면 배우자 카드는 공제 대상 아님 안내 (담당 배정 전 응대)' },
     { date: '2027-02-04 09:12', empNo: '20180115', name: '윤하람', author: '김도현', kind: '전화', body: '안경 영수증·12월 월세 이체 내역 2/5(금)까지 제출하기로 함' },
     { date: '2027-02-03 16:40', empNo: '20210303', name: '문서아', author: '이수민', kind: '보완요청', body: '모친 장애인증명서 요청 메일 발송' },
     { date: '2027-02-03 14:05', empNo: '20150702', name: '서지안', author: '김도현', kind: '메신저', body: '부친 중복공제 여부 문의 → 동생은 공제 안 하기로 확인' },
@@ -102,6 +125,10 @@ window.MockApi = (function () {
     { id: 'demo-종전근무지_서류요청_안내문.hwp', date: '2027-01-27 13:40', uploader: '이수민', area: 'notice', ref: '3', refLabel: '종전근무지 원천징수영수증 요청 안내문', name: '종전근무지_서류요청_안내문.hwp', url: '#demo-file', size: 31744, mime: '', memo: '' },
     { id: 'demo-의료비_공제_안내.pdf', date: '2027-01-20 11:10', uploader: '정해린', area: 'rules', ref: '4', refLabel: '의료비 세액공제', name: '의료비_공제_안내.pdf', url: '#demo-file', size: 388000, mime: '', memo: '' },
     { id: 'demo-소득세액공제신고서_양식.xlsx', date: '2027-01-10 09:00', uploader: '정해린', area: 'rules', ref: '5', refLabel: '공통 제출 서류', name: '소득세액공제신고서_양식.xlsx', url: '#demo-file', size: 58000, mime: '', memo: '' },
+    { id: 'demo-f10', date: '2027-02-03 15:40', uploader: '박지호', area: 'person', ref: '20260302', refLabel: '봉예린(20260302)', name: '봉예린_종전근무지1_사아물류.pdf', url: '#demo-file', size: 148000, mime: '', memo: '' },
+    { id: 'demo-f11', date: '2027-02-03 13:30', uploader: '박지호', area: 'person', ref: '20070516', refLabel: '마동철(20070516)', name: '마동철_수기제출_공제신고서.jpg', url: '#demo-file', size: 2240000, mime: '', memo: '' },
+    { id: 'demo-f12', date: '2027-02-02 14:00', uploader: '이수민', area: 'person', ref: '20181107', refLabel: '어지민(20181107)', name: '어지민_간소화자료.pdf', url: '#demo-file', size: 486000, mime: '', memo: '' },
+    { id: 'demo-f13', date: '2027-02-02 10:15', uploader: '김도현', area: 'person', ref: '20230310', refLabel: '리밍(20230310)', name: '리밍_외국인등록증_사본.pdf', url: '#demo-file', size: 205000, mime: '', memo: '' },
     { id: 'demo-f9', date: '2027-01-09 16:00', uploader: '정해린', area: 'etc', ref: '', refLabel: '', name: '2026귀속_연말정산_직원안내문.pdf', url: '#demo-file', size: 742000, mime: '', memo: '직원 배포용 안내문' },
   ];
   const AREAS = { person: '대상자 증빙', notice: '공지사항', rules: '연말정산 기준', etc: '일반 자료' };

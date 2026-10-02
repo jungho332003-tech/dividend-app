@@ -645,9 +645,32 @@ window.MockApi = (function () {
     person({ no: '14', dept: '생산팀', empNo: '20230102', name: '남궁별', subgroup: '정규직', payArea: '공장', rank: '사원', phone: '010-2201-1114', email: 'byul.namgung@example.com', owner: '박지호', owner2: '최유나', prevWork: '다라물산, 마바테크', prevCount: '2' }),
     person({ no: '15', dept: '품질팀', empNo: '20240205', name: '전시우', subgroup: '정규직', payArea: '공장', rank: '사원', phone: '010-2201-1115', email: 'siwoo.jeon@example.com', owner: '', owner2: '' }),
     person({ no: '16', dept: '품질팀', empNo: '20240819', name: '홍나래', subgroup: '계약직', payArea: '공장', rank: '사원', phone: '010-2201-1116', email: 'narae.hong@example.com', owner: '', owner2: '', ehr: true }),
+    // 17~30: 담당자들이 자주 만나는 연말정산 응대 사례
+    person({ no: '17', dept: '인사팀', empNo: '20120905', name: '노승현', subgroup: '정규직', payArea: '본사', rank: '차장', phone: '010-2201-1117', email: 'seunghyun.noh@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, note1: '모친 기본공제 신청 — 형(타사 재직)도 공제 신청했다고 함. 형제 중 한 명만 가능, 본인과 형 협의 결과 회신 대기' }),
+    person({ no: '18', dept: '재무팀', empNo: '20170814', name: '구하늘', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1118', email: 'haneul.koo@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, note1: '맞벌이 — 자녀 2명 중 첫째만 본인 공제, 둘째는 배우자 회사에서 공제. 자녀 교육비도 공제받는 쪽으로 맞춤 확인' }),
+    person({ no: '19', dept: '해외영업팀', empNo: '20230310', name: '리밍', subgroup: '정규직', payArea: '본사', rank: '대리', phone: '010-2201-1119', email: 'liming@example.com', owner: '김도현', owner2: '한서준', ehr: true, arrived: true, note1: '외국인 근로자 — 단일세율 적용 신청 여부 문의. 일반 정산과 비교해 안내 후 본인 선택 받기로 함', fix1: '외국인등록증 사본 받음' }),
+    person({ no: '20', dept: '영업2팀', empNo: '20261201', name: '차서윤', subgroup: '정규직', payArea: '지사', rank: '사원', phone: '010-2201-1120', email: 'seoyun.cha@example.com', owner: '김도현', owner2: '한서준', note1: '2026.12 입사 — 종전근무지 없음(첫 직장) 확인. 간소화 자료 제출 방법 안내 필요' }),
+    person({ no: '21', dept: '개발팀', empNo: '20150603', name: '석준기', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1121', email: 'jungi.seok@example.com', owner: '이수민', owner2: '최유나', ehr: true, arrived: true, mortApply: true, mortNts: false, mortPrev: 'X (2026-08-20 신규 차입)', missing: '장기주택저당차입금 이자상환증명서(간소화 자료에 없음), 주택 취득 시 등기사항증명서', note1: '2026년 8월 신규 차입 — 기준시가·차입 시기 요건 확인 필요' }),
+    person({ no: '22', dept: '개발팀', empNo: '20181107', name: '어지민', subgroup: '정규직', payArea: '본사', rank: '대리', phone: '010-2201-1122', email: 'jimin.eo@example.com', owner: '이수민', owner2: '최유나', ehr: true, arrived: true, verified: true, review2: true, note1: '배우자 난임시술비 — 간소화 자료에 난임시술로 구분돼 있는지 확인함', note2: '의료비 공제율 구분 확인 완료' }),
+    person({ no: '23', dept: '총무팀', empNo: '20080225', name: '하정우', subgroup: '정규직', payArea: '본사', rank: '부장', phone: '010-2201-1123', email: 'jungwoo.ha@example.com', owner: '이수민', owner2: '한서준', ehr: true, arrived: true, verified: true, note1: '대학생 자녀 교육비 — 장학금 받은 금액 빼고 공제. 학자금 대출 상환분은 자녀 본인 공제라 제외 안내' }),
+    person({ no: '24', dept: '총무팀', empNo: '20160418', name: '편은지', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1124', email: 'eunji.pyeon@example.com', owner: '이수민', owner2: '한서준', ehr: true, arrived: true, verified: true, review2: true, note1: '정치자금 기부금 10만원 + 고향사랑기부금 — 간소화 자료로 확인' }),
+    person({ no: '25', dept: '마케팅팀', empNo: '20210927', name: '탁수빈', subgroup: '정규직', payArea: '본사', rank: '사원', phone: '010-2201-1125', email: 'subin.tak@example.com', owner: '박지호', owner2: '한서준', ehr: true, arrived: true, rentApply: true, rent: '7,800,000', savingApply: true, saving: '3,000,000', savingNts: true, note1: '월세 + 주택청약 — 무주택 세대주 여부 주민등록등본으로 확인 중' }),
+    person({ no: '26', dept: '생산팀', empNo: '20070516', name: '마동철', subgroup: '정규직', payArea: '공장', rank: '차장', phone: '010-2201-1126', email: 'dongcheol.ma@example.com', owner: '박지호', owner2: '최유나', manual: true, arrived: true, missing: '부친 장애인증명서, 부친 의료비 영수증(요양병원)', note1: '수기 제출 — 부친(82세) 경로우대·장애인 추가공제 신청' }),
+    person({ no: '27', dept: '생산팀', empNo: '20190722', name: '선우진', subgroup: '정규직', payArea: '공장', rank: '대리', phone: '010-2201-1127', email: 'woojin.sunwoo@example.com', owner: '박지호', owner2: '최유나', leave: true, note1: '육아휴직 중 (2026.06~) — 우편·메일로 서류 받기로 함' }),
+    person({ no: '28', dept: '품질팀', empNo: '20260302', name: '봉예린', subgroup: '계약직', payArea: '공장', rank: '사원', phone: '010-2201-1128', email: 'yerin.bong@example.com', owner: '박지호', owner2: '한서준', prevWork: '사아물류, 자차유통', prevCount: '2', ehr: true, arrived: true, missing: '두 번째 종전근무지(자차유통) 원천징수영수증', note1: '2026.03 입사 — 종전근무지 2곳, 1곳 서류만 제출' }),
+    person({ no: '29', dept: '연구소', empNo: '20140811', name: '피정민', subgroup: '정규직', payArea: '연구소', rank: '책임', phone: '010-2201-1129', email: 'jungmin.pi@example.com', owner: '', owner2: '', ehr: true, arrived: true, note1: '연금저축·IRP 납입 — 연간 한도 문의' }),
+    person({ no: '30', dept: '연구소', empNo: '20220103', name: '도아름', subgroup: '정규직', payArea: '연구소', rank: '선임', phone: '010-2201-1130', email: 'areum.do@example.com', owner: '', owner2: '', ehr: true, note1: '배우자 카드 사용분 공제 문의 — 배우자 소득 확인 필요' }),
   ];
 
   const logs = [
+    { date: '2027-02-04 09:40', empNo: '20120905', name: '노승현', author: '김도현', kind: '전화', body: '모친 중복공제 — 형과 상의 후 2/5까지 누가 공제할지 알려주기로 함' },
+    { date: '2027-02-04 09:05', empNo: '20150603', name: '석준기', author: '이수민', kind: '보완요청', body: '이자상환증명서·등기사항증명서 요청 메일 발송' },
+    { date: '2027-02-03 17:50', empNo: '20230310', name: '리밍', author: '김도현', kind: '방문', body: '단일세율과 일반 정산 비교표 보여주고 설명함. 본인이 일반 정산 선택' },
+    { date: '2027-02-03 15:30', empNo: '20260302', name: '봉예린', author: '박지호', kind: '메신저', body: '자차유통 원천징수영수증은 이전 회사 인사팀에 요청 중이라고 함' },
+    { date: '2027-02-03 13:20', empNo: '20070516', name: '마동철', author: '박지호', kind: '전화', body: '부친 장애인증명서는 주민센터 아닌 병원 발급 서류도 된다고 안내' },
+    { date: '2027-02-02 16:10', empNo: '20080225', name: '하정우', author: '이수민', kind: '메일', body: '학자금 대출 상환분은 자녀 본인 공제라 부모 교육비에서 뺀다고 안내' },
+    { date: '2027-02-02 11:45', empNo: '20190722', name: '선우진', author: '박지호', kind: '메일', body: '휴직자 서류 제출 안내 메일 (회신용 주소 포함)' },
+    { date: '2027-02-01 10:20', empNo: '20220103', name: '도아름', author: '박지호', kind: '전화', body: '배우자 연 소득 100만원 넘으면 배우자 카드는 공제 대상 아님 안내 (담당 배정 전 응대)' },
     { date: '2027-02-04 09:12', empNo: '20180115', name: '윤하람', author: '김도현', kind: '전화', body: '안경 영수증·12월 월세 이체 내역 2/5(금)까지 제출하기로 함' },
     { date: '2027-02-03 16:40', empNo: '20210303', name: '문서아', author: '이수민', kind: '보완요청', body: '모친 장애인증명서 요청 메일 발송' },
     { date: '2027-02-03 14:05', empNo: '20150702', name: '서지안', author: '김도현', kind: '메신저', body: '부친 중복공제 여부 문의 → 동생은 공제 안 하기로 확인' },
@@ -682,6 +705,10 @@ window.MockApi = (function () {
     { id: 'demo-종전근무지_서류요청_안내문.hwp', date: '2027-01-27 13:40', uploader: '이수민', area: 'notice', ref: '3', refLabel: '종전근무지 원천징수영수증 요청 안내문', name: '종전근무지_서류요청_안내문.hwp', url: '#demo-file', size: 31744, mime: '', memo: '' },
     { id: 'demo-의료비_공제_안내.pdf', date: '2027-01-20 11:10', uploader: '정해린', area: 'rules', ref: '4', refLabel: '의료비 세액공제', name: '의료비_공제_안내.pdf', url: '#demo-file', size: 388000, mime: '', memo: '' },
     { id: 'demo-소득세액공제신고서_양식.xlsx', date: '2027-01-10 09:00', uploader: '정해린', area: 'rules', ref: '5', refLabel: '공통 제출 서류', name: '소득세액공제신고서_양식.xlsx', url: '#demo-file', size: 58000, mime: '', memo: '' },
+    { id: 'demo-f10', date: '2027-02-03 15:40', uploader: '박지호', area: 'person', ref: '20260302', refLabel: '봉예린(20260302)', name: '봉예린_종전근무지1_사아물류.pdf', url: '#demo-file', size: 148000, mime: '', memo: '' },
+    { id: 'demo-f11', date: '2027-02-03 13:30', uploader: '박지호', area: 'person', ref: '20070516', refLabel: '마동철(20070516)', name: '마동철_수기제출_공제신고서.jpg', url: '#demo-file', size: 2240000, mime: '', memo: '' },
+    { id: 'demo-f12', date: '2027-02-02 14:00', uploader: '이수민', area: 'person', ref: '20181107', refLabel: '어지민(20181107)', name: '어지민_간소화자료.pdf', url: '#demo-file', size: 486000, mime: '', memo: '' },
+    { id: 'demo-f13', date: '2027-02-02 10:15', uploader: '김도현', area: 'person', ref: '20230310', refLabel: '리밍(20230310)', name: '리밍_외국인등록증_사본.pdf', url: '#demo-file', size: 205000, mime: '', memo: '' },
     { id: 'demo-f9', date: '2027-01-09 16:00', uploader: '정해린', area: 'etc', ref: '', refLabel: '', name: '2026귀속_연말정산_직원안내문.pdf', url: '#demo-file', size: 742000, mime: '', memo: '직원 배포용 안내문' },
   ];
   const AREAS = { person: '대상자 증빙', notice: '공지사항', rules: '연말정산 기준', etc: '일반 자료' };
@@ -1165,7 +1192,7 @@ window.MockApi = (function () {
       <div class="head">
         <div><h1>서류 검토</h1><p>대상자를 눌러 진행 체크·특이사항·수정사항·미비서류를 입력하세요. [대상자] 시트에 바로 저장됩니다.</p></div>
         <div class="head-actions">
-          ${isLead() ? '<button class="btn" onclick="openImport()">시트 붙여넣기</button><button class="btn" onclick="openAddPerson()">+ 대상자</button>' : ''}
+          ${isLead() ? '<button class="btn" onclick="openImport()">대상자 업로드</button><button class="btn" onclick="openAddPerson()">+ 대상자</button>' : ''}
           <a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
         </div>
       </div>
@@ -1349,7 +1376,7 @@ window.MockApi = (function () {
     const sel = id => `<select class="field-in" id="${id}">${staff.map(s => `<option value="${esc(s)}">${esc(s || '(없음)')}</option>`).join('')}</select>`;
     openModal(`
       <h3>대상자 추가</h3>
-      <p class="sub">한 명씩 추가합니다. 여러 명은 「시트 붙여넣기」나 [대상자] 시트에 직접 붙여넣으세요.</p>
+      <p class="sub">한 명씩 추가합니다. 여러 명은 「대상자 업로드」로 엑셀 파일을 올리거나 [대상자] 시트에 직접 붙여넣으세요.</p>
       <form class="form" id="apForm" novalidate>
         <div class="two"><div class="fld"><label for="apEmp">사원번호</label><input class="field-in" id="apEmp"></div><div class="fld"><label for="apName">성명</label><input class="field-in" id="apName"></div></div>
         <div class="two"><div class="fld"><label for="apDept">부서</label><input class="field-in" id="apDept"></div><div class="fld"><label for="apRank">직급</label><input class="field-in" id="apRank"></div></div>
@@ -1368,7 +1395,7 @@ window.MockApi = (function () {
     };
   }
 
-  /* ---------- 시트 붙여넣기 (총괄·관리자) ---------- */
+  /* ---------- 대상자 업로드: 엑셀·CSV 파일 또는 붙여넣기 (총괄·관리자) ---------- */
   // 구글 시트 복사본(TSV) 파싱: 줄바꿈이 들어간 셀은 "..."로 감싸져 온다
   function parseTSV(text) {
     const rows = []; let row = [], cell = '', q = false;
@@ -1385,39 +1412,155 @@ window.MockApi = (function () {
   }
   const normH = s => String(s).replace(/\s/g, '').toLowerCase();
   const matchCol = h => { const n = normH(h); return D.cols.find(c => normH(c.l) === n || (c.re && new RegExp(c.re).test(n))); };
-  function readPaste() {
-    const rows = parseTSV($('#imText').value);
-    if (!rows.length) return { err: '붙여넣은 내용이 없습니다.' };
-    const hdr = rows[0].map(matchCol), hasHdr = hdr.filter(Boolean).length >= 2;
-    const map = hasHdr ? hdr : D.cols.slice(0, rows[0].length);
-    const unknown = hasHdr ? rows[0].filter((h, i) => h.trim() && !hdr[i]) : [];
-    if (!map.some(c => c && c.k === 'name')) return { err: '「성명」 열을 찾지 못했습니다. 제목 행까지 함께 복사해 주세요.' };
-    const data = (hasHdr ? rows.slice(1) : rows).map(r => { const o = {}; map.forEach((c, i) => { if (c) o[c.k] = r[i] == null ? '' : r[i]; }); return o; }).filter(o => String(o.name || '').trim());
-    return { data, cols: map.filter(Boolean).length, unknown, hasHdr };
+  /**
+   * 표(행 배열) → 대상자 목록. 위쪽 10줄 안에서 열 이름이 2개 이상 맞는 줄을 제목 행으로 본다
+   * (파일 맨 위에 "2026 귀속 연말정산" 같은 제목 줄이 있어도 된다). 제목 행이 없으면 기존 시트 열 순서로 읽는다.
+   */
+  function readRows(rows, emptyMsg) {
+    rows = (rows || []).map(r => r.map(c => c == null ? '' : String(c))).filter(r => r.some(c => c.trim()));
+    if (!rows.length) return { err: emptyMsg };
+    let h = -1;
+    for (let k = 0; k < Math.min(rows.length, 10); k++) if (rows[k].map(matchCol).filter(Boolean).length >= 2) { h = k; break; }
+    const hdr = h >= 0 ? rows[h].map(matchCol) : null;
+    const map = hdr || D.cols.slice(0, rows[0].length);
+    const unknown = hdr ? rows[h].filter((x, i) => x.trim() && !hdr[i]) : [];
+    if (!map.some(c => c && c.k === 'name')) return { err: '「성명」 열을 찾지 못했습니다. 제목 행(No., 부서, 사원번호, 성명…)이 있는지 확인해 주세요.' };
+    const data = rows.slice(h + 1).map(r => { const o = {}; map.forEach((c, i) => { if (c) o[c.k] = (r[i] || '').trim(); }); return o; }).filter(o => o.name);
+    const emps = data.map(o => o.empNo).filter(Boolean);
+    const dupInFile = emps.filter((e, i) => emps.indexOf(e) !== i);
+    return { data, cols: map.filter(Boolean).length, unknown, dupInFile: [...new Set(dupInFile)] };
   }
+
+  /* 엑셀 파일은 SheetJS로 읽는다 (처음 쓸 때만 내려받음) */
+  let xlsxLoading = null;
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (!xlsxLoading) xlsxLoading = new Promise((resolve, reject) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload = () => resolve(window.XLSX);
+      sc.onerror = () => { xlsxLoading = null; reject(new Error('엑셀 읽기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하거나, 엑셀에서 복사해 붙여넣기 탭을 써주세요.')); };
+      document.head.appendChild(sc);
+    });
+    return xlsxLoading;
+  }
+  /** CSV: UTF-8로 읽고 글자가 깨지면 엑셀 기본 저장 형식(EUC-KR)으로 다시 읽는다 */
+  function decodeCsv(buf) {
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (text.includes('�')) { try { text = new TextDecoder('euc-kr').decode(buf); } catch (e) { /* 지원 안 하는 브라우저 */ } }
+    return text.replace(/^﻿/, '');
+  }
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"' && cell === '') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  /** 파일 → 행 배열. 엑셀은 성명 열이 있는 첫 시트를 쓴다 */
+  function readFileRows(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    return file.arrayBuffer().then(buf => {
+      if (ext === 'csv' || ext === 'txt' || ext === 'tsv') {
+        const text = decodeCsv(buf);
+        return { rows: ext === 'csv' ? parseCSV(text) : parseTSV(text), sheet: '' };
+      }
+      if (!['xlsx', 'xls', 'xlsm'].includes(ext)) throw new Error('엑셀(.xlsx, .xls) 또는 CSV 파일만 올릴 수 있습니다.');
+      return loadXlsx().then(X => {
+        const wb = X.read(buf, { type: 'array', cellDates: true });
+        const sheets = wb.SheetNames.map(n => ({ n, rows: X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '', dateNF: 'yyyy-mm-dd' }) }));
+        const hit = sheets.find(x => !readRows(x.rows, '').err) || sheets[0];
+        return { rows: hit ? hit.rows : [], sheet: hit ? hit.n : '' };
+      });
+    });
+  }
+
   function openImport() {
+    let src = 'file';      // file | paste
+    let fileResult = null; // 파일에서 읽은 결과
     openModal(`
-      <h3>시트 붙여넣기</h3>
-      <p class="sub">기존 검토 시트에서 <b>제목 행(No., 부서, 사원번호…)부터</b> 복사해 붙여넣으세요.<br>
-      · 열 이름으로 자동 매칭 (제목 행이 없으면 기존 시트 열 순서로 인식)<br>
-      · 사원번호가 같으면 붙여넣은 칸만 갱신, 없으면 추가 · O, Y, ○, 완료 같은 표기는 체크로 인식</p>
+      <h3>대상자 업로드</h3>
+      <p class="sub">엑셀·CSV 파일을 올리거나, 시트에서 복사해 붙여넣으세요. 열 이름(No., 부서, 사원번호, 성명…)으로 자동 매칭합니다.<br>
+      · 사원번호가 같으면 파일에 있는 칸만 갱신, 없으면 새로 추가 · O, Y, ○, 완료 같은 표기는 체크로 인식</p>
+      <div class="subtabs" role="tablist" style="margin-bottom:12px">
+        <button type="button" role="tab" id="imTabFile" aria-selected="true">파일 올리기</button>
+        <button type="button" role="tab" id="imTabPaste" aria-selected="false">붙여넣기</button>
+      </div>
       <form class="form" id="imForm" novalidate>
-        <textarea class="field-in" id="imText" style="min-height:200px" aria-label="붙여넣을 내용"></textarea>
+        <div id="imFileBox">
+          <div class="drop" id="imDrop" tabindex="0" role="button"><span class="desk-only">파일을 끌어다 놓거나 </span><u>눌러서 파일 선택</u> · .xlsx .xls .csv</div>
+          <input type="file" id="imFile" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden>
+          <div class="hint" id="imFileName" style="margin-top:6px"></div>
+        </div>
+        <textarea class="field-in" id="imText" style="min-height:200px" aria-label="붙여넣을 내용" placeholder="시트에서 제목 행부터 복사해 붙여넣으세요" hidden></textarea>
         <div class="hint" id="imHint"></div>
-        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="imOk">가져오기</button></div>
-      </form>`);
-    $('#imText').oninput = () => {
-      const r = readPaste();
-      $('#imHint').innerHTML = r.err ? `<span style="color:var(--warn-ink)">${esc(r.err)}</span>`
-        : `인식된 열 ${r.cols}개 · 대상자 ${r.data.length}명 · 새로 추가 ${r.data.filter(o => !o.empNo || !D.people.some(p => p.empNo === String(o.empNo).trim())).length}명${r.unknown.length ? ` · 무시되는 열: ${r.unknown.map(esc).join(', ')}` : ''}`;
+        <div id="imPreview"></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="imOk" disabled>가져오기</button></div>
+      </form>`, true);
+
+    const current = () => src === 'file' ? (fileResult || { err: '' }) : readRows(parseTSV($('#imText').value), '붙여넣은 내용이 없습니다.');
+    const show = () => {
+      const r = current();
+      $('#imOk').disabled = !!r.err || !r.data;
+      if (r.err !== undefined && !r.data) { $('#imHint').innerHTML = r.err ? `<span style="color:var(--warn-ink)">${esc(r.err)}</span>` : ''; $('#imPreview').innerHTML = ''; return; }
+      const isNew = o => !o.empNo || !D.people.some(p => p.empNo === o.empNo);
+      // 파일 안에서 같은 사원번호는 한 사람으로 센다 (아래쪽 줄이 위쪽을 갱신)
+      const uniq = r.data.filter((o, i) => !o.empNo || r.data.findIndex(x => x.empNo === o.empNo) === i);
+      const add = uniq.filter(isNew).length;
+      $('#imHint').innerHTML = `인식된 열 ${r.cols}개 · 대상자 <b>${uniq.length}명</b> (새로 추가 ${add}명 · 갱신 ${uniq.length - add}명)`
+        + (r.unknown.length ? `<br>무시되는 열: ${r.unknown.map(esc).join(', ')}` : '')
+        + (r.dupInFile.length ? `<br><span style="color:var(--warn-ink)">파일 안에서 사원번호가 겹칩니다: ${r.dupInFile.map(esc).join(', ')} (아래쪽 줄 내용이 남습니다)</span>` : '');
+      // 앞 5명 미리 보기
+      const keys = ['no', 'dept', 'empNo', 'name', 'rank', 'owner', 'owner2'];
+      $('#imPreview').innerHTML = `<div class="table-wrap"><table class="sheet-grid" style="min-width:0"><thead><tr>${keys.map(k => `<th>${esc(col(k).l)}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${r.data.slice(0, 5).map(o => `<tr style="cursor:default">${keys.map(k => `<td>${esc(o[k] || '')}</td>`).join('')}<td>${isNew(o) ? '<span class="chip info">추가</span>' : '<span class="chip plain">갱신</span>'}</td></tr>`).join('')}</tbody></table></div>
+        ${r.data.length > 5 ? `<p class="hint" style="margin:6px 0 0">외 ${r.data.length - 5}명</p>` : ''}`;
     };
+    const setSrc = v => {
+      src = v;
+      $('#imTabFile').setAttribute('aria-selected', String(v === 'file'));
+      $('#imTabPaste').setAttribute('aria-selected', String(v === 'paste'));
+      $('#imFileBox').hidden = v !== 'file';
+      $('#imText').hidden = v !== 'paste';
+      show();
+    };
+    const takeFile = file => {
+      if (!file) return;
+      fileResult = { err: '' };
+      $('#imFileName').textContent = `${file.name} 읽는 중…`;
+      show();
+      readFileRows(file)
+        .then(({ rows, sheet }) => { fileResult = readRows(rows, '파일에 내용이 없습니다.'); $('#imFileName').textContent = `${file.name}${sheet ? ` · 시트 「${sheet}」` : ''}`; })
+        .catch(e => { fileResult = { err: e.message || String(e) }; $('#imFileName').textContent = file.name; })
+        .then(show);
+    };
+    $('#imTabFile').onclick = () => setSrc('file');
+    $('#imTabPaste').onclick = () => setSrc('paste');
+    const drop = $('#imDrop'), input = $('#imFile');
+    drop.onclick = () => input.click();
+    drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } };
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); takeFile(e.dataTransfer.files[0]); };
+    input.onchange = () => { takeFile(input.files[0]); input.value = ''; };
+    $('#imText').oninput = show;
     $('#imForm').onsubmit = e => {
       e.preventDefault();
-      const r = readPaste();
-      if (r.err) { $('#imHint').innerHTML = `<span style="color:var(--warn-ink)">${esc(r.err)}</span>`; return; }
+      const r = current();
+      if (r.err || !r.data) return;
+      // 같은 사원번호 줄은 하나로 합친다 (아래쪽 줄의 값이 이긴다)
+      const merged = [], at = {};
+      r.data.forEach(o => { if (o.empNo && at[o.empNo] !== undefined) Object.assign(merged[at[o.empNo]], o); else { if (o.empNo) at[o.empNo] = merged.length; merged.push(Object.assign({}, o)); } });
       $('#imOk').disabled = true;
-      call('apiImportPeople', r.data).then(data => { applyData(data); closeModal(); reviewTab = 'all'; render(); toast(`${data.added}명 추가 · ${data.updated}명 갱신했습니다.`); })
-        .catch(err => { $('#imOk').disabled = false; fail(err); });
+      $('#imOk').textContent = `${merged.length}명 저장 중…`;
+      call('apiImportPeople', merged).then(data => { applyData(data); closeModal(); reviewTab = 'all'; reviewStatus = 'all'; render(); toast(`${data.added}명 추가 · ${data.updated}명 갱신했습니다.`); })
+        .catch(err => { $('#imOk').disabled = false; $('#imOk').textContent = '가져오기'; fail(err); });
     };
   }
 
