@@ -498,6 +498,12 @@
   .t tbody tr.click { cursor: pointer; }
   .t tbody tr.click:hover { background: var(--panel-2); }
   .people-cards td { white-space: nowrap; }
+  .sheet-grid { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13px; }
+  .sheet-grid th, .sheet-grid td { border: 1px solid var(--line); padding: 7px 10px; text-align: center; white-space: nowrap; }
+  .sheet-grid th { background: var(--panel-2); font-weight: 700; color: var(--ink); height: 44px; }
+  .sheet-grid td.nm { font-weight: 600; }
+  .sheet-grid tbody tr { cursor: pointer; }
+  .sheet-grid tbody tr:hover td { background: var(--accent-soft); }
   .people-cards th, .people-cards td { padding: 8px 8px; font-size: 13px; }
   .people-cards .edit-hint { color: var(--accent-2); font-size: 12.5px; font-weight: 600; opacity: .55; }
   .people-cards tr.click:hover .edit-hint { opacity: 1; }
@@ -816,27 +822,15 @@
     const list = reviewFiltered();
     const logCount = {};
     D.logs.forEach(l => { logCount[l.empNo] = (logCount[l.empNo] || 0) + 1; });
-    // 명단: 기본 정보 열을 시트 순서대로 보여주고, 행을 누르면 수정 화면이 뜬다
+    // 명단: 시트와 같은 기본 정보 10개 열을 한 줄씩 보여주고, 줄을 누르면 수정 화면이 뜬다
+    const BASIC = ['no', 'dept', 'empNo', 'name', 'subgroup', 'payArea', 'rank', 'phone', 'email', 'leave'];
     const rows = list.map(p => `
-      <tr class="click" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
-        <td class="c-hide" data-label="No.">${esc(p.no)}</td>
-        <td data-label="부서">${esc(p.dept)}</td>
-        <td data-label="사원번호">${esc(p.empNo)}</td>
-        <td class="c-name" data-label="성명">${esc(p.name)}</td>
-        <td class="m-hide" data-label="사원하위그룹">${esc(p.subgroup)}</td>
-        <td class="m-hide" data-label="급여영역">${esc(p.payArea)}</td>
-        <td data-label="직급">${esc(p.rank)}</td>
-        <td data-label="전화번호">${esc(p.phone)}</td>
-        <td class="m-hide" data-label="이메일">${esc(p.email)}</td>
-        <td class="${p.leave ? '' : 'm-hide'}" data-label="휴직">${p.leave ? '<span class="chip plain">휴직</span>' : ''}</td>
-        <td data-label="담당 / 2차">${esc(p.owner || '-')}<span style="color:var(--muted)"> / ${esc(p.owner2 || '-')}</span></td>
-        <td data-label="상태">${statusChip(p)}</td>
-        <td data-label="미비 · 특이">${p.missing ? '<span class="chip no" title="' + esc(p.missing) + '">미비</span> ' : ''}${hasNote(p) ? '<span class="chip info">특이</span> ' : ''}${logCount[p.empNo] ? `<span class="chip plain">응대 ${logCount[p.empNo]}</span>` : ''}</td>
-        <td class="c-hide edit-cell"><span class="edit-hint">수정 ›</span></td>
+      <tr onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
+        ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? (p.leave ? 'O' : '') : esc(p[k])}</td>`).join('')}
       </tr>`).join('');
     return rows
-      ? `<div class="table-wrap"><table class="t cards people-cards"><thead><tr><th class="c-hide">No.</th><th>부서</th><th>사원번호</th><th>성명</th><th>사원하위그룹</th><th>급여영역</th><th>직급</th><th>전화번호</th><th>이메일</th><th>휴직</th><th>담당 / 2차</th><th>상태</th><th>미비 · 특이</th><th class="c-hide"></th></tr></thead><tbody>${rows}</tbody></table></div>
-        <p class="hint" style="margin-top:8px">이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
+      ? `<div class="table-wrap"><table class="sheet-grid"><thead><tr>${BASIC.map(k => `<th>${esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="hint" style="margin-top:8px">${list.length}명 · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
       : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
   }
 
