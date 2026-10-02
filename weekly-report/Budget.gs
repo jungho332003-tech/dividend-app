@@ -63,7 +63,10 @@ function setupBudgetSheets_(ss) {
 /* ---------- 신청 폼 (스프레드시트 메뉴) ---------- */
 
 function openBudgetForm() {
-  const html = HtmlService.createHtmlOutputFromFile('BudgetForm').setWidth(480).setHeight(600);
+  // 한 파일 설치본(dist/Code.gs)은 화면을 BUDGET_FORM_HTML 문자열로 갖고 있다
+  const html = (typeof BUDGET_FORM_HTML === 'string'
+    ? HtmlService.createHtmlOutput(BUDGET_FORM_HTML)
+    : HtmlService.createHtmlOutputFromFile('BudgetForm')).setWidth(480).setHeight(600);
   SpreadsheetApp.getUi().showModalDialog(html, '💰 예산전용 신청');
 }
 
