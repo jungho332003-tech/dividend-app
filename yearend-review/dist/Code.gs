@@ -674,6 +674,95 @@ function apiAddLog(id, kind, body) {
   return { logAdded: entry };
 }
 
+/**
+ * 대상자 업로드 양식 (총괄·관리자)
+ * 접속한 사람의 드라이브에 "연말정산 대상자 업로드 양식" 스프레드시트를 하나 만들어 두고(다음부터는 다시 씀),
+ * 열 제목·담당자 목록을 최신으로 맞춘 뒤 엑셀(.xlsx)로 내려받는 주소를 돌려준다.
+ * withPeople=true면 지금 볼 수 있는 대상자 명단을 채워서 준다 (엑셀에서 고쳐 다시 올리기용).
+ */
+function apiTemplateLink(withPeople) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'review');
+  if (!me.isLeader && !me.isAdmin) throw new Error('양식 다운로드는 총괄 또는 관리자만 할 수 있습니다.');
+
+  const props = PropertiesService.getUserProperties();
+  let ss = null;
+  const id = props.getProperty('TEMPLATE_ID');
+  if (id) {
+    try {
+      const f = DriveApp.getFileById(id);
+      if (!f.isTrashed()) ss = SpreadsheetApp.openById(id);
+    } catch (e) { ss = null; /* 지워졌거나 권한 없음: 새로 만든다 */ }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create('연말정산 대상자 업로드 양식');
+    props.setProperty('TEMPLATE_ID', ss.getId());
+  }
+
+  const header = COLS.map(c => c.l);
+  let sh = ss.getSheetByName('대상자') || ss.getSheets()[0].setName('대상자');
+  sh.clear();
+  sh.getDataRange().clearDataValidations();
+  sh.getRange(1, 1, 1, header.length).setValues([header])
+    .setBackground('#efefef').setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle').setWrap(true);
+  sh.setRowHeight(1, 42);
+  sh.setFrozenRows(1);
+  sh.setFrozenColumns(4);
+  COLS.forEach((c, i) => sh.setColumnWidth(i + 1, c.t === 'long' ? 220 : c.t === 'bool' ? 90 : 110));
+
+  const ROWS = 1000;
+  const boolRule = SpreadsheetApp.newDataValidation().requireValueInList(['O', 'X'], true).setAllowInvalid(true).build();
+  COLS.forEach((c, i) => { if (c.t === 'bool') sh.getRange(2, i + 1, ROWS, 1).setDataValidation(boolRule).setHorizontalAlignment('center'); });
+  const staff = ctx.members.map(m => m.name);
+  if (staff.length) {
+    const staffRule = SpreadsheetApp.newDataValidation().requireValueInList(staff, true).setAllowInvalid(true).build();
+    ['owner', 'owner2'].forEach(k => sh.getRange(2, COLS.findIndex(c => c.k === k) + 1, ROWS, 1).setDataValidation(staffRule));
+  }
+  sh.getRange(2, COLS.findIndex(c => c.k === 'empNo') + 1, ROWS, 1).setNumberFormat('@'); // 사원번호 앞자리 0 유지
+
+  let count = 0;
+  if (withPeople) {
+    const people = forMe_('people', cached_(CK.people, () => readPeople_(ctx.ss)), me);
+    const rows = people.map(p => COLS.map(c => c.t === 'bool' ? (p[c.k] ? 'O' : '') : p[c.k]));
+    if (rows.length) sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+    count = rows.length;
+  }
+
+  let guide = ss.getSheetByName('작성 안내') || ss.insertSheet('작성 안내');
+  guide.clear();
+  const lines = [
+    ['연말정산 대상자 업로드 양식 작성 안내'],
+    [''],
+    ['· [대상자] 시트 2행부터 한 사람씩 적고, 웹앱 서류 검토 > 대상자 업로드에 이 파일을 올리세요.'],
+    ['· 성명은 꼭 적어야 합니다. 사원번호가 이미 있으면 그 사람 정보를 갱신하고, 없으면 새로 추가합니다.'],
+    ['· 빈 칸은 기존 값을 그대로 둡니다. 필요 없는 열은 비워 두거나 지워도 됩니다.'],
+    ['· 체크 항목(휴직여부, E-HR 등록, 서류 도착여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
+    [`· 담당자·2차검토 담당자는 [담당자] 목록의 이름과 똑같이 적어야 내 담당으로 연결됩니다: ${staff.join(', ') || '(담당자 없음)'}`],
+    ['· 열 순서는 바꿔도 됩니다. 1행 제목(열 이름)으로 맞춥니다.'],
+    [''],
+    ['예시 (이 시트는 올려도 읽지 않습니다)'],
+  ];
+  guide.getRange(1, 1, lines.length, 1).setValues(lines);
+  guide.getRange('A1').setFontSize(13).setFontWeight('bold');
+  guide.getRange(lines.length + 1, 1, 2, 8).setValues([
+    ['No.', '부서', '사원번호', '성명', '직급', '담당자', '2차검토 담당자', '서류 도착여부'],
+    ['1', '인사팀', '20110321', '홍길동', '과장', staff[0] || '김담당', staff[1] || '이검토', 'O'],
+  ]);
+  guide.getRange(lines.length + 1, 1, 1, 8).setBackground('#efefef').setFontWeight('bold');
+  guide.setColumnWidth(1, 120);
+  ss.setActiveSheet(sh);
+  SpreadsheetApp.flush();
+
+  const stamp = fmt(new Date(), 'yyyyMMdd');
+  return {
+    url: `https://docs.google.com/spreadsheets/d/${ss.getId()}/export?format=xlsx`,
+    sheetUrl: ss.getUrl(),
+    fileName: `연말정산_대상자_${withPeople ? '명단' : '양식'}_${stamp}.xlsx`,
+    count: count,
+  };
+}
+
 // ===================================================================
 // Notice.gs
 // ===================================================================

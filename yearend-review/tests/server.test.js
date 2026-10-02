@@ -6,7 +6,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
 
 /* ---------- 1. 새 스프레드시트 ---------- */
 {
-  const { api, ss, state } = makeEnv();
+  const { api, ss, state, books } = makeEnv();
   const as = email => { state.user = email; };
   ok('initialize creates sheets', () => {
     api.initialize();
@@ -181,6 +181,21 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     as('choi@x.com'); assert.strictEqual(api.apiBootstrap().people.length, 4); // 전체
     as('lead@x.com'); assert.strictEqual(api.apiBootstrap().me.scope, '전체'); // 총괄은 항상 전체
     as('owner@x.com'); save({});
+  });
+
+  ok('양식 다운로드: 총괄만, 한 번 만들고 다시 씀, 명단 채우기는 열람 범위대로', () => {
+    as('kim@x.com'); throwsMsg(() => api.apiTemplateLink(false), /총괄 또는 관리자/);
+    as('lead@x.com');
+    const r1 = api.apiTemplateLink(false);
+    assert(/\/export\?format=xlsx$/.test(r1.url)); assert.strictEqual(r1.count, 0);
+    const book = books[Object.keys(books)[0]];
+    const sh = book.getSheetByName('대상자');
+    assert.strictEqual(sh.get(1, 1), 'No.'); assert.strictEqual(sh.get(1, 4), '성명'); assert.strictEqual(sh.getLastColumn(), 35);
+    assert(book.getSheetByName('작성 안내'));
+    const r2 = api.apiTemplateLink(true);
+    assert.strictEqual(Object.keys(books).length, 1, 'reuses the same template');
+    assert.strictEqual(r2.count, api.apiBootstrap().people.length);
+    assert.strictEqual(sh.getLastRow(), r2.count + 1);
   });
 
   ok('admin save members / settings / apply', () => {

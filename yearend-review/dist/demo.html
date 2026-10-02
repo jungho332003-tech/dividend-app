@@ -535,6 +535,8 @@
   .prog-row .n.warn { color: var(--warn-ink); font-weight: 700; }
   .linkish { background: none; border: 0; padding: 0; color: var(--accent-2); cursor: pointer; font: inherit; text-align: left; }
   .linkish:hover { text-decoration: underline; }
+  .tpl-opt { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; flex-wrap: wrap; }
+  .tpl-opt span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 
   @media (max-width: 760px) {
     .form .three { grid-template-columns: 1fr 1fr; }
@@ -818,6 +820,7 @@ window.MockApi = (function () {
       });
       return { people: myPeople(m), added, updated };
     },
+    apiTemplateLink() { return { demo: true }; },
     apiAddLog(id, kind, body) {
       const m = meInfo(); need(m, 'review');
       const p = people.find(x => x.id === id);
@@ -1192,7 +1195,7 @@ window.MockApi = (function () {
       <div class="head">
         <div><h1>서류 검토</h1><p>대상자를 눌러 진행 체크·특이사항·수정사항·미비서류를 입력하세요. [대상자] 시트에 바로 저장됩니다.</p></div>
         <div class="head-actions">
-          ${isLead() ? '<button class="btn" onclick="openImport()">대상자 업로드</button><button class="btn" onclick="openAddPerson()">+ 대상자</button>' : ''}
+          ${isLead() ? '<button class="btn" onclick="openTemplate()">양식 다운로드</button><button class="btn" onclick="openImport()">대상자 업로드</button><button class="btn" onclick="openAddPerson()">+ 대상자</button>' : ''}
           <a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
         </div>
       </div>
@@ -1425,7 +1428,8 @@ window.MockApi = (function () {
     const map = hdr || D.cols.slice(0, rows[0].length);
     const unknown = hdr ? rows[h].filter((x, i) => x.trim() && !hdr[i]) : [];
     if (!map.some(c => c && c.k === 'name')) return { err: '「성명」 열을 찾지 못했습니다. 제목 행(No., 부서, 사원번호, 성명…)이 있는지 확인해 주세요.' };
-    const data = rows.slice(h + 1).map(r => { const o = {}; map.forEach((c, i) => { if (c) o[c.k] = (r[i] || '').trim(); }); return o; }).filter(o => o.name);
+    // 빈 칸은 보내지 않는다: 이미 있는 대상자의 값이 빈 칸으로 지워지지 않게 (체크를 풀려면 X)
+    const data = rows.slice(h + 1).map(r => { const o = {}; map.forEach((c, i) => { const v = (r[i] || '').trim(); if (c && v) o[c.k] = v; }); return o; }).filter(o => o.name);
     const emps = data.map(o => o.empNo).filter(Boolean);
     const dupInFile = emps.filter((e, i) => emps.indexOf(e) !== i);
     return { data, cols: map.filter(Boolean).length, unknown, dupInFile: [...new Set(dupInFile)] };
@@ -1481,13 +1485,54 @@ window.MockApi = (function () {
     });
   }
 
+  /* ---------- 대상자 양식 다운로드 ---------- */
+  function openTemplate() {
+    openModal(`
+      <h3>대상자 양식 다운로드</h3>
+      <p class="sub">엑셀(.xlsx) 파일로 받습니다. 작성한 뒤 「대상자 업로드」로 올리면 됩니다.</p>
+      <div class="form">
+        <div class="tpl-opt">
+          <div><b>빈 양식</b><span>시트와 같은 열 ${D.cols.length}개 + 작성 안내. 새 대상자 명단을 만들 때</span></div>
+          <button type="button" class="btn primary" onclick="downloadTemplate(false)">빈 양식 받기</button>
+        </div>
+        <div class="tpl-opt">
+          <div><b>현재 명단 포함</b><span>지금 보이는 대상자 ${D.people.length}명이 채워진 파일. 엑셀에서 한꺼번에 고쳐 다시 올릴 때</span></div>
+          <button type="button" class="btn" onclick="downloadTemplate(true)">명단으로 받기</button>
+        </div>
+        <div class="hint">체크 항목은 O(체크)·X(체크 풀기)로, 담당자는 목록에서 고를 수 있습니다. 파일은 내 구글 드라이브의 「연말정산 대상자 업로드 양식」 시트로 만들어집니다.</div>
+        <div id="tplMsg"></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button></div>
+      </div>`);
+  }
+  function downloadTemplate(withPeople) {
+    const msg = $('#tplMsg');
+    // 예시 화면: 파일을 만들 서버가 없으므로 열 구성만 보여준다
+    if (window.MockApi) {
+      msg.innerHTML = `<div class="notice">예시 화면이라 파일을 내려받을 수 없습니다. 실제 웹앱에서는 아래 열이 들어간 엑셀 파일이 새 탭에서 바로 내려받아집니다${withPeople ? ` (대상자 ${D.people.length}명 포함)` : ''}.</div>
+        <div class="table-wrap" style="margin-top:8px"><table class="sheet-grid" style="min-width:0"><thead><tr>${D.cols.slice(0, 12).map(c => `<th>${esc(c.l)}</th>`).join('')}<th>…</th></tr></thead></table></div>`;
+      return;
+    }
+    // 서버 응답을 기다린 뒤 창을 열면 팝업 차단에 걸리므로, 누르는 순간 빈 탭을 먼저 연다
+    const w = window.open('', '_blank');
+    if (w) { try { w.document.write('<p style="font-family:sans-serif;padding:24px">양식을 만드는 중입니다… 잠시 후 다운로드가 시작됩니다.</p>'); } catch (e) { /* 무시 */ } }
+    msg.innerHTML = '<div class="hint">양식을 만드는 중…</div>';
+    call('apiTemplateLink', !!withPeople)
+      .then(res => {
+        if (w) w.location.href = res.url;
+        msg.innerHTML = `<div class="msg ok">${w ? '새 탭에서 다운로드가 시작됩니다.' : '아래를 눌러 받으세요.'}${res.count ? ` (대상자 ${res.count}명)` : ''}
+          <br><a href="${esc(res.url)}" target="_blank" rel="noopener">엑셀(.xlsx)로 받기</a> · <a href="${esc(res.sheetUrl)}" target="_blank" rel="noopener">구글 시트로 열기</a></div>`;
+      })
+      .catch(e => { if (w) w.close(); msg.innerHTML = `<div class="msg err">${esc(e.message || String(e))}</div>`; });
+  }
+
   function openImport() {
     let src = 'file';      // file | paste
     let fileResult = null; // 파일에서 읽은 결과
     openModal(`
       <h3>대상자 업로드</h3>
       <p class="sub">엑셀·CSV 파일을 올리거나, 시트에서 복사해 붙여넣으세요. 열 이름(No., 부서, 사원번호, 성명…)으로 자동 매칭합니다.<br>
-      · 사원번호가 같으면 파일에 있는 칸만 갱신, 없으면 새로 추가 · O, Y, ○, 완료 같은 표기는 체크로 인식</p>
+      · 사원번호가 같으면 갱신, 없으면 새로 추가 · <b>빈 칸은 기존 값을 그대로 둡니다</b> · 체크는 O, 체크를 풀려면 X<br>
+      · 양식이 없으면 <button type="button" class="linkish" onclick="openTemplate()">양식 다운로드</button>부터 받으세요.</p>
       <div class="subtabs" role="tablist" style="margin-bottom:12px">
         <button type="button" role="tab" id="imTabFile" aria-selected="true">파일 올리기</button>
         <button type="button" role="tab" id="imTabPaste" aria-selected="false">붙여넣기</button>

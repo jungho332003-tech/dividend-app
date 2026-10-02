@@ -32,6 +32,9 @@ class Sheet {
   protect() { const p = { warn: false, eds: [], setDescription() { return p; }, setWarningOnly(w) { p.warn = w; return p; }, isWarningOnly() { return p.warn; }, remove: () => { this.prot = this.prot.filter(x => x !== p); }, addEditor(e) { p.eds.push(e); }, addEditors(l) { p.eds.push(...l); }, removeEditors() { p.eds = []; }, getEditors() { return p.eds.map(e => ({ getEmail: () => e })); }, canDomainEdit() { return false; }, setDomainEdit() {}, setUnprotectedRanges() {} }; this.prot.push(p); return p; }
 }
 ['setColumnWidth', 'setFrozenRows', 'setFrozenColumns', 'setRowHeight', 'hideColumns', 'hideSheet'].forEach(k => { Sheet.prototype[k] = function () { return this; }; });
+Sheet.prototype.clear = function () { this.d = []; return this; };
+Sheet.prototype.setName = function (n) { this.name = n; return this; };
+Sheet.prototype.getDataRange = function () { return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1)); };
 
 class Range {
   constructor(sh, r, c, nr, nc) { Object.assign(this, { sh, r, c, nr, nc }); }
@@ -44,11 +47,23 @@ class Range {
   getColumn() { return this.c; }
   protect() { return this.sh.protect(); }
 }
-['setNumberFormat', 'setWrap', 'setBackground', 'setFontWeight', 'setHorizontalAlignment', 'setBorder', 'setNote', 'setDataValidation', 'setFontSize', 'setFontColor', 'merge', 'breakApart', 'clear', 'setVerticalAlignment', 'insertCheckboxes'].forEach(k => { Range.prototype[k] = function () { return this; }; });
+['clearDataValidations', 'setNumberFormat', 'setWrap', 'setBackground', 'setFontWeight', 'setHorizontalAlignment', 'setBorder', 'setNote', 'setDataValidation', 'setFontSize', 'setFontColor', 'merge', 'breakApart', 'clear', 'setVerticalAlignment', 'insertCheckboxes'].forEach(k => { Range.prototype[k] = function () { return this; }; });
+
+function makeBook(name, id) {
+  const sheets = [new Sheet('Sheet1', 0)];
+  let sid = 1;
+  return {
+    sheets, getSheets: () => sheets, getId: () => id, getUrl: () => 'https://docs/' + id, getName: () => name,
+    getSheetByName: n => sheets.find(s => s.name === n) || null,
+    insertSheet: n => { const s = new Sheet(n, sid++); sheets.push(s); return s; },
+    setActiveSheet() {},
+  };
+}
 
 function makeEnv() {
   const sheets = [];
   let sid = 1;
+  const books = {};
   const ss = {
     getSheetByName: n => sheets.find(s => s.name === n) || null,
     insertSheet: n => { const s = new Sheet(n, sid++); sheets.push(s); return s; },
@@ -75,6 +90,8 @@ function makeEnv() {
     SpreadsheetApp: {
       getActive: () => ss, getUi: () => ({ alert() {}, createMenu: () => chain, showModalDialog() {} }),
       newDataValidation: () => chain, ProtectionType: { SHEET: 'S', RANGE: 'R' }, BorderStyle: {}, flush() {},
+      create: n => { const id = 'BOOK' + (Object.keys(books).length + 1); books[id] = makeBook(n, id); return books[id]; },
+      openById: id => books[id],
     },
     Session: { getActiveUser: () => ({ getEmail: () => state.user }), getEffectiveUser: () => ({ getEmail: () => state.user }) },
     CacheService: { getDocumentCache: () => ({
@@ -89,13 +106,13 @@ function makeEnv() {
       formatDate: (d, tz, p) => { const k = new Date(d.getTime() + 9 * 3600e3); const pad = n => String(n).padStart(2, '0'); return p.replace('yyyy', k.getUTCFullYear()).replace('MM', pad(k.getUTCMonth() + 1)).replace('dd', pad(k.getUTCDate())).replace('HH', pad(k.getUTCHours())).replace('mm', pad(k.getUTCMinutes())); },
       base64Decode: s => Array.from(Buffer.from(s, 'base64')), newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
     },
-    DriveApp: { getFolderById: id => { if (id !== 'FOLDER') throw new Error('no folder'); return root; }, getFileById: id => id === 'SSID' ? { getOwner: () => ({ getEmail: () => 'owner@x.com' }), getEditors: () => [], getViewers: () => [], addEditor(e) { state.editors[e] = 1; }, removeEditor() {}, removeViewer() {} } : (state.files[id] || (() => { throw new Error('nf'); })()) },
+    DriveApp: { getFolderById: id => { if (id !== 'FOLDER') throw new Error('no folder'); return root; }, getFileById: id => books[id] ? { isTrashed: () => false } : id === 'SSID' ? { getOwner: () => ({ getEmail: () => 'owner@x.com' }), getEditors: () => [], getViewers: () => [], addEditor(e) { state.editors[e] = 1; }, removeEditor() {}, removeViewer() {} } : (state.files[id] || (() => { throw new Error('nf'); })()) },
     ScriptApp: { getService: () => ({ getUrl: () => 'https://webapp' }) },
     HtmlService: { createHtmlOutputFromFile: () => chain, createHtmlOutput: () => chain },
   };
   vm.createContext(g);
-  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, setupProtections, CtxDate: Date };', g);
-  return { api: g.__api, ss, state, cacheStore };
+  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, setupProtections, apiTemplateLink, CtxDate: Date };', g);
+  return { api: g.__api, ss, state, cacheStore, books };
 }
 
 module.exports = { makeEnv, assert };

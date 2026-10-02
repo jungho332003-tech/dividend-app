@@ -238,6 +238,7 @@ window.MockApi = (function () {
       });
       return { people: myPeople(m), added, updated };
     },
+    apiTemplateLink() { return { demo: true }; },
     apiAddLog(id, kind, body) {
       const m = meInfo(); need(m, 'review');
       const p = people.find(x => x.id === id);
