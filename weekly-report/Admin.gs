@@ -79,13 +79,17 @@ function requireAdmin_(ctx) {
 
 /* ---------- 조회 ---------- */
 
-function apiAdminData() {
+/** force=true면 공유 상태를 새로 확인 (상태 새로고침 버튼) */
+function apiAdminData(force) {
   const ctx = getContext();
   requireAdmin_(ctx);
-  return adminData_(ctx);
+  return adminData_(ctx, !force);
 }
 
-function adminData_(ctx) {
+/**
+ * useCache=true면 공유 상태(시트·폴더·캘린더 확인, 가장 느린 부분)를 5분 캐시에서 쓴다.
+ */
+function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
     members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin })),
@@ -100,8 +104,14 @@ function adminData_(ctx) {
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
-    status: accessStatus_(ctx),
+    status: useCache ? cached_('access', () => accessStatus_(ctx), 300) : freshStatus_(ctx),
   };
+}
+
+function freshStatus_(ctx) {
+  const status = accessStatus_(ctx);
+  putCache_('access', status, 300);
+  return status;
 }
 
 /**
@@ -208,7 +218,8 @@ function apiSaveMembers(list) {
     sh.getRange(2, 1, rows.length, 6).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N']));
   }
   clearCaches_(ctx);
-  return adminData_(getContext());
+  // 저장만 하고 공유 상태는 다시 확인하지 않는다 (확인은 "권한 한 번에 적용"이나 "상태 새로고침"에서)
+  return adminData_(getContext(), true);
 }
 
 function apiSaveMenuAccess(access) {
@@ -241,7 +252,7 @@ function apiSaveSettings(s) {
   setConfigValue(CFG.CALENDAR, String(s.calendarId || '').trim());
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_(ctx);
-  return adminData_(getContext());
+  return adminData_(getContext(), false);
 }
 
 function clearCaches_(ctx) {
@@ -331,7 +342,7 @@ function apiApplyPermissions() {
 
   clearCaches_(ctx);
   if (!log.some(l => l.ok && /권한을 줬습니다/.test(l.text))) ok('새로 줄 공유 권한은 없었습니다. 모두 이미 공유되어 있습니다.');
-  return { log: log, data: adminData_(getContext()) };
+  return { log: log, data: adminData_(getContext(), false) };
 }
 
 /** 팀원을 뺄 때 시트·폴더·캘린더 접근 해제 (소유자와 본인은 건드리지 않는다) */
@@ -370,5 +381,5 @@ function apiRevokeAccess(email) {
       log.push({ ok: false, text: '팀 캘린더 공유 해제 실패 (이미 해제되었거나 권한 없음)' });
     }
   }
-  return { log: log, data: adminData_(getContext()) };
+  return { log: log, data: adminData_(getContext(), false) };
 }

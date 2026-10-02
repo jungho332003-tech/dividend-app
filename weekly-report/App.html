@@ -685,7 +685,7 @@
     $('#main').innerHTML = PAGES[page]();
     if (page === 'weekly' && weeklyTab === 'mine') bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = null;
     if (page === 'dash' && !upcoming && can('calendar')) loadUpcoming();
-    if (page === 'admin' && !A) loadAdmin();
+    if (page === 'admin' && !A) loadAdmin(false);
     if (page === 'calendar') loadMonth();
     renderDemoBar();
   }
@@ -1362,9 +1362,17 @@
   let menuDraft = null;
   let adminTab = 'members';
 
-  function loadAdmin() {
-    call('apiAdminData').then(setAdmin).catch(fail);
+  let adminLoading = false;
+  /** force=true면 공유 상태를 새로 확인, 아니면 서버의 5분 캐시를 써서 빠르게 연다 */
+  function loadAdmin(force) {
+    if (adminLoading) return;
+    adminLoading = true;
+    call('apiAdminData', !!force)
+      .then(d => { adminLoading = false; setAdmin(d); })
+      .catch(e => { adminLoading = false; fail(e); });
   }
+  /** 상태 새로고침 버튼 */
+  function refreshAdmin() { loadAdmin(true); A = null; render(); }
   function setAdmin(data) {
     A = data;
     aDraft = A.members.map(m => Object.assign({}, m));
@@ -1421,7 +1429,7 @@
       <div class="head">
         <div><h1>팀원·권한</h1><p>팀원을 등록하고 "권한 한 번에 적용"을 누르면 시트·첨부 폴더·캘린더 공유와 시트 잠금을 자동으로 합니다.</p></div>
         <div class="head-actions">
-          <button class="btn" onclick="A=null;render()">상태 새로고침</button>
+          <button class="btn" onclick="refreshAdmin()">상태 새로고침</button>
           <button class="btn primary" onclick="applyAll()">권한 한 번에 적용</button>
         </div>
       </div>

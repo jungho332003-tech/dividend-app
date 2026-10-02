@@ -111,7 +111,9 @@ function applyProtections_(ctx) {
   const admins = ctx.members.filter(m => m.admin && m.email).map(m => m.email);
   const missing = [];
 
+  let created = 0;
   ctx.members.filter(m => m.write).forEach(m => {
+    if (!ss.getSheetByName(SHEET.INPUT_PREFIX + m.name)) created++;
     const sh = setupInputSheet_(ss, m.name, ctx);
     if (m.email) protectSheet_(sh, [m.email].concat(admins));
     else missing.push(m.name);
@@ -129,9 +131,7 @@ function applyProtections_(ctx) {
 
   // 예산전용: 웹앱·메뉴로 신청 (직접 수정 시 경고만)
   const budget = ss.getSheetByName(BUDGET.SHEET);
-  budget.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
-  budget.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
-  budget.protect().setDescription(`${BUDGET.SHEET} 보호`).setWarningOnly(true);
+  if (budget) warnOnlyProtect_(budget);
 
   // 회사 기준: 팀장·관리자만 수정
   [RULES.SHEET, RULES.HISTORY].forEach(name => {
@@ -142,12 +142,11 @@ function applyProtections_(ctx) {
   // 게시판: 누구나 글/댓글 작성 (직접 수정 시 경고만)
   [BOARD.SHEET, BOARD.COMMENTS].forEach(name => {
     const sh = ss.getSheetByName(name);
-    if (!sh) return;
-    sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
-    sh.protect().setDescription(`${name} 보호`).setWarningOnly(true);
+    if (sh) warnOnlyProtect_(sh);
   });
 
-  buildReport_(ctx);
+  // 새 팀원 입력시트가 생겼거나 보고서가 비어 있을 때만 보고서를 다시 만든다 (평소엔 매시간 자동 갱신)
+  if (created || report.getLastRow() < REPORT.FIRST_ROW) buildReport_(ctx);
   return missing;
 }
 
@@ -199,7 +198,10 @@ function styleHeader_(range) {
 
 /** 시트 전체 보호: 실행한 관리자(소유자) + editors만 편집 */
 function protectSheet_(sh, editors) {
-  sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
+  // 이미 원하는 사람들로만 잠겨 있으면 다시 잠그지 않는다 (권한 적용 속도)
+  const current = sh.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+  if (current.length === 1 && !current[0].isWarningOnly() && sameEditors_(current[0], editors)) return current[0];
+  current.forEach(p => p.remove());
   const p = sh.protect().setDescription(`${sh.getName()} 보호`);
   restrictEditors_(p, editors);
   return p;
@@ -209,6 +211,13 @@ function protectSheet_(sh, editors) {
  * 시트는 관리자만(warningOnly면 경고만), leaderRange는 팀장만 편집.
  */
 function protectSheetWithLeaderRange_(sh, leaderRange, leaders, warningOnly, admins) {
+  const sheetP = sh.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+  const rangeP = sh.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+  if (sheetP.length === 1 && rangeP.length === 1
+    && sheetP[0].isWarningOnly() === !!warningOnly
+    && (warningOnly || sameEditors_(sheetP[0], admins || []))
+    && rangeP[0].getRange().getA1Notation() === leaderRange.getA1Notation()
+    && sameEditors_(rangeP[0], leaders)) return;
   sh.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => p.remove());
   sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
 
@@ -222,6 +231,39 @@ function protectSheetWithLeaderRange_(sh, leaderRange, leaders, warningOnly, adm
 
   const rp = leaderRange.protect().setDescription(`${sh.getName()} 팀장 전용`);
   restrictEditors_(rp, leaders);
+}
+
+/** 보호의 편집자가 (실행한 관리자 + 소유자 + editors)와 정확히 같은지 */
+function sameEditors_(p, editors) {
+  if (p.canDomainEdit()) return false;
+  const want = new Set(editors.concat(Session.getEffectiveUser().getEmail(), ownerEmail_())
+    .filter(Boolean).map(e => e.toLowerCase()));
+  const have = new Set(p.getEditors().map(u => u.getEmail().toLowerCase()));
+  // 소유자는 보호에서 뺄 수 없으므로 양쪽에 항상 있다고 본다
+  const owner = ownerEmail_();
+  if (owner) have.add(owner);
+  if (want.size !== have.size) return false;
+  for (const e of want) if (!have.has(e)) return false;
+  return true;
+}
+
+/** 스프레드시트 소유자 이메일 (조회가 느려서 6시간 캐시) */
+function ownerEmail_() {
+  return cached_(CK.owner, () => {
+    try {
+      const o = SpreadsheetApp.getActive().getOwner();
+      return o ? o.getEmail().toLowerCase() : '';
+    } catch (e) { return ''; /* 공유 드라이브 등 소유자 조회 불가 */ }
+  }, 21600);
+}
+
+/** 경고만 하는 시트 보호 (이미 그렇게 되어 있으면 그대로 둔다) */
+function warnOnlyProtect_(sh) {
+  sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(p => p.remove());
+  const current = sh.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+  if (current.length === 1 && current[0].isWarningOnly()) return;
+  current.forEach(p => p.remove());
+  sh.protect().setDescription(`${sh.getName()} 보호`).setWarningOnly(true);
 }
 
 function restrictEditors_(p, editors) {

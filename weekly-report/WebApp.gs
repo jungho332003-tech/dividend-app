@@ -139,13 +139,7 @@ function toClientItem_(item) {
 function currentMember_(members) {
   const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
   const m = members.find(x => x.email && x.email.toLowerCase() === email);
-  // 소유자 조회는 느려서 6시간 캐시
-  const owner = cached_(CK.owner, () => {
-    try {
-      const o = SpreadsheetApp.getActive().getOwner();
-      return o ? o.getEmail().toLowerCase() : '';
-    } catch (e) { return ''; /* 공유 드라이브 등 소유자 조회 불가 */ }
-  }, 21600);
+  const owner = ownerEmail_();
   const isAdmin = (!!owner && owner === email) || !!(m && m.admin);
   const me = {
     email: email,
