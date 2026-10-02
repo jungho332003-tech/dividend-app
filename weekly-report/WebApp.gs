@@ -191,8 +191,7 @@ function apiSaveMyWeek(payload) {
   requireMenu_(me, 'weekly');
   if (!me.writer) throw new Error('작성 대상 팀원으로 등록되어 있지 않습니다. 관리자에게 [팀원] 시트 등록을 요청하세요.');
 
-  const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name);
-  if (!sh) throw new Error('입력시트가 아직 없습니다. 관리자에게 "팀원 입력시트 만들기"를 요청하세요.');
+  const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name) || createMyInputSheet_(ctx, me);
 
   const toRows = list => (list || [])
     .filter(x => String(x.task || '').trim())
@@ -209,6 +208,32 @@ function apiSaveMyWeek(payload) {
   sh.getRange(INPUT.NOTE_CELL).setValue(String(payload.note || '').trim());
   sh.getRange(INPUT.DONE_CELL).setValue(!!payload.done);
   return memberPatch_(ctx, me.name);
+}
+
+/**
+ * 팀원 목록에는 있는데 입력시트가 아직 없으면(권한 적용 전) 저장할 때 바로 만든다.
+ * 본인과 관리자만 편집할 수 있게 잠그고, 다음 보고서 갱신 때 주간보고에 들어간다.
+ */
+function createMyInputSheet_(ctx, me) {
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const existing = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name);
+    if (existing) return existing;
+    const sh = setupInputSheet_(ctx.ss, me.name, ctx);
+    const admins = ctx.members.filter(m => m.admin && m.email).map(m => m.email);
+    try {
+      protectSheet_(sh, [me.email].concat(admins));
+    } catch (e) {
+      // 잠금은 관리자가 "권한 한 번에 적용"을 누르면 다시 걸린다
+    }
+    try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
+    return sh;
+  } catch (e) {
+    throw new Error('입력시트를 만들 수 없습니다. 스프레드시트 편집 권한이 있는지 관리자에게 확인하세요. (관리 → 권한 한 번에 적용)');
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function parseDue_(v) {
