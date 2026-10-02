@@ -677,7 +677,13 @@
   window.addEventListener('beforeunload', e => { if (pending) { e.preventDefault(); e.returnValue = ''; } });
 
   function load() {
-    return call('apiBootstrap').then(data => { D = data; render(); }).catch(fail);
+    return call('apiBootstrap').then(data => {
+      const first = !D;
+      D = data;
+      // 담당으로 지정된 대상자가 없으면 서류 검토를 전체 목록으로 연다
+      if (first && !D.people.some(isMine)) reviewTab = 'all';
+      render();
+    }).catch(fail);
   }
 
   /* ================= 공통 계산 ================= */
@@ -691,7 +697,7 @@
   /** 상태는 시트 체크 항목으로 자동 판정 (시트에 상태 열을 따로 두지 않는다) */
   function pStatus(p) {
     if (String(p.missing || '').trim()) return 'supp';
-    if (!(p.arrived || p.manual || p.ehr)) return 'none';
+    if (!(p.arrived || p.ehr)) return 'none';
     if (!p.verified) return 'review';
     if (!p.review2) return 'wait2';
     return 'done';
@@ -901,7 +907,7 @@
     }
     const base = reviewBase();
     const scopeNote = D.me.scope && D.me.scope !== '전체' && !isLead()
-      ? `<p class="hint" style="margin:0 0 10px">열람 범위: ${D.me.scope.split(',').filter(x => x !== '본인').length ? `내 담당 + ${esc(D.me.scope.split(',').filter(x => x !== '본인').map(x => x === '(미배정)' ? '담당자 없는 대상자' : `${x} 담당`).join(', '))}` : '내 담당만'} (관리자가 정합니다)</p>` : '';
+      ? `<p class="hint" style="margin:0 0 10px">열람 범위: ${D.me.scope.split(',').filter(x => x !== '본인' && x !== '(미배정)').length ? `내 담당 + ${esc(D.me.scope.split(',').filter(x => x !== '본인').filter(x => x !== '(미배정)').map(x => `${x} 담당`).join(', '))}` : '내 담당만'} + 담당자 없는 대상자 (관리자가 정합니다)</p>` : '';
     const owners = [...new Set(D.people.flatMap(p => [p.owner, p.owner2]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
     const chips = [['all', '전체']].concat(Object.keys(STATUS).map(k => [k, STATUS[k][0]]))
       .map(([k, l]) => `<button aria-pressed="${reviewStatus === k}" onclick="reviewStatus='${k}';render()">${l} ${k === 'all' ? base.length : base.filter(p => pStatus(p) === k).length}</button>`).join('');
@@ -927,7 +933,7 @@
   /* ---------- 대상자 상세 (입력) ---------- */
   let curPerson = null;
   let draftOwner = '';
-  const GROUP_ORDER = ['진행', '1차 특이·수정사항', '주택자금 · 월세', '종전근무지', '2차 검토', '담당'];
+  const GROUP_ORDER = ['진행', '1차 특이·수정사항', '주택자금 · 월세', '2차 검토', '담당'];
 
   function fieldHtml(p, c) {
     const id = 'pf_' + c.k;
@@ -1729,7 +1735,7 @@
     if (bar) bar.hidden = false;
   }
   function aAdd() {
-    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], admin: false, scope: '본인' });
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], admin: false, scope: '전체' });
     aDirty = true;
     render();
     const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');
@@ -1781,11 +1787,12 @@
   /** 서버의 canSee_와 같은 규칙으로 보이는 인원 수 (1차·2차 담당은 항상 포함) */
   function scopeCount(m) {
     const all = isFull(m) || !m.scope || m.scope === SCOPE_ALL, list = scopeList(m);
-    return A.assign.filter(([o, o2]) => all || o === m.name || o2 === m.name || (o ? list.includes(o) : list.includes(UNASSIGNED))).length;
+    return A.assign.filter(([o, o2]) => all || !o || o === m.name || o2 === m.name || list.includes(o)).length;
   }
   function adminScope() {
     // 열: 실제로 1차 담당이 있는 이름 + 응대담당 (총괄·2차검토만 하는 사람은 뺀다)
-    const cols = [...new Set(Object.keys(A.owners).filter(k => k !== UNASSIGNED).concat(aDraft.filter(m => m.name && m.role === '응대담당').map(m => m.name)))].concat(UNASSIGNED);
+    // 담당자가 없는 대상자는 항상 모두에게 보이므로 열로 두지 않는다
+    const cols = [...new Set(Object.keys(A.owners).filter(k => k !== UNASSIGNED).concat(aDraft.filter(m => m.name && m.role === '응대담당').map(m => m.name)))];
     const head = cols.map(c => `<th style="text-align:center;white-space:nowrap">${esc(c)}<br><span style="font-weight:400">${A.owners[c] || 0}명</span></th>`).join('');
     const rows = aDraft.map((m, i) => {
       if (!m.name) return '';
@@ -1808,7 +1815,8 @@
         </table></div>
         <p style="color:var(--muted);font-size:12.5px;margin:12px 0 0;line-height:1.7">
           · 본인이 1차 담당이거나 2차검토 담당인 대상자는 항상 보입니다.<br>
-          · <b>(미배정)</b>을 체크하면 담당자가 비어 있는 대상자를 보고 「내가 담당하기」로 맡을 수 있습니다.<br>
+          · 아무 설정도 하지 않으면(전체) 모든 대상자가 보입니다.<br>
+          · 담당자가 정해지지 않은 대상자(${A.owners[UNASSIGNED] || 0}명)는 누구에게나 보이고, 「내가 담당하기」로 맡을 수 있습니다.<br>
           · 응대기록과 대상자 증빙 첨부도 보이는 대상자 것만 나옵니다.<br>
           · 바꾼 뒤 아래 「변경사항 저장」을 누르세요. 담당자는 새로고침하면 반영됩니다.
         </p>
@@ -2006,7 +2014,7 @@
     bar.hidden = false;
     bar.innerHTML = `<b>예시 화면</b><span>모든 이름·사번·금액은 예시 데이터입니다.</span>
       <label>보는 사람 <select id="demoUser">${MockApi.users().map(u => `<option value="${esc(u.email)}" ${u.email === D.me.email ? 'selected' : ''}>${esc(u.name)} (${esc(u.role)})</option>`).join('')}</select></label>`;
-    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); A = null; reviewTab = 'mine'; load(); };
+    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); A = null; reviewTab = 'mine'; D = null; load(); };
   }
 
   load();

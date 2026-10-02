@@ -129,7 +129,8 @@ function canSee_(me, p) {
   if (!me.name) return false;
   if (p.owner === me.name || p.owner2 === me.name) return true;
   const list = me.scope.split(',');
-  return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf(SCOPE_UNASSIGNED) >= 0;
+  // 담당자가 정해지지 않은 대상자는 누구나 본다 (맡을 사람을 찾을 수 있게)
+  return !p.owner || list.indexOf(p.owner) >= 0;
 }
 
 /** 범위가 제한된 사람이 볼 수 있는 사원번호(또는 행 id) 모음. 전체면 null */
@@ -160,7 +161,7 @@ function apiBootstrap() {
     sheetUrl: ss.getUrl(),
     me: me,
     staff: ctx.members.map(m => ({ name: m.name, role: m.role })),
-    cols: COLS.map(c => ({ k: c.k, l: c.l, t: c.t || '', g: c.g, who: c.who, re: c.re || '' })),
+    cols: COLS.map(c => ({ k: c.k, l: c.l, t: c.t || '', g: c.g, who: c.who, re: c.re || '', loose: !!c.loose })),
     logKinds: LOG_KINDS,
     noticeCategories: NOTICE.CATEGORIES,
     noticeLeaderOnly: NOTICE.LEADER_ONLY,

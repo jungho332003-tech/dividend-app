@@ -64,7 +64,7 @@ function rowToPerson_(r, map, row) {
   const p = { row: row };
   COLS.forEach(c => {
     const v = map[c.k] ? r[map[c.k] - 1] : '';
-    p[c.k] = c.t === 'bool' ? toBool_(v) : cellText_(v);
+    p[c.k] = c.t === 'bool' ? boolOf_(c, v) : cellText_(v);
   });
   p.updated = map.updated && r[map.updated - 1] instanceof Date ? fmt(r[map.updated - 1], 'yyyy-MM-dd HH:mm') : cellText_(map.updated ? r[map.updated - 1] : '');
   p.editor = cellText_(map.editor ? r[map.editor - 1] : '');
@@ -142,6 +142,8 @@ function canEdit_(me, cur, col, patch) {
 
 /** 저장할 값. 체크박스 칸(지금 값이 true/false)이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다 */
 function cellValue_(col, now, value) {
+  // 종전근무지처럼 회사명이 적힌 칸은 체크를 유지할 때 그 글자를 그대로 둔다
+  if (col.loose && value && boolOf_(col, now) && typeof now !== 'boolean') return now;
   if (col.t === 'bool') return typeof now === 'boolean' ? !!value : (value ? 'O' : '');
   return String(value == null ? '' : value).trim();
 }
@@ -260,7 +262,7 @@ function apiImportPeople(rows) {
       COLS.forEach(c => {
         if (!(c.k in src) || !map[c.k]) return;
         const old = r[map[c.k] - 1];
-        r[map[c.k] - 1] = c.t === 'bool' ? (typeof old === 'boolean' ? toBool_(src[c.k]) : (toBool_(src[c.k]) ? 'O' : '')) : String(src[c.k] == null ? '' : src[c.k]).trim();
+        r[map[c.k] - 1] = c.t === 'bool' ? cellValue_(c, old, boolOf_(c, src[c.k])) : String(src[c.k] == null ? '' : src[c.k]).trim();
       });
       if (map.updated) r[map.updated - 1] = now;
       if (map.editor) r[map.editor - 1] = me.name || me.email;
@@ -359,7 +361,7 @@ function apiTemplateLink(withPeople) {
     ['· [대상자] 시트 2행부터 한 사람씩 적고, 웹앱 서류 검토 > 대상자 업로드에 이 파일을 올리세요.'],
     ['· 성명은 꼭 적어야 합니다. 사원번호가 이미 있으면 그 사람 정보를 갱신하고, 없으면 새로 추가합니다.'],
     ['· 빈 칸은 기존 값을 그대로 둡니다. 필요 없는 열은 비워 두거나 지워도 됩니다.'],
-    ['· 체크 항목(휴직여부, E-HR 등록, 서류 도착여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
+    ['· 체크 항목(휴직여부, 시스템 등록, 서류 도착여부, 종전근무지 여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
     [`· 담당자·2차검토 담당자는 [담당자] 목록의 이름과 똑같이 적어야 내 담당으로 연결됩니다: ${staff.join(', ') || '(담당자 없음)'}`],
     ['· 열 순서는 바꿔도 됩니다. 1행 제목(열 이름)으로 맞춥니다.'],
     [''],

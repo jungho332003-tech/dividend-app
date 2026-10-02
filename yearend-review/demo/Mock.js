@@ -15,7 +15,7 @@ window.MockApi = (function () {
   ];
   const staff = [
     { name: '정해린', email: 'haerin.jung@example.com', role: '총괄', admin: true, scope: '전체' },
-    { name: '김도현', email: 'dohyun.kim@example.com', role: '응대담당', admin: false, scope: '본인,(미배정)' },
+    { name: '김도현', email: 'dohyun.kim@example.com', role: '응대담당', admin: false, scope: '본인' },
     { name: '이수민', email: 'sumin.lee@example.com', role: '응대담당', admin: false, scope: '본인,박지호' },
     { name: '박지호', email: 'jiho.park@example.com', role: '응대담당', admin: false, scope: '본인' },
     { name: '최유나', email: 'yuna.choi@example.com', role: '2차검토', admin: false, scope: '전체' },
@@ -33,21 +33,23 @@ window.MockApi = (function () {
     ['subgroup', '사원하위그룹명', '', '기본 정보', 'info'], ['payArea', '급여영역', '', '기본 정보', 'info'], ['rank', '직급', '', '기본 정보', 'info'],
     ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'info'],
     ['owner', '담당자', '', '담당', 'assign'], ['owner2', '2차검토 담당자', '', '담당', 'assign'],
-    ['review2', '2차 서류검토 여부', 'bool', '2차 검토', 'second'], ['ehr', 'E-HR 등록', 'bool', '진행', 'first'],
-    ['arrived', '서류 도착여부', 'bool', '진행', 'first'], ['manual', '수기서류 제출', 'bool', '진행', 'first'], ['verified', '서류확인 및 검증', 'bool', '진행', 'first'],
-    ['prevWork', '종전근무지', '', '종전근무지', 'first'], ['prevCount', '종전근무지 개수', '', '종전근무지', 'first'],
-    ['rentLoanApply', '주택임차차입금(신청여부)', 'bool', '주택자금 · 월세', 'first'], ['rentLoan', '주택임차차입금', '', '주택자금 · 월세', 'first'],
-    ['mortApply', '장기주택저당차입금(신청여부)', 'bool', '주택자금 · 월세', 'first'], ['mort', '장기주택저당차입금', '', '주택자금 · 월세', 'first'],
-    ['mortNts', '장기주택 국세청자료 여부', 'bool', '주택자금 · 월세', 'first'], ['mortPrev', '전년도 장기주택 공제여부(차입일)', '', '주택자금 · 월세', 'first', '^(\\d{2,4}년도?|전년도)장기주택공제여부'],
-    ['savingApply', '주택마련저축(신청여부)', 'bool', '주택자금 · 월세', 'first'], ['saving', '주택마련저축', '', '주택자금 · 월세', 'first'],
-    ['savingNts', '주택마련저축 국세청자료 여부', 'bool', '주택자금 · 월세', 'first'],
-    ['rentApply', '월세액(신청여부)', 'bool', '주택자금 · 월세', 'first'], ['rent', '월세액', '', '주택자금 · 월세', 'first'],
+    ['review2', '2차 서류검토 여부', 'bool', '2차 검토', 'second'], ['ehr', '시스템 등록', 'bool', '진행', 'first', '^(시스템등록|e-?hr등록)$'],
+    ['arrived', '서류 도착여부', 'bool', '진행', 'first'], ['verified', '서류확인 및 검증', 'bool', '진행', 'first'],
+    ['prevWork', '종전근무지 여부', 'bool', '진행', 'first', '^종전근무지(여부)?$', true],
+    ['rentLoanApply', '주택임차차입금(신청여부)', 'bool', '주택자금 · 월세', 'first'], ['mortApply', '장기주택저당차입금(신청여부)', 'bool', '주택자금 · 월세', 'first'],
+    ['mortNts', '장기주택 국세청자료 여부', 'bool', '주택자금 · 월세', 'first'], ['savingApply', '주택마련저축(신청여부)', 'bool', '주택자금 · 월세', 'first'],
+    ['savingNts', '주택마련저축 국세청자료 여부', 'bool', '주택자금 · 월세', 'first'], ['rentApply', '월세액(신청여부)', 'bool', '주택자금 · 월세', 'first'],
     ['note1', '특이사항', 'long', '1차 특이·수정사항', 'first'], ['fix1', '수정사항', 'long', '1차 특이·수정사항', 'first'], ['missing', '미비서류', 'long', '1차 특이·수정사항', 'first'],
     ['note2', '특이사항(2차)', 'long', '2차 검토', 'second'], ['fix2', '수정사항(2차)', 'long', '2차 검토', 'second'],
-  ].map(([k, l, t, g, who, re]) => ({ k, l, t, g, who, re: re || '' }));
+].map(([k, l, t, g, who, re, loose]) => ({ k, l, t, g, who, re: re || '', loose: !!loose }));
 
   const blank = () => { const p = {}; COLS.forEach(c => { p[c.k] = c.t === 'bool' ? false : ''; }); return p; };
-  const person = (o) => { const p = Object.assign(blank(), o); p.id = p.empNo; p.updated = p.updated || '2027-02-03 17:20'; p.editor = p.editor || p.owner || ''; return p; };
+  // 예전 열(수기서류 제출, 종전근무지 회사명·개수, 금액)로 적힌 예시 데이터를 지금 열로 맞춘다
+  const person = (o) => {
+    if (o.manual) o.arrived = true;
+    o.prevWork = !!(o.prevWork || o.prevCount);
+    ['manual', 'prevCount', 'rentLoan', 'mort', 'mortPrev', 'saving', 'rent'].forEach(k => delete o[k]);
+    const p = Object.assign(blank(), o); p.id = p.empNo; p.updated = p.updated || '2027-02-03 17:20'; p.editor = p.editor || p.owner || ''; return p; };
   const people = [
     person({ no: '1', dept: '인사팀', empNo: '20110321', name: '오민재', subgroup: '정규직', payArea: '본사', rank: '차장', phone: '010-2201-1101', email: 'minjae.oh@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, review2: true, rentApply: true, rent: '7,200,000', note1: '월세 계약서 주소와 주민등록 주소 일치 확인함', editor: '최유나', updated: '2027-02-03 15:02' }),
     person({ no: '2', dept: '재무팀', empNo: '20150702', name: '서지안', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1102', email: 'jian.seo@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, mortApply: true, mort: '4,350,000', mortNts: true, mortPrev: 'O (2019-03-15)', note1: '부친 인적공제 — 동생(타사 재직)과 중복 여부 본인 확인 완료, 동생은 공제 안 함' }),
@@ -147,7 +149,7 @@ window.MockApi = (function () {
     if (lead(m) || m.scope === '전체') return true;
     if (p.owner === m.name || p.owner2 === m.name) return true;
     const list = m.scope.split(',');
-    return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf('(미배정)') >= 0;
+    return !p.owner || list.indexOf(p.owner) >= 0;
   };
   const seen = m => new Set(people.filter(p => canSee(m, p)).map(p => p.empNo || p.id));
   const myPeople = m => people.filter(p => canSee(m, p));
@@ -231,7 +233,7 @@ window.MockApi = (function () {
       let added = 0, updated = 0;
       rows.forEach(src => {
         const o = {};
-        COLS.forEach(c => { if (c.k in src) o[c.k] = c.t === 'bool' ? /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직)$/i.test(String(src[c.k]).trim()) : String(src[c.k]).trim(); });
+        COLS.forEach(c => { if (!(c.k in src)) return; const v = String(src[c.k]).trim(); o[c.k] = c.t !== 'bool' ? v : c.loose ? !!v && !/^(x|n|no|false|0|없음|무|해당없음|-)$/i.test(v) : /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직)$/i.test(v); });
         const ex = o.empNo && people.find(p => p.empNo === o.empNo);
         if (ex) { Object.assign(ex, o, { updated: stamp(), editor: m.name }); updated++; }
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }

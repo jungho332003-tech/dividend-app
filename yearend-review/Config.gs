@@ -44,23 +44,18 @@ const COLS = [
   { k: 'owner', l: '담당자', g: '담당', who: 'assign' },
   { k: 'owner2', l: '2차검토 담당자', g: '담당', who: 'assign' },
   { k: 'review2', l: '2차 서류검토 여부', t: 'bool', g: '2차 검토', who: 'second' },
-  { k: 'ehr', l: 'E-HR 등록', t: 'bool', g: '진행', who: 'first' },
+  // 예전 시트의 "E-HR 등록" 열도 같은 칸으로 읽는다
+  { k: 'ehr', l: '시스템 등록', t: 'bool', re: '^(시스템등록|e-?hr등록)$', g: '진행', who: 'first' },
   { k: 'arrived', l: '서류 도착여부', t: 'bool', g: '진행', who: 'first' },
-  { k: 'manual', l: '수기서류 제출', t: 'bool', g: '진행', who: 'first' },
   { k: 'verified', l: '서류확인 및 검증', t: 'bool', g: '진행', who: 'first' },
-  { k: 'prevWork', l: '종전근무지', g: '종전근무지', who: 'first' },
-  { k: 'prevCount', l: '종전근무지 개수', g: '종전근무지', who: 'first' },
+  // 예전 시트의 "종전근무지"(회사명) 열도 읽는다: 회사명이 적혀 있으면 있음(체크)으로 본다
+  { k: 'prevWork', l: '종전근무지 여부', t: 'bool', loose: true, re: '^종전근무지(여부)?$', g: '진행', who: 'first' },
   { k: 'rentLoanApply', l: '주택임차차입금(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'rentLoan', l: '주택임차차입금', g: '주택자금 · 월세', who: 'first' },
   { k: 'mortApply', l: '장기주택저당차입금(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'mort', l: '장기주택저당차입금', g: '주택자금 · 월세', who: 'first' },
   { k: 'mortNts', l: '장기주택 국세청자료 여부', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'mortPrev', l: '전년도 장기주택 공제여부(차입일)', re: '^(\\d{2,4}년도?|전년도)장기주택공제여부', g: '주택자금 · 월세', who: 'first' },
   { k: 'savingApply', l: '주택마련저축(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'saving', l: '주택마련저축', g: '주택자금 · 월세', who: 'first' },
   { k: 'savingNts', l: '주택마련저축 국세청자료 여부', t: 'bool', g: '주택자금 · 월세', who: 'first' },
   { k: 'rentApply', l: '월세액(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'rent', l: '월세액', g: '주택자금 · 월세', who: 'first' },
   { k: 'note1', l: '특이사항', t: 'long', g: '1차 특이·수정사항', who: 'first' },
   { k: 'fix1', l: '수정사항', t: 'long', g: '1차 특이·수정사항', who: 'first' },
   { k: 'missing', l: '미비서류', t: 'long', g: '1차 특이·수정사항', who: 'first' },
@@ -77,6 +72,15 @@ const META_COLS = [
 const TRUE_RE = /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직)$/i;
 function toBool_(v) {
   return v === true || TRUE_RE.test(String(v == null ? '' : v).trim());
+}
+
+// loose 체크 칸(종전근무지 여부): 회사명처럼 무엇이든 적혀 있으면 체크, X·N·없음·빈 칸은 체크 안 함
+const FALSE_RE = /^(x|n|no|false|0|없음|무|해당없음|-)$/i;
+function boolOf_(col, v) {
+  if (!col.loose) return toBool_(v);
+  if (v === true || v === false) return v;
+  const s = String(v == null ? '' : v).trim();
+  return !!s && !FALSE_RE.test(s);
 }
 
 function normHeader_(s) {
@@ -132,7 +136,8 @@ function setConfigValue(key, value) {
 
 /**
  * [담당자] 시트: 순서 | 이름 | 이메일 | 역할(응대담당/2차검토/총괄) | 관리자(Y/N) | 열람범위
- * 열람범위: 비우거나 '전체' = 모든 대상자 / '본인' = 내 담당만 / '본인,이수민,(미배정)' = 내 담당 + 고른 담당자의 대상자
+ * 열람범위: 비우거나 '전체' = 모든 대상자(설정 안 함) / '본인' = 내 담당만 / '본인,이수민' = 내 담당 + 고른 담당자의 대상자
+ * 담당자가 비어 있는 대상자는 열람범위와 상관없이 모두에게 보인다.
  */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);

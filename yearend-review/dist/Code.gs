@@ -53,23 +53,18 @@ const COLS = [
   { k: 'owner', l: '담당자', g: '담당', who: 'assign' },
   { k: 'owner2', l: '2차검토 담당자', g: '담당', who: 'assign' },
   { k: 'review2', l: '2차 서류검토 여부', t: 'bool', g: '2차 검토', who: 'second' },
-  { k: 'ehr', l: 'E-HR 등록', t: 'bool', g: '진행', who: 'first' },
+  // 예전 시트의 "E-HR 등록" 열도 같은 칸으로 읽는다
+  { k: 'ehr', l: '시스템 등록', t: 'bool', re: '^(시스템등록|e-?hr등록)$', g: '진행', who: 'first' },
   { k: 'arrived', l: '서류 도착여부', t: 'bool', g: '진행', who: 'first' },
-  { k: 'manual', l: '수기서류 제출', t: 'bool', g: '진행', who: 'first' },
   { k: 'verified', l: '서류확인 및 검증', t: 'bool', g: '진행', who: 'first' },
-  { k: 'prevWork', l: '종전근무지', g: '종전근무지', who: 'first' },
-  { k: 'prevCount', l: '종전근무지 개수', g: '종전근무지', who: 'first' },
+  // 예전 시트의 "종전근무지"(회사명) 열도 읽는다: 회사명이 적혀 있으면 있음(체크)으로 본다
+  { k: 'prevWork', l: '종전근무지 여부', t: 'bool', loose: true, re: '^종전근무지(여부)?$', g: '진행', who: 'first' },
   { k: 'rentLoanApply', l: '주택임차차입금(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'rentLoan', l: '주택임차차입금', g: '주택자금 · 월세', who: 'first' },
   { k: 'mortApply', l: '장기주택저당차입금(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'mort', l: '장기주택저당차입금', g: '주택자금 · 월세', who: 'first' },
   { k: 'mortNts', l: '장기주택 국세청자료 여부', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'mortPrev', l: '전년도 장기주택 공제여부(차입일)', re: '^(\\d{2,4}년도?|전년도)장기주택공제여부', g: '주택자금 · 월세', who: 'first' },
   { k: 'savingApply', l: '주택마련저축(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'saving', l: '주택마련저축', g: '주택자금 · 월세', who: 'first' },
   { k: 'savingNts', l: '주택마련저축 국세청자료 여부', t: 'bool', g: '주택자금 · 월세', who: 'first' },
   { k: 'rentApply', l: '월세액(신청여부)', t: 'bool', g: '주택자금 · 월세', who: 'first' },
-  { k: 'rent', l: '월세액', g: '주택자금 · 월세', who: 'first' },
   { k: 'note1', l: '특이사항', t: 'long', g: '1차 특이·수정사항', who: 'first' },
   { k: 'fix1', l: '수정사항', t: 'long', g: '1차 특이·수정사항', who: 'first' },
   { k: 'missing', l: '미비서류', t: 'long', g: '1차 특이·수정사항', who: 'first' },
@@ -86,6 +81,15 @@ const META_COLS = [
 const TRUE_RE = /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직)$/i;
 function toBool_(v) {
   return v === true || TRUE_RE.test(String(v == null ? '' : v).trim());
+}
+
+// loose 체크 칸(종전근무지 여부): 회사명처럼 무엇이든 적혀 있으면 체크, X·N·없음·빈 칸은 체크 안 함
+const FALSE_RE = /^(x|n|no|false|0|없음|무|해당없음|-)$/i;
+function boolOf_(col, v) {
+  if (!col.loose) return toBool_(v);
+  if (v === true || v === false) return v;
+  const s = String(v == null ? '' : v).trim();
+  return !!s && !FALSE_RE.test(s);
 }
 
 function normHeader_(s) {
@@ -141,7 +145,8 @@ function setConfigValue(key, value) {
 
 /**
  * [담당자] 시트: 순서 | 이름 | 이메일 | 역할(응대담당/2차검토/총괄) | 관리자(Y/N) | 열람범위
- * 열람범위: 비우거나 '전체' = 모든 대상자 / '본인' = 내 담당만 / '본인,이수민,(미배정)' = 내 담당 + 고른 담당자의 대상자
+ * 열람범위: 비우거나 '전체' = 모든 대상자(설정 안 함) / '본인' = 내 담당만 / '본인,이수민' = 내 담당 + 고른 담당자의 대상자
+ * 담당자가 비어 있는 대상자는 열람범위와 상관없이 모두에게 보인다.
  */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
@@ -250,10 +255,10 @@ function initialize() {
   if (!ss.getSheetByName(SHEET.MEMBERS)) {
     const sh = ss.insertSheet(SHEET.MEMBERS);
     const rows = [['순서', '이름', '이메일', '역할', '관리자(Y/N)', '열람범위'], [1, '총괄', '', '총괄', 'Y', '전체']];
-    for (let i = 1; i <= 4; i++) rows.push([i + 1, `담당자${i}`, '', '응대담당', 'N', '본인']);
+    for (let i = 1; i <= 4; i++) rows.push([i + 1, `담당자${i}`, '', '응대담당', 'N', '']);
     sh.getRange(1, 1, rows.length, 6).setValues(rows);
     styleHeader_(sh.getRange('A1:F1'));
-    sh.getRange('F1').setNote('전체 = 모든 대상자 / 본인 = 내 담당만 / 본인,이수민,(미배정) = 내 담당 + 고른 담당자의 대상자. 웹앱 권한 관리 > 열람 범위에서 바꾸는 것을 권장합니다.');
+    sh.getRange('F1').setNote('비우면 전체(설정 안 함) / 본인 = 내 담당만 / 본인,이수민 = 내 담당 + 이수민 담당. 담당자가 없는 대상자는 항상 모두에게 보입니다. 웹앱 권한 관리 > 열람 범위에서 바꾸는 것을 권장합니다.');
     sh.getRange('D2:D100').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ROLES).build());
     sh.getRange('E2:E100').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['Y', 'N']).build());
     sh.setColumnWidth(2, 120).setColumnWidth(3, 240).setColumnWidth(5, 100);
@@ -442,7 +447,7 @@ function rowToPerson_(r, map, row) {
   const p = { row: row };
   COLS.forEach(c => {
     const v = map[c.k] ? r[map[c.k] - 1] : '';
-    p[c.k] = c.t === 'bool' ? toBool_(v) : cellText_(v);
+    p[c.k] = c.t === 'bool' ? boolOf_(c, v) : cellText_(v);
   });
   p.updated = map.updated && r[map.updated - 1] instanceof Date ? fmt(r[map.updated - 1], 'yyyy-MM-dd HH:mm') : cellText_(map.updated ? r[map.updated - 1] : '');
   p.editor = cellText_(map.editor ? r[map.editor - 1] : '');
@@ -520,6 +525,8 @@ function canEdit_(me, cur, col, patch) {
 
 /** 저장할 값. 체크박스 칸(지금 값이 true/false)이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다 */
 function cellValue_(col, now, value) {
+  // 종전근무지처럼 회사명이 적힌 칸은 체크를 유지할 때 그 글자를 그대로 둔다
+  if (col.loose && value && boolOf_(col, now) && typeof now !== 'boolean') return now;
   if (col.t === 'bool') return typeof now === 'boolean' ? !!value : (value ? 'O' : '');
   return String(value == null ? '' : value).trim();
 }
@@ -638,7 +645,7 @@ function apiImportPeople(rows) {
       COLS.forEach(c => {
         if (!(c.k in src) || !map[c.k]) return;
         const old = r[map[c.k] - 1];
-        r[map[c.k] - 1] = c.t === 'bool' ? (typeof old === 'boolean' ? toBool_(src[c.k]) : (toBool_(src[c.k]) ? 'O' : '')) : String(src[c.k] == null ? '' : src[c.k]).trim();
+        r[map[c.k] - 1] = c.t === 'bool' ? cellValue_(c, old, boolOf_(c, src[c.k])) : String(src[c.k] == null ? '' : src[c.k]).trim();
       });
       if (map.updated) r[map.updated - 1] = now;
       if (map.editor) r[map.editor - 1] = me.name || me.email;
@@ -737,7 +744,7 @@ function apiTemplateLink(withPeople) {
     ['· [대상자] 시트 2행부터 한 사람씩 적고, 웹앱 서류 검토 > 대상자 업로드에 이 파일을 올리세요.'],
     ['· 성명은 꼭 적어야 합니다. 사원번호가 이미 있으면 그 사람 정보를 갱신하고, 없으면 새로 추가합니다.'],
     ['· 빈 칸은 기존 값을 그대로 둡니다. 필요 없는 열은 비워 두거나 지워도 됩니다.'],
-    ['· 체크 항목(휴직여부, E-HR 등록, 서류 도착여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
+    ['· 체크 항목(휴직여부, 시스템 등록, 서류 도착여부, 종전근무지 여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
     [`· 담당자·2차검토 담당자는 [담당자] 목록의 이름과 똑같이 적어야 내 담당으로 연결됩니다: ${staff.join(', ') || '(담당자 없음)'}`],
     ['· 열 순서는 바꿔도 됩니다. 1행 제목(열 이름)으로 맞춥니다.'],
     [''],
@@ -1698,7 +1705,8 @@ function canSee_(me, p) {
   if (!me.name) return false;
   if (p.owner === me.name || p.owner2 === me.name) return true;
   const list = me.scope.split(',');
-  return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf(SCOPE_UNASSIGNED) >= 0;
+  // 담당자가 정해지지 않은 대상자는 누구나 본다 (맡을 사람을 찾을 수 있게)
+  return !p.owner || list.indexOf(p.owner) >= 0;
 }
 
 /** 범위가 제한된 사람이 볼 수 있는 사원번호(또는 행 id) 모음. 전체면 null */
@@ -1729,7 +1737,7 @@ function apiBootstrap() {
     sheetUrl: ss.getUrl(),
     me: me,
     staff: ctx.members.map(m => ({ name: m.name, role: m.role })),
-    cols: COLS.map(c => ({ k: c.k, l: c.l, t: c.t || '', g: c.g, who: c.who, re: c.re || '' })),
+    cols: COLS.map(c => ({ k: c.k, l: c.l, t: c.t || '', g: c.g, who: c.who, re: c.re || '', loose: !!c.loose })),
     logKinds: LOG_KINDS,
     noticeCategories: NOTICE.CATEGORIES,
     noticeLeaderOnly: NOTICE.LEADER_ONLY,

@@ -41,10 +41,10 @@ function initialize() {
   if (!ss.getSheetByName(SHEET.MEMBERS)) {
     const sh = ss.insertSheet(SHEET.MEMBERS);
     const rows = [['순서', '이름', '이메일', '역할', '관리자(Y/N)', '열람범위'], [1, '총괄', '', '총괄', 'Y', '전체']];
-    for (let i = 1; i <= 4; i++) rows.push([i + 1, `담당자${i}`, '', '응대담당', 'N', '본인']);
+    for (let i = 1; i <= 4; i++) rows.push([i + 1, `담당자${i}`, '', '응대담당', 'N', '']);
     sh.getRange(1, 1, rows.length, 6).setValues(rows);
     styleHeader_(sh.getRange('A1:F1'));
-    sh.getRange('F1').setNote('전체 = 모든 대상자 / 본인 = 내 담당만 / 본인,이수민,(미배정) = 내 담당 + 고른 담당자의 대상자. 웹앱 권한 관리 > 열람 범위에서 바꾸는 것을 권장합니다.');
+    sh.getRange('F1').setNote('비우면 전체(설정 안 함) / 본인 = 내 담당만 / 본인,이수민 = 내 담당 + 이수민 담당. 담당자가 없는 대상자는 항상 모두에게 보입니다. 웹앱 권한 관리 > 열람 범위에서 바꾸는 것을 권장합니다.');
     sh.getRange('D2:D100').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ROLES).build());
     sh.getRange('E2:E100').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['Y', 'N']).build());
     sh.setColumnWidth(2, 120).setColumnWidth(3, 240).setColumnWidth(5, 100);

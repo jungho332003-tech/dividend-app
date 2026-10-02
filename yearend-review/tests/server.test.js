@@ -12,15 +12,16 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     api.initialize();
     ['설정', '담당자', '대상자', '응대기록', '공지', '공지댓글', '기준', '기준개정이력', '첨부', '메뉴권한'].forEach(n => assert(ss.getSheetByName(n), n));
     const hdr = ss.getSheetByName('대상자').getRange(1, 1, 1, 40).getValues()[0].filter(Boolean);
-    assert.strictEqual(hdr.length, 37);
-    assert.strictEqual(hdr[0], 'No.'); assert.strictEqual(hdr[35], '최종수정');
+    assert.strictEqual(hdr.length, 30);
+    assert.strictEqual(hdr[0], 'No.'); assert.strictEqual(hdr[13], '시스템 등록'); assert.strictEqual(hdr[28], '최종수정');
+    assert(!hdr.includes('수기서류 제출') && !hdr.includes('월세액') && hdr.includes('종전근무지 여부'));
     assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7);
   });
-  ok('initialize twice is safe', () => { api.initialize(); assert.strictEqual(ss.getSheetByName('대상자').getLastColumn(), 37); assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7); });
+  ok('initialize twice is safe', () => { api.initialize(); assert.strictEqual(ss.getSheetByName('대상자').getLastColumn(), 30); assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7); });
 
   // 담당자 등록 (소유자 owner@x.com = 관리자)
   const mem = ss.getSheetByName('담당자');
-  ok('new member rows default to 본인 scope', () => assert.strictEqual(mem.get(3, 6), '본인'));
+  ok('new member rows default to 전체 (blank)', () => { assert.strictEqual(mem.get(3, 6), ''); });
   mem.getRange(2, 1, 5, 6).clearContent();
   mem.getRange(2, 1, 4, 6).setValues([[1, '정해린', 'lead@x.com', '총괄', 'N', ''], [2, '김도현', 'kim@x.com', '응대담당', 'N', '전체'], [3, '이수민', 'lee@x.com', '응대담당', 'N', ''], [4, '최유나', 'choi@x.com', '2차검토', 'N', '전체']]);
   ss.getSheetByName('설정').getRange('B4').setValue('FOLDER');
@@ -39,9 +40,9 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     assert.strictEqual(r.added, 3); assert.strictEqual(r.people.length, 3);
     const p = r.people[0];
     assert.strictEqual(p.ehr, true); assert.strictEqual(p.arrived, true); assert.strictEqual(p.verified, false);
-    assert.strictEqual(p.note1, '줄1\n줄2'); assert.strictEqual(p.mortPrev, '2019-03-15'); assert.strictEqual(p.editor, '정해린');
+    assert.strictEqual(p.note1, '줄1\n줄2'); assert.strictEqual(p.editor, '정해린');
     const sh = ss.getSheetByName('대상자');
-    assert.strictEqual(sh.get(2, 14), 'O'); // E-HR 등록 열(14번째)
+    assert.strictEqual(sh.get(2, 14), 'O'); // 시스템 등록 열(14번째)
   });
   ok('re-import updates by 사원번호', () => { const r = api.apiImportPeople([{ empNo: '1002', name: '서지안', dept: '재무2팀' }]); assert.strictEqual(r.updated, 1); assert.strictEqual(r.people.length, 3); assert.strictEqual(r.people[1].dept, '재무2팀'); assert.strictEqual(r.people[1].owner, '이수민'); });
 
@@ -151,7 +152,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     throwsMsg(() => api.apiUploadFile({ name: 'a', data: 'YQ==', area: 'etc' }), /첨부파일\] 메뉴/);
   });
 
-  ok('열람 범위: 본인 / 본인+담당자 / (미배정) / 전체', () => {
+  ok('열람 범위: 본인 / 본인+담당자 / 담당자 없는 대상자는 모두 / 전체', () => {
     as('owner@x.com');
     const d = api.apiAdminData(false);
     assert(d.owners['김도현'] >= 1);
@@ -165,19 +166,20 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     assert.strictEqual(api.apiAdminData(false).members.find(m => m.name === '김도현').scope, '본인');
     as('kim@x.com');
     let b = api.apiBootstrap();
-    assert.deepStrictEqual(b.people.map(p => p.empNo).sort().join(), '1001,1003');
-    assert(b.logs.every(l => ['1001', '1003'].includes(l.empNo)));
-    assert(b.files.every(f => f.area !== 'person' || ['1001', '1003'].includes(f.ref)));
+    assert.deepStrictEqual(b.people.map(p => p.empNo).sort().join(), '1001,1003,1005'); // 1005는 담당자 없음 → 보임
+    assert(b.logs.every(l => ['1001', '1003', '1005'].includes(l.empNo)));
+    assert(b.files.every(f => f.area !== 'person' || ['1001', '1003', '1005'].includes(f.ref)));
     throwsMsg(() => api.apiSavePerson('2002', { note1: 'x' }), /열람 범위/);
     throwsMsg(() => api.apiAddLog('2002', '전화', 'x'), /열람 범위/);
     throwsMsg(() => api.apiUploadFile({ name: 'a.pdf', data: 'YQ==', area: 'person', ref: '2002' }), /열람 범위/);
-    throwsMsg(() => api.apiSavePerson('1005', { owner: '김도현' }), /열람 범위/);
-    as('owner@x.com'); save({ '김도현': '본인,이수민,(미배정)' });
+    as('owner@x.com'); save({ '김도현': '본인,이수민' });
     as('kim@x.com');
     b = api.apiBootstrap();
-    assert.strictEqual(b.me.scope, '본인,이수민,(미배정)');
+    assert.strictEqual(b.me.scope, '본인,이수민');
     assert.deepStrictEqual(b.people.map(p => p.empNo).sort().join(), '1001,1003,1005,2002');
-    api.apiSavePerson('1005', { owner: '김도현' }); // 미배정을 볼 수 있으면 맡을 수 있다
+    api.apiSavePerson('1005', { owner: '김도현' }); // 담당자 없는 대상자는 누구나 맡을 수 있다
+    as('owner@x.com'); save({ '김도현': '' });
+    as('kim@x.com'); assert.strictEqual(api.apiBootstrap().me.scope, '전체'); // 설정 안 하면 전체
     as('choi@x.com'); assert.strictEqual(api.apiBootstrap().people.length, 4); // 전체
     as('lead@x.com'); assert.strictEqual(api.apiBootstrap().me.scope, '전체'); // 총괄은 항상 전체
     as('owner@x.com'); save({});
@@ -190,7 +192,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     assert(/\/export\?format=xlsx$/.test(r1.url)); assert.strictEqual(r1.count, 0);
     const book = books[Object.keys(books)[0]];
     const sh = book.getSheetByName('대상자');
-    assert.strictEqual(sh.get(1, 1), 'No.'); assert.strictEqual(sh.get(1, 4), '성명'); assert.strictEqual(sh.getLastColumn(), 35);
+    assert.strictEqual(sh.get(1, 1), 'No.'); assert.strictEqual(sh.get(1, 4), '성명'); assert.strictEqual(sh.getLastColumn(), 28);
     assert(book.getSheetByName('작성 안내'));
     const r2 = api.apiTemplateLink(true);
     assert.strictEqual(Object.keys(books).length, 1, 'reuses the same template');
@@ -230,7 +232,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
   const hdr = ['No.', '부서', '사원번호', '성명', '사원하위그룹명', '급여영역', '직급', '전화번호', '이메일주소', '휴직여부', '담당자', '2차검토 담당자', '2차 서류검토 여부', 'E-HR 등록', '서류 도착여부', '수기서류 제출', '서류확인 및 검증', '종전근무지', '종전근무지 개수', '주택임차차입금\n(신청여부)', '주택임차차입금', '장기주택\n저당차입금\n(신청여부)', '장기주택저당차입금', '장기주택\n국세청자료 여부', '24년도 장기주택 공제여부\n(차입일)', '주택마련저축\n(신청여부)', '주택마련저축', '주택마련저축\n국세청자료 여부', '월세액\n(신청여부)', '월세액', '특이사항', '수정사항', '특이사항(2차)', '수정사항(2차)', '미비서류'];
   sh.getRange(1, 1, 1, hdr.length).setValues([hdr]);
   const row = new Array(hdr.length).fill('');
-  Object.assign(row, { 0: 1, 1: '인사팀', 2: 7001, 3: '기존직원', 10: '김도현', 11: '최유나', 13: true, 14: false, 24: new api.CtxDate('2019-03-15T00:00:00+09:00'), 30: '기존 특이' });
+  Object.assign(row, { 0: 1, 1: '인사팀', 2: 7001, 3: '기존직원', 10: '김도현', 11: '최유나', 13: true, 14: false, 17: '가나상사', 18: 1, 24: new api.CtxDate('2019-03-15T00:00:00+09:00'), 30: '기존 특이' });
   sh.getRange(2, 1, 1, hdr.length).setValues([row]);
   ok('existing sheet: only meta columns appended', () => {
     api.initialize();
@@ -244,13 +246,18 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     state.user = 'kim@x.com';
     const p = api.apiBootstrap().people[0];
     assert.strictEqual(p.id, '7001'); assert.strictEqual(p.ehr, true); assert.strictEqual(p.arrived, false);
-    assert.strictEqual(p.mortPrev, '2019-03-15'); assert.strictEqual(p.note1, '기존 특이');
+    assert.strictEqual(p.prevWork, true, '회사명이 적힌 종전근무지 = 있음'); assert.strictEqual(p.note1, '기존 특이');
+    assert.strictEqual(p.mortPrev, undefined); assert.strictEqual(p.manual, undefined);
   });
   ok('existing sheet: checkbox cells stay boolean on save', () => {
     const r = api.apiSavePerson('7001', { arrived: true, verified: true });
     assert.strictEqual(sh.get(2, 15), true); // 체크박스 칸 → true
     assert.strictEqual(sh.get(2, 17), 'O');  // 빈 칸이었던 곳 → O
     assert.strictEqual(r.personPatch.arrived, true);
+    api.apiSavePerson('7001', { prevWork: true, note1: '저장' });
+    assert.strictEqual(sh.get(2, 18), '가나상사', '체크 유지 시 회사명 그대로');
+    api.apiSavePerson('7001', { prevWork: false });
+    assert.strictEqual(sh.get(2, 18), '');
   });
 }
 console.log(`\n${pass} passed${process.exitCode ? ' (with failures)' : ''}`);
