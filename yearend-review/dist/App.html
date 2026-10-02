@@ -498,7 +498,9 @@
   .t tbody tr.click { cursor: pointer; }
   .t tbody tr.click:hover { background: var(--panel-2); }
   .people-cards td { white-space: nowrap; }
-  .people-cards td:last-child { white-space: normal; min-width: 180px; }
+  .people-cards th, .people-cards td { padding: 8px 8px; font-size: 13px; }
+  .people-cards .edit-hint { color: var(--accent-2); font-size: 12.5px; font-weight: 600; opacity: .55; }
+  .people-cards tr.click:hover .edit-hint { opacity: 1; }
   .miss { color: var(--warn-ink); font-size: 12.5px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .modal.wide { max-width: 820px; }
   .form .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -536,7 +538,9 @@
     .prog-row { grid-template-columns: 64px repeat(5, 1fr); }
     .prog-row .meter { grid-column: 1 / -1; }
     .modal.wide { max-width: none; }
-    .people-cards td.c-name { grid-column: 1 / -1; font-size: 16px; font-weight: 700; }
+    .people-cards td.c-name { grid-column: 1 / -1; font-size: 16px; font-weight: 700; order: -1; }
+    .people-cards td.m-hide { display: none; }
+    .people-cards td { white-space: normal; }
     .people-cards td.c-hide { display: none; }
   }
 </style>
@@ -812,20 +816,27 @@
     const list = reviewFiltered();
     const logCount = {};
     D.logs.forEach(l => { logCount[l.empNo] = (logCount[l.empNo] || 0) + 1; });
+    // 명단: 기본 정보 열을 시트 순서대로 보여주고, 행을 누르면 수정 화면이 뜬다
     const rows = list.map(p => `
-      <tr class="click" onclick="openPerson('${esc(p.id)}')">
+      <tr class="click" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
         <td class="c-hide" data-label="No.">${esc(p.no)}</td>
-        <td class="c-name" data-label="성명">${esc(p.name)}${p.leave ? ' <span class="chip plain">휴직</span>' : ''}</td>
-        <td data-label="사원번호">${esc(p.empNo)}</td>
         <td data-label="부서">${esc(p.dept)}</td>
+        <td data-label="사원번호">${esc(p.empNo)}</td>
+        <td class="c-name" data-label="성명">${esc(p.name)}</td>
+        <td class="m-hide" data-label="사원하위그룹">${esc(p.subgroup)}</td>
+        <td class="m-hide" data-label="급여영역">${esc(p.payArea)}</td>
+        <td data-label="직급">${esc(p.rank)}</td>
+        <td data-label="전화번호">${esc(p.phone)}</td>
+        <td class="m-hide" data-label="이메일">${esc(p.email)}</td>
+        <td class="${p.leave ? '' : 'm-hide'}" data-label="휴직">${p.leave ? '<span class="chip plain">휴직</span>' : ''}</td>
         <td data-label="담당 / 2차">${esc(p.owner || '-')}<span style="color:var(--muted)"> / ${esc(p.owner2 || '-')}</span></td>
         <td data-label="상태">${statusChip(p)}</td>
-        <td data-label="진행" class="c-wide">${mini(p, [['ehr', 'E-HR'], ['arrived', '도착'], ['manual', '수기'], ['verified', '검증'], ['review2', '2차']])}</td>
-        <td data-label="주택자금 등" class="c-wide">${mini(p, [['rentLoanApply', '임차'], ['mortApply', '장기'], ['savingApply', '저축'], ['rentApply', '월세']])}${p.prevWork || p.prevCount ? ' <span class="chip plain">종전</span>' : ''}</td>
-        <td data-label="미비서류 · 특이사항" class="c-wide">${p.missing ? `<div class="miss">⚠ ${esc(p.missing)}</div>` : ''}${hasNote(p) ? '<span class="chip info">특이사항</span> ' : ''}${logCount[p.empNo] ? `<span class="chip plain">응대 ${logCount[p.empNo]}</span>` : ''}</td>
+        <td data-label="미비 · 특이">${p.missing ? '<span class="chip no" title="' + esc(p.missing) + '">미비</span> ' : ''}${hasNote(p) ? '<span class="chip info">특이</span> ' : ''}${logCount[p.empNo] ? `<span class="chip plain">응대 ${logCount[p.empNo]}</span>` : ''}</td>
+        <td class="c-hide edit-cell"><span class="edit-hint">수정 ›</span></td>
       </tr>`).join('');
     return rows
-      ? `<div class="table-wrap"><table class="t cards people-cards"><thead><tr><th class="c-hide">No.</th><th>성명</th><th>사원번호</th><th>부서</th><th>담당 / 2차</th><th>상태</th><th>진행</th><th>주택자금 등</th><th>미비서류 · 특이사항</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ? `<div class="table-wrap"><table class="t cards people-cards"><thead><tr><th class="c-hide">No.</th><th>부서</th><th>사원번호</th><th>성명</th><th>사원하위그룹</th><th>급여영역</th><th>직급</th><th>전화번호</th><th>이메일</th><th>휴직</th><th>담당 / 2차</th><th>상태</th><th>미비 · 특이</th><th class="c-hide"></th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="hint" style="margin-top:8px">이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
       : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
   }
 
@@ -932,8 +943,8 @@
       <form class="form" id="personForm" novalidate>
         ${canTake ? `<div class="notice take"><span>아직 1차 담당자가 없습니다. 맡으면 검토 내용을 입력할 수 있습니다.</span><button type="button" class="btn small primary" onclick="draftOwner=D.me.name;drawPerson()">내가 담당하기</button></div>` : ''}
         ${!editable && !canTake ? `<div class="notice">보기만 할 수 있습니다. 1차 담당자(${esc(p.owner || '미지정')})·2차 검토 담당자(${esc(p.owner2 || '미지정')})·총괄이 입력합니다. 응대기록은 누구나 남길 수 있습니다.</div>` : ''}
+        ${groupHtml(p, '기본 정보')}
         ${groups.map(g => groupHtml(p, g)).join('')}
-        <details class="basic"><summary>기본 정보 (부서·연락처 등)</summary><div class="form" style="margin-top:6px">${groupHtml(p, '기본 정보')}</div></details>
 
         <div class="sec">증빙 첨부<span>${files.length}개</span></div>
         <div id="pFiles">${filesView(files) || '<div class="hint">올린 파일이 없습니다.</div>'}</div>
