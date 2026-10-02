@@ -139,11 +139,14 @@ function setConfigValue(key, value) {
   sh.appendRow([key, value]);
 }
 
-/** [담당자] 시트: 순서 | 이름 | 이메일 | 역할(응대담당/2차검토/총괄) | 관리자(Y/N) */
+/**
+ * [담당자] 시트: 순서 | 이름 | 이메일 | 역할(응대담당/2차검토/총괄) | 관리자(Y/N) | 열람범위
+ * 열람범위: 비우거나 '전체' = 모든 대상자 / '본인' = 내 담당만 / '본인,이수민,(미배정)' = 내 담당 + 고른 담당자의 대상자
+ */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -151,17 +154,38 @@ function getMembers() {
       email: String(r[2]).trim(),
       role: String(r[3]).trim(),
       admin: String(r[4]).trim().toUpperCase() === 'Y',
+      scope: normScope_(r[5]),
     }))
     .sort((a, b) => a.order - b.order);
 }
 
+const SCOPE_ALL = '전체';
+const SCOPE_UNASSIGNED = '(미배정)';
+
+/** 열람범위 칸 → '전체' 또는 '본인,이름,…' (본인은 항상 포함) */
+function normScope_(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s || s === SCOPE_ALL) return SCOPE_ALL;
+  const names = s.split(/[,，\n]/).map(x => x.trim()).filter(x => x && x !== '본인' && x !== SCOPE_ALL);
+  return ['본인'].concat(names.filter((x, i) => names.indexOf(x) === i)).join(',');
+}
+
+/**
+ * 매 요청에 필요한 설정·담당자 목록. 두 시트를 매번 읽지 않도록 60초 캐시한다
+ * (웹앱에서 담당자·설정을 저장하면 바로 지워지고, 시트를 직접 고치면 최대 60초 뒤 반영).
+ */
 function getContext() {
-  const cfg = getConfig();
+  const base = cached_(CK.ctx, () => {
+    const c = getConfig();
+    const cfg = {};
+    Object.keys(c).forEach(k => { cfg[k] = c[k] instanceof Date ? ymd(c[k]) : c[k]; });
+    return { cfg: cfg, members: getMembers() };
+  });
   return {
     ss: SpreadsheetApp.getActive(),
-    cfg: cfg,
-    year: String(cfg[CFG.YEAR] || defaultYear_()),
-    members: getMembers(),
+    cfg: base.cfg,
+    year: String(base.cfg[CFG.YEAR] || defaultYear_()),
+    members: base.members,
   };
 }
 
@@ -225,21 +249,24 @@ function initialize() {
 
   if (!ss.getSheetByName(SHEET.MEMBERS)) {
     const sh = ss.insertSheet(SHEET.MEMBERS);
-    const rows = [['순서', '이름', '이메일', '역할', '관리자(Y/N)'], [1, '총괄', '', '총괄', 'Y']];
-    for (let i = 1; i <= 4; i++) rows.push([i + 1, `담당자${i}`, '', '응대담당', 'N']);
-    sh.getRange(1, 1, rows.length, 5).setValues(rows);
-    styleHeader_(sh.getRange('A1:E1'));
+    const rows = [['순서', '이름', '이메일', '역할', '관리자(Y/N)', '열람범위'], [1, '총괄', '', '총괄', 'Y', '전체']];
+    for (let i = 1; i <= 4; i++) rows.push([i + 1, `담당자${i}`, '', '응대담당', 'N', '본인']);
+    sh.getRange(1, 1, rows.length, 6).setValues(rows);
+    styleHeader_(sh.getRange('A1:F1'));
+    sh.getRange('F1').setNote('전체 = 모든 대상자 / 본인 = 내 담당만 / 본인,이수민,(미배정) = 내 담당 + 고른 담당자의 대상자. 웹앱 권한 관리 > 열람 범위에서 바꾸는 것을 권장합니다.');
     sh.getRange('D2:D100').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ROLES).build());
     sh.getRange('E2:E100').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['Y', 'N']).build());
     sh.setColumnWidth(2, 120).setColumnWidth(3, 240).setColumnWidth(5, 100);
     sh.setFrozenRows(1);
   }
 
+  ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '열람범위');
   setupPeopleSheets_(ss);
   setupNoticeSheets_(ss);
   setupRuleSheets_(ss);
   setupFileSheet_(ss);
   setupMenuSheet_(ss);
+  clearCaches_();
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n' +
     '1. [담당자] 시트에 이름·이메일·역할을 입력하세요.\n' +
@@ -449,6 +476,22 @@ function readLogs_(ss) {
     .reverse();
 }
 
+/**
+ * id로 대상자 행을 찾아 그 행 값을 함께 돌려준다.
+ * 캐시에 있는 행 번호부터 확인하고(읽기 1번), 맞지 않으면 사원번호 열에서 찾는다.
+ */
+function readPersonRow_(sh, map, id) {
+  const width = sh.getLastColumn();
+  const hit = (peekCache_(CK.people) || []).find(p => p.id === id);
+  if (hit && hit.row >= 2) {
+    const values = sh.getRange(hit.row, 1, 1, width).getValues()[0];
+    const emp = map.empNo ? cellText_(values[map.empNo - 1]) : '';
+    if ((emp || 'r' + hit.row) === id) return { row: hit.row, values: values };
+  }
+  const row = findPersonRow_(sh, map, id);
+  return row < 0 ? null : { row: row, values: sh.getRange(row, 1, 1, width).getValues()[0] };
+}
+
 /** id(사원번호 또는 'r행번호')로 행 찾기 */
 function findPersonRow_(sh, map, id) {
   const last = sh.getLastRow();
@@ -475,14 +518,10 @@ function canEdit_(me, cur, col, patch) {
   return cur.owner === me.name || takes;
 }
 
-function writeCell_(range, col, value) {
-  if (col.t === 'bool') {
-    const now = range.getValue();
-    // 체크박스 칸이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다
-    range.setValue(typeof now === 'boolean' ? !!value : (value ? 'O' : ''));
-  } else {
-    range.setValue(String(value == null ? '' : value).trim());
-  }
+/** 저장할 값. 체크박스 칸(지금 값이 true/false)이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다 */
+function cellValue_(col, now, value) {
+  if (col.t === 'bool') return typeof now === 'boolean' ? !!value : (value ? 'O' : '');
+  return String(value == null ? '' : value).trim();
 }
 
 /** 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게) */
@@ -496,9 +535,11 @@ function apiSavePerson(id, patch) {
   try {
     const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
     const map = colMap_(sh);
-    const row = findPersonRow_(sh, map, String(id));
-    if (row < 0) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
-    const cur = rowToPerson_(sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0], map, row);
+    const found = readPersonRow_(sh, map, String(id));
+    if (!found) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
+    const { row, values } = found;
+    const cur = rowToPerson_(values, map, row);
+    if (!canSee_(me, cur)) throw new Error('열람 범위 밖의 대상자입니다. 관리자에게 열람 범위를 요청하세요.');
 
     const keys = Object.keys(patch || {}).filter(k => COLS.some(c => c.k === k));
     if (!keys.length) return { personPatch: cur };
@@ -513,13 +554,22 @@ function apiSavePerson(id, patch) {
       const emp = String(patch.empNo || '').trim();
       if (emp && emp !== cur.empNo && findPersonRow_(sh, map, emp) > 0) throw new Error(`사원번호 ${emp}가 이미 있습니다.`);
     }
-    keys.forEach(k => writeCell_(sh.getRange(row, map[k]), COLS.find(c => c.k === k), patch[k]));
-    if (map.updated) sh.getRange(row, map.updated).setValue(new Date());
-    if (map.editor) sh.getRange(row, map.editor).setValue(me.name || me.email);
-    SpreadsheetApp.flush();
+    // 바뀐 칸만 쓴다 (수식이 있는 다른 칸은 건드리지 않는다). 쓰기만 이어서 하면 Apps Script가 한 번에 보낸다
+    const now = new Date();
+    keys.forEach(k => {
+      const v = cellValue_(COLS.find(c => c.k === k), values[map[k] - 1], patch[k]);
+      sh.getRange(row, map[k]).setValue(v);
+      values[map[k] - 1] = v;
+    });
+    if (map.updated) { sh.getRange(row, map.updated).setValue(now); values[map.updated - 1] = now; }
+    if (map.editor) { sh.getRange(row, map.editor).setValue(me.name || me.email); values[map.editor - 1] = me.name || me.email; }
 
-    const saved = rowToPerson_(sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0], map, row);
-    dropCache_(CK.people);
+    // 다시 읽지 않고 저장한 값으로 결과를 만들고, 캐시의 그 사람만 바꾼다
+    const saved = rowToPerson_(values, map, row);
+    patchCache_(CK.people, list => {
+      const i = list.findIndex(p => p.id === String(id));
+      if (i >= 0) list[i] = saved; else list.push(saved);
+    });
     return { personPatch: saved, oldId: String(id) };
   } finally {
     lock.releaseLock();
@@ -609,10 +659,19 @@ function apiAddLog(id, kind, body) {
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 응대기록을 남길 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('응대 내용을 입력해 주세요.');
-  const p = readPeople_(ctx.ss).find(x => x.id === String(id));
-  if (!p) throw new Error('대상자를 찾을 수 없습니다.');
-  ctx.ss.getSheetByName(SHEET.LOGS).appendRow([new Date(), p.empNo, p.name, me.name || me.email, LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타', text]);
-  return refreshPart_('logs');
+  const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+  const map = colMap_(sh);
+  const found = readPersonRow_(sh, map, String(id));
+  if (!found) throw new Error('대상자를 찾을 수 없습니다.');
+  const p = rowToPerson_(found.values, map, found.row);
+  if (!canSee_(me, p)) throw new Error('열람 범위 밖의 대상자입니다.');
+  const now = new Date();
+  const k = LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타';
+  ctx.ss.getSheetByName(SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
+  // 응대기록 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다
+  const entry = { date: fmt(now, 'yyyy-MM-dd HH:mm'), empNo: p.empNo, name: p.name, author: me.name || me.email, kind: k, body: text };
+  patchCache_(CK.logs, list => { list.unshift(entry); });
+  return { logAdded: entry };
 }
 
 // ===================================================================
@@ -767,8 +826,11 @@ function apiAddNoticeComment(id, body) {
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 댓글을 쓸 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('댓글 내용을 입력해 주세요.');
-  ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), new Date(), me.name || me.email, text]);
-  return refreshPart_('notices');
+  const now = new Date();
+  ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), now, me.name || me.email, text]);
+  const comment = { date: fmt(now, 'yyyy-MM-dd HH:mm'), author: me.name || me.email, body: text };
+  patchCache_(CK.notices, list => { const n = list.find(x => x.id === String(id)); if (n) n.comments.push(comment); });
+  return { commentAdded: { id: String(id), comment: comment } };
 }
 
 /* ---------- 읽음 표시 (사람마다 따로: 웹앱이 "접속한 사용자" 권한으로 실행되므로 사용자 속성에 저장) ---------- */
@@ -993,6 +1055,10 @@ function apiUploadFile(file) {
   const area = FILES.AREAS[file.area] ? file.area : 'etc';
   requireMenu_(me, FILES.MENU[area]);
 
+  if (area === 'person') {
+    const p = cached_(CK.people, () => readPeople_(ctx.ss)).find(x => (x.empNo || x.id) === String(file.ref || ''));
+    if (!p || !canSee_(me, p)) throw new Error('열람 범위 밖의 대상자에게는 파일을 올릴 수 없습니다.');
+  }
   const name = String(file.name || '').trim() || '첨부파일';
   const bytes = Utilities.base64Decode(String(file.data || ''));
   if (!bytes.length) throw new Error('빈 파일은 올릴 수 없습니다.');
@@ -1189,7 +1255,10 @@ function apiAdminData(force) {
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, admin: m.admin })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, admin: m.admin, scope: m.scope })),
+    // 열람 범위 화면용: 담당자 칸에 적힌 이름별 대상자 수와, 사람별 [1차, 2차] 담당 (이름만, 개인정보 없음)
+    owners: ownerCounts_(ctx),
+    assign: readPeople_(ctx.ss).map(p => [p.owner, p.owner2]),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -1201,6 +1270,12 @@ function adminData_(ctx, useCache) {
     webAppUrl: ScriptApp.getService().getUrl() || '',
     status: useCache ? cached_('access', () => accessStatus_(ctx), 300) : freshStatus_(ctx),
   };
+}
+
+function ownerCounts_(ctx) {
+  const counts = {};
+  readPeople_(ctx.ss).forEach(p => { const k = p.owner || SCOPE_UNASSIGNED; counts[k] = (counts[k] || 0) + 1; });
+  return counts;
 }
 
 function freshStatus_(ctx) {
@@ -1254,7 +1329,7 @@ function accessStatus_(ctx) {
 
 /* ---------- 저장 ---------- */
 
-/** 담당자 목록 전체 저장. list: [{order, name, email, role, admin}] */
+/** 담당자 목록 전체 저장. list: [{order, name, email, role, admin, scope}] */
 function apiSaveMembers(list) {
   const ctx = getContext();
   requireAdmin_(ctx);
@@ -1265,6 +1340,7 @@ function apiSaveMembers(list) {
     email: String(m.email || '').trim().toLowerCase(),
     role: ROLES.indexOf(m.role) >= 0 ? m.role : ROLES[0],
     admin: !!m.admin,
+    scope: normScope_(m.scope),
   })).filter(m => m.name);
 
   const names = {};
@@ -1275,9 +1351,10 @@ function apiSaveMembers(list) {
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 5).clearContent();
+  ensureHeader_(sh, 6, '열람범위');
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 6).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 5).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.admin ? 'Y' : 'N']));
+    sh.getRange(2, 1, rows.length, 6).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.admin ? 'Y' : 'N', m.scope]));
   }
   clearCaches_();
   return adminData_(getContext(), true);
@@ -1435,11 +1512,13 @@ const CK = {
   rules: 'rules',
   files: 'files',
   owner: 'owner',
+  ctx: 'ctx',
 };
 
-function cached_(key, build, ttl) {
-  const cache = CacheService.getDocumentCache();
+/** 캐시에 있으면 값, 없으면 null (새로 만들지 않는다) */
+function peekCache_(key) {
   try {
+    const cache = CacheService.getDocumentCache();
     const hit = cache.get(key);
     if (hit && hit.indexOf('CHUNKS:') === 0) {
       const n = Number(hit.slice(7));
@@ -1449,7 +1528,13 @@ function cached_(key, build, ttl) {
     } else if (hit) {
       return JSON.parse(hit);
     }
-  } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
+  } catch (e) { /* 캐시 오류는 없는 것으로 본다 */ }
+  return null;
+}
+
+function cached_(key, build, ttl) {
+  const hit = peekCache_(key);
+  if (hit !== null) return hit;
   const value = build();
   putCache_(key, value, ttl);
   return value;
@@ -1472,13 +1557,21 @@ function putCache_(key, value, ttl) {
   } catch (e) { /* 캐시할 수 없으면 건너뛴다 */ }
 }
 
+/** 캐시된 목록이 있으면 그 자리에서 고친다. 없으면 다음 조회 때 시트에서 새로 읽으므로 그냥 둔다 */
+function patchCache_(key, fn) {
+  const list = peekCache_(key);
+  if (list === null) return;
+  fn(list);
+  putCache_(key, list);
+}
+
 function dropCache_(key) {
   try { CacheService.getDocumentCache().remove(key); } catch (e) { /* 캐시 없음 */ }
 }
 
 function clearCaches_() {
   try {
-    CacheService.getDocumentCache().removeAll([CK.people, CK.logs, CK.notices, CK.rules, CK.files, 'menus', 'access']);
+    CacheService.getDocumentCache().removeAll([CK.people, CK.logs, CK.notices, CK.rules, CK.files, CK.ctx, 'menus', 'access']);
   } catch (e) { /* 캐시 없음 */ }
 }
 
@@ -1489,8 +1582,41 @@ function refreshPart_(part) {
   const value = READERS[part](SpreadsheetApp.getActive());
   putCache_(CK[part], value);
   const out = {};
-  out[part] = part === 'files' ? visibleFiles_(value, currentMember_(getMembers())) : value;
+  out[part] = forMe_(part, value, currentMember_(getContext().members));
   return out;
+}
+
+/**
+ * 접속자에게 보낼 만큼만 거른다 (캐시는 전체를 두고, 보낼 때마다 거른다)
+ *  - 대상자·응대기록·대상자 증빙: 열람범위 안의 대상자만
+ *  - 첨부: 메뉴 권한이 있는 구분만
+ */
+function forMe_(part, value, me) {
+  if (part === 'people') return value.filter(p => canSee_(me, p));
+  if (part === 'logs' || part === 'files') {
+    const list = part === 'files' ? visibleFiles_(value, me) : value;
+    const seen = visibleEmpNos_(me);
+    if (!seen) return list;
+    if (part === 'logs') return list.filter(l => seen.has(String(l.empNo)));
+    return list.filter(f => f.area !== 'person' || seen.has(String(f.ref)));
+  }
+  return value;
+}
+
+/** 열람범위로 볼 수 있는 대상자인가 */
+function canSee_(me, p) {
+  if (me.isLeader || me.isAdmin || me.scope === SCOPE_ALL) return true;
+  if (!me.name) return false;
+  if (p.owner === me.name || p.owner2 === me.name) return true;
+  const list = me.scope.split(',');
+  return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf(SCOPE_UNASSIGNED) >= 0;
+}
+
+/** 범위가 제한된 사람이 볼 수 있는 사원번호(또는 행 id) 모음. 전체면 null */
+function visibleEmpNos_(me) {
+  if (me.isLeader || me.isAdmin || me.scope === SCOPE_ALL) return null;
+  const people = cached_(CK.people, () => readPeople_(SpreadsheetApp.getActive()));
+  return new Set(people.filter(p => canSee_(me, p)).map(p => p.empNo || p.id));
 }
 
 /** 메뉴 권한이 없는 구분의 첨부는 보내지 않는다 (예: 서류 검토 권한이 없으면 대상자 증빙 제외) */
@@ -1520,12 +1646,12 @@ function apiBootstrap() {
     noticeLeaderOnly: NOTICE.LEADER_ONLY,
     ruleCategories: RULES.CATEGORIES,
     fileAreas: FILES.AREAS,
-    people: seesPeople ? cached_(CK.people, () => readPeople_(ss)) : [],
-    logs: can('review') ? cached_(CK.logs, () => readLogs_(ss)) : [],
+    people: seesPeople ? forMe_('people', cached_(CK.people, () => readPeople_(ss)), me) : [],
+    logs: can('review') ? forMe_('logs', cached_(CK.logs, () => readLogs_(ss)), me) : [],
     notices: can('notice') || can('dash') ? cached_(CK.notices, () => readNotices_(ss)) : [],
     reads: getReads_(),
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
-    files: can('files') || can('review') ? visibleFiles_(cached_(CK.files, () => readFiles_(ss)), me) : [],
+    files: can('files') || can('review') ? forMe_('files', cached_(CK.files, () => readFiles_(ss)), me) : [],
   };
 }
 
@@ -1541,6 +1667,8 @@ function currentMember_(members) {
     role: m ? m.role : '',
     isLeader: !!(m && m.role === LEADER_ROLE),
     isAdmin: isAdmin,
+    // 총괄·관리자는 항상 전체
+    scope: (m && m.role === LEADER_ROLE) || isAdmin ? SCOPE_ALL : (m ? m.scope : SCOPE_ALL),
   };
   me.menus = allowedMenus_(me);
   return me;

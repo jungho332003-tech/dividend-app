@@ -88,7 +88,10 @@ function apiAdminData(force) {
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, admin: m.admin })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, admin: m.admin, scope: m.scope })),
+    // 열람 범위 화면용: 담당자 칸에 적힌 이름별 대상자 수와, 사람별 [1차, 2차] 담당 (이름만, 개인정보 없음)
+    owners: ownerCounts_(ctx),
+    assign: readPeople_(ctx.ss).map(p => [p.owner, p.owner2]),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -100,6 +103,12 @@ function adminData_(ctx, useCache) {
     webAppUrl: ScriptApp.getService().getUrl() || '',
     status: useCache ? cached_('access', () => accessStatus_(ctx), 300) : freshStatus_(ctx),
   };
+}
+
+function ownerCounts_(ctx) {
+  const counts = {};
+  readPeople_(ctx.ss).forEach(p => { const k = p.owner || SCOPE_UNASSIGNED; counts[k] = (counts[k] || 0) + 1; });
+  return counts;
 }
 
 function freshStatus_(ctx) {
@@ -153,7 +162,7 @@ function accessStatus_(ctx) {
 
 /* ---------- 저장 ---------- */
 
-/** 담당자 목록 전체 저장. list: [{order, name, email, role, admin}] */
+/** 담당자 목록 전체 저장. list: [{order, name, email, role, admin, scope}] */
 function apiSaveMembers(list) {
   const ctx = getContext();
   requireAdmin_(ctx);
@@ -164,6 +173,7 @@ function apiSaveMembers(list) {
     email: String(m.email || '').trim().toLowerCase(),
     role: ROLES.indexOf(m.role) >= 0 ? m.role : ROLES[0],
     admin: !!m.admin,
+    scope: normScope_(m.scope),
   })).filter(m => m.name);
 
   const names = {};
@@ -174,9 +184,10 @@ function apiSaveMembers(list) {
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 5).clearContent();
+  ensureHeader_(sh, 6, '열람범위');
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 6).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 5).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.admin ? 'Y' : 'N']));
+    sh.getRange(2, 1, rows.length, 6).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.admin ? 'Y' : 'N', m.scope]));
   }
   clearCaches_();
   return adminData_(getContext(), true);

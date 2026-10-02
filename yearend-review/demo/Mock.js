@@ -14,12 +14,12 @@ window.MockApi = (function () {
     { key: 'rules', label: '연말정산 기준' }, { key: 'files', label: '첨부파일' },
   ];
   const staff = [
-    { name: '정해린', email: 'haerin.jung@example.com', role: '총괄', admin: true },
-    { name: '김도현', email: 'dohyun.kim@example.com', role: '응대담당', admin: false },
-    { name: '이수민', email: 'sumin.lee@example.com', role: '응대담당', admin: false },
-    { name: '박지호', email: 'jiho.park@example.com', role: '응대담당', admin: false },
-    { name: '최유나', email: 'yuna.choi@example.com', role: '2차검토', admin: false },
-    { name: '한서준', email: 'seojun.han@example.com', role: '2차검토', admin: false },
+    { name: '정해린', email: 'haerin.jung@example.com', role: '총괄', admin: true, scope: '전체' },
+    { name: '김도현', email: 'dohyun.kim@example.com', role: '응대담당', admin: false, scope: '본인,(미배정)' },
+    { name: '이수민', email: 'sumin.lee@example.com', role: '응대담당', admin: false, scope: '본인,박지호' },
+    { name: '박지호', email: 'jiho.park@example.com', role: '응대담당', admin: false, scope: '본인' },
+    { name: '최유나', email: 'yuna.choi@example.com', role: '2차검토', admin: false, scope: '전체' },
+    { name: '한서준', email: 'seojun.han@example.com', role: '2차검토', admin: false, scope: '본인' },
   ];
   let me = 'dohyun.kim@example.com';
   let menuAccess = {};
@@ -110,13 +110,24 @@ window.MockApi = (function () {
   function meInfo() {
     const p = staff.find(x => x.email === me);
     const info = { email: p.email, name: p.name, role: p.role, isLeader: p.role === '총괄', isAdmin: !!p.admin };
+    info.scope = info.isLeader || info.isAdmin ? '전체' : (p.scope || '전체');
     info.menus = info.isAdmin ? MENUS.map(x => x.key).concat('admin') : MENUS.map(x => x.key).filter(k => menuAccess[p.role][k] !== false);
     return info;
   }
   const lead = m => m.isLeader || m.isAdmin;
+  // 서버의 canSee_와 같은 규칙
+  const canSee = (m, p) => {
+    if (lead(m) || m.scope === '전체') return true;
+    if (p.owner === m.name || p.owner2 === m.name) return true;
+    const list = m.scope.split(',');
+    return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf('(미배정)') >= 0;
+  };
+  const seen = m => new Set(people.filter(p => canSee(m, p)).map(p => p.empNo || p.id));
+  const myPeople = m => people.filter(p => canSee(m, p));
+  const myLogs = m => { const s = seen(m); return logs.filter(l => s.has(l.empNo)); };
   const need = (m, k) => { if (m.menus.indexOf(k) < 0) throw new Error(`[${(MENUS.find(x => x.key === k) || { label: k }).label}] 메뉴를 사용할 권한이 없습니다.`); };
   const myReads = () => (reads[me] = reads[me] || ['1', '2', '3']);
-  const visFiles = m => files.filter(f => m.menus.indexOf(AREA_MENU[f.area]) >= 0);
+  const visFiles = m => { const s = seen(m); return files.filter(f => m.menus.indexOf(AREA_MENU[f.area]) >= 0 && (f.area !== 'person' || s.has(f.ref))); };
   const sortNotices = () => notices.sort((a, b) => (b.pinned - a.pinned) || (['긴급', '중요', '일반'].indexOf(a.level) - ['긴급', '중요', '일반'].indexOf(b.level)) || b.date.localeCompare(a.date));
   function canEdit(m, cur, c, patch) {
     if (lead(m)) return true;
@@ -134,7 +145,9 @@ window.MockApi = (function () {
     st['정해린'] = { sheet: 'owner', folder: 'owner' };
     st['한서준'] = { sheet: 'editor', folder: 'none' };
     return {
-      members: staff.map((p, i) => ({ order: i + 1, name: p.name, email: p.email, role: p.role, admin: !!p.admin })),
+      members: staff.map((p, i) => ({ order: i + 1, name: p.name, email: p.email, role: p.role, admin: !!p.admin, scope: p.scope || '전체' })),
+      owners: people.reduce((o, p) => { const k = p.owner || '(미배정)'; o[k] = (o[k] || 0) + 1; return o; }, {}),
+      assign: people.map(p => [p.owner, p.owner2]),
       menus: MENUS, roles: ROLES, menuAccess: JSON.parse(JSON.stringify(menuAccess)), settings: Object.assign({}, settings),
       webAppUrl: 'https://script.google.com/macros/s/AKfy...예시.../exec',
       status: { resources: { sheet: { ok: true, name: '2026 귀속 연말정산 검토 (스프레드시트)' }, folder: { ok: true, name: '연말정산 증빙 (담당자 전용)' } }, people: st },
@@ -142,7 +155,7 @@ window.MockApi = (function () {
   }
 
   return {
-    delay: { apiUploadFile: 900, apiApplyPermissions: 1200 },
+    delay: { apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
     now: () => NOW,
@@ -157,7 +170,7 @@ window.MockApi = (function () {
         noticeCategories: ['공지', '응대지침', '자료', '질문'], noticeLeaderOnly: ['공지', '응대지침'],
         ruleCategories: ['인적공제', '주택자금·월세', '의료비', '교육비', '기부금', '신용카드 등', '연금·보험', '제출서류', '응대 기준', '기타'],
         fileAreas: AREAS,
-        people: can('review') || can('dash') ? people : [], logs: can('review') ? logs : [],
+        people: can('review') || can('dash') ? myPeople(m) : [], logs: can('review') ? myLogs(m) : [],
         notices: can('notice') || can('dash') ? sortNotices() : [], reads: myReads().slice(),
         rules: can('rules') ? rules : [], files: can('files') || can('review') ? visFiles(m) : [],
       };
@@ -167,6 +180,7 @@ window.MockApi = (function () {
       const m = meInfo(); need(m, 'review');
       const cur = people.find(p => p.id === id);
       if (!cur) throw new Error('대상자를 찾을 수 없습니다.');
+      if (!canSee(m, cur)) throw new Error('열람 범위 밖의 대상자입니다.');
       Object.keys(patch).forEach(k => {
         const c = COLS.find(x => x.k === k);
         if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
@@ -178,7 +192,7 @@ window.MockApi = (function () {
     apiAddPerson(f) {
       const m = meInfo(); if (!lead(m)) throw new Error('대상자 추가는 총괄 또는 관리자만 할 수 있습니다.');
       people.push(person(Object.assign({ no: String(people.length + 1) }, f, { editor: m.name, updated: stamp() })));
-      return { people };
+      return { people: myPeople(m) };
     },
     apiDeletePerson(id) {
       const m = meInfo(); if (!lead(m)) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
@@ -195,13 +209,15 @@ window.MockApi = (function () {
         if (ex) { Object.assign(ex, o, { updated: stamp(), editor: m.name }); updated++; }
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }
       });
-      return { people, added, updated };
+      return { people: myPeople(m), added, updated };
     },
     apiAddLog(id, kind, body) {
       const m = meInfo(); need(m, 'review');
       const p = people.find(x => x.id === id);
-      logs.unshift({ date: stamp(), empNo: p.empNo, name: p.name, author: m.name, kind, body });
-      return { logs };
+      if (!canSee(m, p)) throw new Error('열람 범위 밖의 대상자입니다.');
+      const entry = { date: stamp(), empNo: p.empNo, name: p.name, author: m.name, kind, body };
+      logs.unshift(entry);
+      return { logAdded: entry };
     },
 
     apiSaveNotice(n) {
@@ -217,7 +233,7 @@ window.MockApi = (function () {
       return { notices: sortNotices(), savedId: id, reads: myReads().slice() };
     },
     apiDeleteNotice(id) { notices.splice(notices.findIndex(n => n.id === id), 1); return { notices: sortNotices() }; },
-    apiAddNoticeComment(id, body) { notices.find(n => n.id === id).comments.push({ date: stamp(), author: meInfo().name, body }); return { notices: sortNotices() }; },
+    apiAddNoticeComment(id, body) { const c = { date: stamp(), author: meInfo().name, body }; notices.find(n => n.id === id).comments.push(c); return { commentAdded: { id, comment: c } }; },
     apiMarkRead(id) { if (myReads().indexOf(id) < 0) myReads().push(id); return { reads: myReads().slice() }; },
     apiMarkUnread(id) { reads[me] = myReads().filter(x => x !== id); return { reads: reads[me].slice() }; },
 
@@ -250,7 +266,7 @@ window.MockApi = (function () {
     apiSaveMembers(list) {
       const keep = staff.slice();
       staff.length = 0;
-      list.forEach(x => { const old = keep.find(s => s.email === x.email) || {}; staff.push(Object.assign(old, { name: x.name, email: x.email, role: x.role, admin: !!x.admin })); });
+      list.forEach(x => { const old = keep.find(s => s.email === x.email) || {}; staff.push(Object.assign(old, { name: x.name, email: x.email, role: x.role, admin: !!x.admin, scope: x.scope || '전체' })); });
       if (!staff.some(s => s.email === me)) me = staff[0].email;
       return adminData();
     },

@@ -146,8 +146,11 @@ function apiAddNoticeComment(id, body) {
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 댓글을 쓸 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('댓글 내용을 입력해 주세요.');
-  ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), new Date(), me.name || me.email, text]);
-  return refreshPart_('notices');
+  const now = new Date();
+  ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), now, me.name || me.email, text]);
+  const comment = { date: fmt(now, 'yyyy-MM-dd HH:mm'), author: me.name || me.email, body: text };
+  patchCache_(CK.notices, list => { const n = list.find(x => x.id === String(id)); if (n) n.comments.push(comment); });
+  return { commentAdded: { id: String(id), comment: comment } };
 }
 
 /* ---------- 읽음 표시 (사람마다 따로: 웹앱이 "접속한 사용자" 권한으로 실행되므로 사용자 속성에 저장) ---------- */

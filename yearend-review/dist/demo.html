@@ -478,6 +478,7 @@
   }
 
   /* ===== 연말정산 검토 추가 ===== */
+  .saving { position: fixed; right: 16px; top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 65; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: 12px; box-shadow: var(--shadow); }
   .chip.info { background: var(--accent-soft); color: var(--accent-2); }
   .chip.lv-긴급 { background: var(--warn-bg); color: var(--warn-ink); }
   .chip.lv-중요 { background: var(--pend-bg); color: var(--pend-ink); }
@@ -574,6 +575,7 @@
 
 <div class="scrim" id="scrim" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
+<div class="saving" id="saving" hidden>저장 중…</div>
 
 <script>
 /* 예시 화면 전용 가짜 서버 (실제 웹앱에서는 Apps Script가 대신한다). build.py가 dist/demo.html을 만들 때 App.html의 <!-- MOCK --> 자리에 넣는다. */
@@ -592,12 +594,12 @@ window.MockApi = (function () {
     { key: 'rules', label: '연말정산 기준' }, { key: 'files', label: '첨부파일' },
   ];
   const staff = [
-    { name: '정해린', email: 'haerin.jung@example.com', role: '총괄', admin: true },
-    { name: '김도현', email: 'dohyun.kim@example.com', role: '응대담당', admin: false },
-    { name: '이수민', email: 'sumin.lee@example.com', role: '응대담당', admin: false },
-    { name: '박지호', email: 'jiho.park@example.com', role: '응대담당', admin: false },
-    { name: '최유나', email: 'yuna.choi@example.com', role: '2차검토', admin: false },
-    { name: '한서준', email: 'seojun.han@example.com', role: '2차검토', admin: false },
+    { name: '정해린', email: 'haerin.jung@example.com', role: '총괄', admin: true, scope: '전체' },
+    { name: '김도현', email: 'dohyun.kim@example.com', role: '응대담당', admin: false, scope: '본인,(미배정)' },
+    { name: '이수민', email: 'sumin.lee@example.com', role: '응대담당', admin: false, scope: '본인,박지호' },
+    { name: '박지호', email: 'jiho.park@example.com', role: '응대담당', admin: false, scope: '본인' },
+    { name: '최유나', email: 'yuna.choi@example.com', role: '2차검토', admin: false, scope: '전체' },
+    { name: '한서준', email: 'seojun.han@example.com', role: '2차검토', admin: false, scope: '본인' },
   ];
   let me = 'dohyun.kim@example.com';
   let menuAccess = {};
@@ -688,13 +690,24 @@ window.MockApi = (function () {
   function meInfo() {
     const p = staff.find(x => x.email === me);
     const info = { email: p.email, name: p.name, role: p.role, isLeader: p.role === '총괄', isAdmin: !!p.admin };
+    info.scope = info.isLeader || info.isAdmin ? '전체' : (p.scope || '전체');
     info.menus = info.isAdmin ? MENUS.map(x => x.key).concat('admin') : MENUS.map(x => x.key).filter(k => menuAccess[p.role][k] !== false);
     return info;
   }
   const lead = m => m.isLeader || m.isAdmin;
+  // 서버의 canSee_와 같은 규칙
+  const canSee = (m, p) => {
+    if (lead(m) || m.scope === '전체') return true;
+    if (p.owner === m.name || p.owner2 === m.name) return true;
+    const list = m.scope.split(',');
+    return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf('(미배정)') >= 0;
+  };
+  const seen = m => new Set(people.filter(p => canSee(m, p)).map(p => p.empNo || p.id));
+  const myPeople = m => people.filter(p => canSee(m, p));
+  const myLogs = m => { const s = seen(m); return logs.filter(l => s.has(l.empNo)); };
   const need = (m, k) => { if (m.menus.indexOf(k) < 0) throw new Error(`[${(MENUS.find(x => x.key === k) || { label: k }).label}] 메뉴를 사용할 권한이 없습니다.`); };
   const myReads = () => (reads[me] = reads[me] || ['1', '2', '3']);
-  const visFiles = m => files.filter(f => m.menus.indexOf(AREA_MENU[f.area]) >= 0);
+  const visFiles = m => { const s = seen(m); return files.filter(f => m.menus.indexOf(AREA_MENU[f.area]) >= 0 && (f.area !== 'person' || s.has(f.ref))); };
   const sortNotices = () => notices.sort((a, b) => (b.pinned - a.pinned) || (['긴급', '중요', '일반'].indexOf(a.level) - ['긴급', '중요', '일반'].indexOf(b.level)) || b.date.localeCompare(a.date));
   function canEdit(m, cur, c, patch) {
     if (lead(m)) return true;
@@ -712,7 +725,9 @@ window.MockApi = (function () {
     st['정해린'] = { sheet: 'owner', folder: 'owner' };
     st['한서준'] = { sheet: 'editor', folder: 'none' };
     return {
-      members: staff.map((p, i) => ({ order: i + 1, name: p.name, email: p.email, role: p.role, admin: !!p.admin })),
+      members: staff.map((p, i) => ({ order: i + 1, name: p.name, email: p.email, role: p.role, admin: !!p.admin, scope: p.scope || '전체' })),
+      owners: people.reduce((o, p) => { const k = p.owner || '(미배정)'; o[k] = (o[k] || 0) + 1; return o; }, {}),
+      assign: people.map(p => [p.owner, p.owner2]),
       menus: MENUS, roles: ROLES, menuAccess: JSON.parse(JSON.stringify(menuAccess)), settings: Object.assign({}, settings),
       webAppUrl: 'https://script.google.com/macros/s/AKfy...예시.../exec',
       status: { resources: { sheet: { ok: true, name: '2026 귀속 연말정산 검토 (스프레드시트)' }, folder: { ok: true, name: '연말정산 증빙 (담당자 전용)' } }, people: st },
@@ -720,7 +735,7 @@ window.MockApi = (function () {
   }
 
   return {
-    delay: { apiUploadFile: 900, apiApplyPermissions: 1200 },
+    delay: { apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
     now: () => NOW,
@@ -735,7 +750,7 @@ window.MockApi = (function () {
         noticeCategories: ['공지', '응대지침', '자료', '질문'], noticeLeaderOnly: ['공지', '응대지침'],
         ruleCategories: ['인적공제', '주택자금·월세', '의료비', '교육비', '기부금', '신용카드 등', '연금·보험', '제출서류', '응대 기준', '기타'],
         fileAreas: AREAS,
-        people: can('review') || can('dash') ? people : [], logs: can('review') ? logs : [],
+        people: can('review') || can('dash') ? myPeople(m) : [], logs: can('review') ? myLogs(m) : [],
         notices: can('notice') || can('dash') ? sortNotices() : [], reads: myReads().slice(),
         rules: can('rules') ? rules : [], files: can('files') || can('review') ? visFiles(m) : [],
       };
@@ -745,6 +760,7 @@ window.MockApi = (function () {
       const m = meInfo(); need(m, 'review');
       const cur = people.find(p => p.id === id);
       if (!cur) throw new Error('대상자를 찾을 수 없습니다.');
+      if (!canSee(m, cur)) throw new Error('열람 범위 밖의 대상자입니다.');
       Object.keys(patch).forEach(k => {
         const c = COLS.find(x => x.k === k);
         if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
@@ -756,7 +772,7 @@ window.MockApi = (function () {
     apiAddPerson(f) {
       const m = meInfo(); if (!lead(m)) throw new Error('대상자 추가는 총괄 또는 관리자만 할 수 있습니다.');
       people.push(person(Object.assign({ no: String(people.length + 1) }, f, { editor: m.name, updated: stamp() })));
-      return { people };
+      return { people: myPeople(m) };
     },
     apiDeletePerson(id) {
       const m = meInfo(); if (!lead(m)) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
@@ -773,13 +789,15 @@ window.MockApi = (function () {
         if (ex) { Object.assign(ex, o, { updated: stamp(), editor: m.name }); updated++; }
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }
       });
-      return { people, added, updated };
+      return { people: myPeople(m), added, updated };
     },
     apiAddLog(id, kind, body) {
       const m = meInfo(); need(m, 'review');
       const p = people.find(x => x.id === id);
-      logs.unshift({ date: stamp(), empNo: p.empNo, name: p.name, author: m.name, kind, body });
-      return { logs };
+      if (!canSee(m, p)) throw new Error('열람 범위 밖의 대상자입니다.');
+      const entry = { date: stamp(), empNo: p.empNo, name: p.name, author: m.name, kind, body };
+      logs.unshift(entry);
+      return { logAdded: entry };
     },
 
     apiSaveNotice(n) {
@@ -795,7 +813,7 @@ window.MockApi = (function () {
       return { notices: sortNotices(), savedId: id, reads: myReads().slice() };
     },
     apiDeleteNotice(id) { notices.splice(notices.findIndex(n => n.id === id), 1); return { notices: sortNotices() }; },
-    apiAddNoticeComment(id, body) { notices.find(n => n.id === id).comments.push({ date: stamp(), author: meInfo().name, body }); return { notices: sortNotices() }; },
+    apiAddNoticeComment(id, body) { const c = { date: stamp(), author: meInfo().name, body }; notices.find(n => n.id === id).comments.push(c); return { commentAdded: { id, comment: c } }; },
     apiMarkRead(id) { if (myReads().indexOf(id) < 0) myReads().push(id); return { reads: myReads().slice() }; },
     apiMarkUnread(id) { reads[me] = myReads().filter(x => x !== id); return { reads: reads[me].slice() }; },
 
@@ -828,7 +846,7 @@ window.MockApi = (function () {
     apiSaveMembers(list) {
       const keep = staff.slice();
       staff.length = 0;
-      list.forEach(x => { const old = keep.find(s => s.email === x.email) || {}; staff.push(Object.assign(old, { name: x.name, email: x.email, role: x.role, admin: !!x.admin })); });
+      list.forEach(x => { const old = keep.find(s => s.email === x.email) || {}; staff.push(Object.assign(old, { name: x.name, email: x.email, role: x.role, admin: !!x.admin, scope: x.scope || '전체' })); });
       if (!staff.some(s => s.email === me)) me = staff[0].email;
       return adminData();
     },
@@ -895,11 +913,47 @@ window.MockApi = (function () {
     if (!data) return;
     if (data.personPatch) {
       const key = data.oldId || data.personPatch.id;
-      const i = D.people.findIndex(p => p.id === key);
+      let i = D.people.findIndex(p => p.id === key);
+      if (i < 0) i = D.people.findIndex(p => p.id === data.personPatch.id); // 화면에서 사원번호를 먼저 바꾼 경우
       if (i >= 0) D.people[i] = data.personPatch; else D.people.push(data.personPatch);
+    }
+    if (data.logAdded) {
+      // 화면에 먼저 넣어 둔 임시 기록을 서버 기록으로 바꾼다
+      const i = D.logs.findIndex(l => l._tmp && l.empNo === data.logAdded.empNo && l.body === data.logAdded.body);
+      if (i >= 0) D.logs[i] = data.logAdded; else D.logs.unshift(data.logAdded);
+    }
+    if (data.commentAdded) {
+      const n = D.notices.find(x => x.id === data.commentAdded.id);
+      if (n) {
+        const i = n.comments.findIndex(c => c._tmp && c.body === data.commentAdded.comment.body);
+        if (i >= 0) n.comments[i] = data.commentAdded.comment; else n.comments.push(data.commentAdded.comment);
+      }
     }
     ['people', 'logs', 'notices', 'reads', 'rules', 'files', 'me'].forEach(k => { if (data[k]) D[k] = data[k]; });
   }
+
+  /**
+   * 빠른 저장: 화면에 먼저 반영하고(바로), 서버 저장은 뒤에서 한다.
+   * 실패하면 undo()로 화면을 되돌리고 retry()로 작성하던 화면을 다시 띄운다.
+   */
+  let pending = 0;
+  function saveInBackground(fn, args, opts) {
+    pending++;
+    showSaving();
+    return call(fn, ...args)
+      .then(data => { applyData(data); if (opts.done) opts.done(data); return data; })
+      .catch(err => {
+        if (opts.undo) opts.undo();
+        render();
+        if (opts.retry) opts.retry(err.message || String(err)); else fail(err);
+      })
+      .then(() => { pending--; showSaving(); if (!pending && opts.ok) toast(opts.ok); });
+  }
+  function showSaving() {
+    const el = $('#saving');
+    if (el) el.hidden = !pending;
+  }
+  window.addEventListener('beforeunload', e => { if (pending) { e.preventDefault(); e.returnValue = ''; } });
 
   function load() {
     return call('apiBootstrap').then(data => { D = data; render(); }).catch(fail);
@@ -1065,7 +1119,7 @@ window.MockApi = (function () {
 
   function logRow(l, noName) {
     const p = D.people.find(x => x.empNo === l.empNo);
-    return `<div class="log"><span class="d">${esc(l.date.slice(2, 16))}</span><span class="chip plain" style="justify-self:start">${esc(l.kind)}</span>
+    return `<div class="log"><span class="d">${esc(l._tmp ? '방금' : l.date.slice(2, 16))}</span><span class="chip plain" style="justify-self:start">${esc(l.kind)}</span>
       <p>${noName ? '' : `${p ? `<button class="linkish" onclick="openPerson('${esc(p.id)}')"><b>${esc(l.name)}</b></button>` : `<b>${esc(l.name)}</b>`} · `}${esc(l.body)} <span class="who">— ${esc(l.author)}</span></p></div>`;
   }
 
@@ -1125,11 +1179,14 @@ window.MockApi = (function () {
       </section>`;
     }
     const base = reviewBase();
+    const scopeNote = D.me.scope && D.me.scope !== '전체' && !isLead()
+      ? `<p class="hint" style="margin:0 0 10px">열람 범위: ${D.me.scope.split(',').filter(x => x !== '본인').length ? `내 담당 + ${esc(D.me.scope.split(',').filter(x => x !== '본인').map(x => x === '(미배정)' ? '담당자 없는 대상자' : `${x} 담당`).join(', '))}` : '내 담당만'} (관리자가 정합니다)</p>` : '';
     const owners = [...new Set(D.people.flatMap(p => [p.owner, p.owner2]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
     const chips = [['all', '전체']].concat(Object.keys(STATUS).map(k => [k, STATUS[k][0]]))
       .map(([k, l]) => `<button aria-pressed="${reviewStatus === k}" onclick="reviewStatus='${k}';render()">${l} ${k === 'all' ? base.length : base.filter(p => pStatus(p) === k).length}</button>`).join('');
     return head + `
       <section class="panel">
+        ${scopeNote}
         <div class="search-row">
           <input class="search" id="reviewSearch" type="search" placeholder="사원번호·이름·부서·미비서류·특이사항 검색" value="${esc(reviewQuery)}" aria-label="대상자 검색">
           ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
@@ -1241,27 +1298,40 @@ window.MockApi = (function () {
     if (draftOwner && !p.owner) patch.owner = draftOwner;
     if (!Object.keys(patch).length) { closeModal(); toast('바뀐 내용이 없습니다.'); return; }
     if (uploadsBusy('person')) { $('#pErr').textContent = BUSY_MSG; $('#pErr').hidden = false; return; }
-    $('#pOk').disabled = true;
-    call('apiSavePerson', p.id, patch)
-      .then(data => { applyData(data); closeModal(); render(); toast(`${p.name}님 검토 내용을 저장했습니다.`); })
-      .catch(err => { $('#pOk').disabled = false; $('#pErr').textContent = err.message || String(err); $('#pErr').hidden = false; });
+    // 화면에 바로 반영
+    const before = Object.assign({}, p);
+    const idx = D.people.indexOf(p);
+    Object.assign(p, patch);
+    if (patch.empNo !== undefined) p.id = patch.empNo || before.id;
+    closeModal();
+    render();
+    saveInBackground('apiSavePerson', [before.id, patch], {
+      ok: `${before.name}님 검토 내용을 저장했습니다.`,
+      undo: () => { if (idx >= 0) D.people[idx] = Object.assign(p, before); },
+      // 실패하면 고치던 내용을 그대로 다시 띄운다
+      retry: msg => {
+        openPerson(before.id);
+        Object.keys(patch).forEach(k => { const el = $('#pf_' + k); if (!el) return; if (el.type === 'checkbox') el.checked = !!patch[k]; else el.value = patch[k]; });
+        if (patch.owner && !before.owner) { draftOwner = patch.owner; }
+        $('#pErr').textContent = `저장하지 못했습니다: ${msg}`; $('#pErr').hidden = false;
+      },
+    });
   }
 
   function addLog() {
     const body = $('#logBody').value.trim();
     if (!body) return;
     const p = curPerson, kind = $('#logKind').value;
-    const btn = $('#logForm button');
-    btn.disabled = true;
-    call('apiAddLog', p.id, kind, body)
-      .then(data => {
-        applyData(data);
-        $('#pLogs').innerHTML = D.logs.filter(l => l.empNo === p.empNo).map(l => logRow(l, true)).join('');
-        $('#logBody').value = '';
-        btn.disabled = false;
-        toast('응대기록을 남겼습니다.');
-      })
-      .catch(e => { btn.disabled = false; fail(e); });
+    const tmp = { _tmp: true, date: '방금 ', empNo: p.empNo, name: p.name, author: D.me.name, kind, body };
+    const drawLogs = () => { const el = $('#pLogs'); if (el && curPerson === p) el.innerHTML = D.logs.filter(l => l.empNo === p.empNo).map(l => logRow(l, true)).join('') || ''; };
+    D.logs.unshift(tmp);
+    drawLogs();
+    $('#logBody').value = '';
+    saveInBackground('apiAddLog', [p.id, kind, body], {
+      ok: '응대기록을 남겼습니다.',
+      done: drawLogs,
+      undo: () => { D.logs = D.logs.filter(l => l !== tmp); drawLogs(); if ($('#logBody') && curPerson === p) $('#logBody').value = body; },
+    });
   }
 
   function deletePerson() {
@@ -1420,9 +1490,9 @@ window.MockApi = (function () {
     catch (e) { toast('복사하지 못했습니다.'); }
   }
 
-  function openNoticeForm(id) {
+  function openNoticeForm(id, draftData, errMsg) {
     const lead = isLead();
-    const n = id ? D.notices.find(x => x.id === id) : { category: lead ? '공지' : '질문', level: '일반', title: '', body: '', start: '', end: '', pinned: false, files: [] };
+    const n = draftData || (id ? D.notices.find(x => x.id === id) : { category: lead ? '공지' : '질문', level: '일반', title: '', body: '', start: '', end: '', pinned: false, files: [] });
     const cats = D.noticeCategories.filter(c => lead || D.noticeLeaderOnly.indexOf(c) < 0 || c === n.category);
     $('#modal').classList.remove('wide');
     openModal(`
@@ -1453,11 +1523,21 @@ window.MockApi = (function () {
       if (!data.title || !data.body) return err('제목과 내용을 입력해 주세요.');
       if (data.start && data.end && data.start > data.end) return err('게시 종료일이 시작일보다 빠릅니다.');
       if (uploadsBusy('notice')) return err(BUSY_MSG);
-      $('#nOk').disabled = true;
-      call('apiSaveNotice', data)
-        .then(res => { applyData(res); closeModal(); openNotice = res.savedId; noticeFilter = 'all'; page = 'notice'; render(); toast(id ? '수정했습니다.' : '등록했습니다.'); })
-        .catch(e2 => { $('#nOk').disabled = false; err(e2.message || String(e2)); });
+      const old = D.notices.slice();
+      const tmpId = id || 'tmp' + Date.now();
+      const ex = D.notices.find(x => x.id === id);
+      const shown = Object.assign({ id: tmpId, date: id ? ex.date : '방금', author: id ? ex.author : D.me.name, comments: id ? ex.comments : [], updated: '방금' }, data, { id: tmpId, level: lead ? data.level : '일반', pinned: lead && data.pinned });
+      D.notices = id ? D.notices.map(x => x.id === id ? shown : x) : [shown].concat(D.notices);
+      if (D.reads.indexOf(tmpId) < 0) D.reads.push(tmpId);
+      closeModal(); openNotice = tmpId; noticeFilter = 'all'; page = 'notice'; render();
+      saveInBackground('apiSaveNotice', [data], {
+        ok: id ? '수정했습니다.' : '등록했습니다.',
+        done: res => { if (openNotice === tmpId) openNotice = res.savedId; if (page === 'notice') render(); },
+        undo: () => { D.notices = old; },
+        retry: msg => openNoticeForm(id, data, `저장하지 못했습니다: ${msg}`),
+      });
     };
+    if (errMsg) { $('#nErr').textContent = errMsg; $('#nErr').hidden = false; }
   }
 
   function addNoticeComment(e, id) {
@@ -1465,11 +1545,13 @@ window.MockApi = (function () {
     const text = $('#cmtIn').value.trim();
     if (!text) return;
     const n = D.notices.find(x => x.id === id);
-    const mine = { date: '방금', author: D.me.name, body: text };
+    const mine = { _tmp: true, date: '방금', author: D.me.name, body: text };
     n.comments.push(mine);
     render();
-    call('apiAddNoticeComment', id, text).then(data => { applyData(data); render(); })
-      .catch(err => { n.comments.splice(n.comments.indexOf(mine), 1); render(); fail(err); });
+    saveInBackground('apiAddNoticeComment', [id, text], {
+      done: () => { if (page === 'notice') render(); },
+      undo: () => { n.comments.splice(n.comments.indexOf(mine), 1); },
+    });
   }
 
   function deleteNotice(id) {
@@ -1538,8 +1620,8 @@ window.MockApi = (function () {
   };
   function toggleRule(id) { openRule = openRule === id ? null : id; $('#ruleList').innerHTML = ruleListHtml(); }
 
-  function openRuleForm(id) {
-    const r = id ? D.rules.find(x => x.id === id) : { category: ruleCat !== 'all' ? ruleCat : D.ruleCategories[0], title: '', body: '', year: D.year, owner: '', link: '', files: [] };
+  function openRuleForm(id, draftData, errMsg) {
+    const r = draftData || (id ? D.rules.find(x => x.id === id) : { category: ruleCat !== 'all' ? ruleCat : D.ruleCategories[0], title: '', body: '', year: D.year, owner: '', link: '', files: [] });
     $('#modal').classList.remove('wide');
     openModal(`
       <h3>${id ? '기준 수정' : '기준 등록'}</h3>
@@ -1566,11 +1648,21 @@ window.MockApi = (function () {
       const rule = { id: id || '', category: $('#rCat').value, year: $('#rYear').value.trim(), title: $('#rTitle').value.trim(), body: $('#rBody').value.trim(), owner: $('#rOwner').value.trim(), link: $('#rLink').value.trim(), changeNote: $('#rNote') ? $('#rNote').value.trim() : '', files: uploadedFiles('rule') };
       if (!rule.title || !rule.body) { $('#rErr').textContent = '제목과 내용을 입력해 주세요.'; $('#rErr').hidden = false; return; }
       if (uploadsBusy('rule')) { $('#rErr').textContent = BUSY_MSG; $('#rErr').hidden = false; return; }
-      $('#rOk').disabled = true;
-      call('apiSaveRule', rule)
-        .then(data => { applyData(data); closeModal(); openRule = data.savedId; ruleCat = 'all'; ruleQuery = ''; page = 'rules'; render(); toast(id ? '기준을 수정했습니다. 개정 이력에 기록됩니다.' : '기준을 등록했습니다.'); })
-        .catch(err => { $('#rOk').disabled = false; $('#rErr').textContent = err.message || String(err); $('#rErr').hidden = false; });
+      const old = D.rules.slice();
+      const tmpId = id || 'tmp' + Date.now();
+      const ex = D.rules.find(x => x.id === id);
+      const shown = Object.assign({ history: [] }, ex || {}, rule, { id: tmpId, updated: todayKey(), editor: D.me.name });
+      shown.history = [{ date: todayKey(), editor: D.me.name, note: rule.changeNote || (id ? '내용 수정' : '최초 등록') }].concat(ex ? ex.history : []);
+      D.rules = id ? D.rules.map(x => x.id === id ? shown : x) : D.rules.concat(shown);
+      closeModal(); openRule = tmpId; ruleCat = 'all'; ruleQuery = ''; page = 'rules'; render();
+      saveInBackground('apiSaveRule', [rule], {
+        ok: id ? '기준을 수정했습니다. 개정 이력에 기록됩니다.' : '기준을 등록했습니다.',
+        done: res => { if (openRule === tmpId) openRule = res.savedId; if (page === 'rules') render(); },
+        undo: () => { D.rules = old; },
+        retry: msg => openRuleForm(id, rule, `저장하지 못했습니다: ${msg}`),
+      });
     };
+    if (errMsg) { $('#rErr').textContent = errMsg; $('#rErr').hidden = false; }
   }
 
   function deleteRule(id) {
@@ -1645,8 +1737,10 @@ window.MockApi = (function () {
       <p class="sub">목록에서 빼고 드라이브 휴지통으로 옮깁니다. ${f.area === 'notice' || f.area === 'rules' ? '이 파일이 붙은 글에서도 열 수 없게 됩니다.' : ''}</p>
       <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="dfOk">삭제</button></div>`);
     $('#dfOk').onclick = () => {
-      $('#dfOk').disabled = true;
-      call('apiDeleteFile', id).then(data => { applyData(data); closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+      const old = D.files.slice();
+      D.files = D.files.filter(x => x.id !== id);
+      closeModal(); render();
+      saveInBackground('apiDeleteFile', [id], { ok: '삭제했습니다.', undo: () => { D.files = old; } });
     };
   }
 
@@ -1691,8 +1785,8 @@ window.MockApi = (function () {
   VIEWS.admin = function () {
     if (!A) return '<div class="loading">권한 정보를 불러오는 중… (시트·첨부 폴더 공유 상태를 확인합니다)</div>';
     const tab = (k, label) => `<button role="tab" aria-selected="${adminTab === k}" onclick="adminTab='${k}';render()">${label}</button>`;
-    const body = { members: adminMembers, menus: adminMenus, settings: adminSettings, guide: adminGuide }[adminTab]();
-    return `<div class="subtabs" role="tablist">${tab('members', '담당자·권한')}${tab('menus', '메뉴 권한')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
+    const body = { members: adminMembers, scope: adminScope, menus: adminMenus, settings: adminSettings, guide: adminGuide }[adminTab]();
+    return `<div class="subtabs" role="tablist">${tab('members', '담당자·권한')}${tab('scope', '열람 범위')}${tab('menus', '메뉴 권한')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
   };
 
   function adminMembers() {
@@ -1709,6 +1803,7 @@ window.MockApi = (function () {
         <td data-label="이메일" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일"></td>
         <td data-label="역할">${sel(i, m.role)}</td>
         <td data-label="관리자"><label style="display:flex;justify-content:center"><input type="checkbox" class="check" ${m.admin ? 'checked' : ''} onchange="aEdit(${i},'admin',this.checked)" aria-label="관리자"></label></td>
+        <td data-label="열람 범위"><button class="linkish" onclick="adminTab='scope';render()">${isFull(m) ? '전체 (총괄·관리자)' : !m.scope || m.scope === SCOPE_ALL ? '전체' : scopeList(m).length ? `본인 + ${esc(scopeList(m).join(', '))}` : '본인 담당만'}</button></td>
         ${st && saved ? `<td data-label="스프레드시트">${accessChip('sheet', st.sheet)}</td><td data-label="첨부 폴더">${accessChip('folder', st.folder)}</td>`
           : `<td colspan="2" class="c-wide"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
         <td class="c-x"><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">×</button></td>
@@ -1731,7 +1826,7 @@ window.MockApi = (function () {
       <section class="panel">
         <div class="table-wrap">
           <table class="t cards admin-cards">
-            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">관리자</th><th>스프레드시트</th><th>첨부 폴더</th><th></th></tr></thead>
+            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">관리자</th><th>열람 범위</th><th>스프레드시트</th><th>첨부 폴더</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -1755,7 +1850,7 @@ window.MockApi = (function () {
     if (bar) bar.hidden = false;
   }
   function aAdd() {
-    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], admin: false });
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], admin: false, scope: '본인' });
     aDirty = true;
     render();
     const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');
@@ -1798,6 +1893,59 @@ window.MockApi = (function () {
     openModal(`<h3>${esc(title)}</h3>
       <div class="list" style="margin:10px 0 16px">${log.map(l => `<div class="list-row" style="grid-template-columns:24px minmax(0,1fr)"><span>${l.ok ? '✓' : '⚠️'}</span><span class="meta" style="color:${l.ok ? 'var(--ink)' : 'var(--warn-ink)'}">${esc(l.text)}</span></div>`).join('')}</div>
       <div class="modal-actions"><button class="btn primary" onclick="closeModal()">확인</button></div>`);
+  }
+
+  /* ---------- 열람 범위: 담당자마다 어느 담당자의 대상자까지 볼지 ---------- */
+  const SCOPE_ALL = '전체', UNASSIGNED = '(미배정)';
+  const scopeList = m => (m.scope && m.scope !== SCOPE_ALL ? m.scope.split(',').filter(x => x && x !== '본인') : []);
+  const isFull = m => m.role === '총괄' || m.admin;
+  /** 서버의 canSee_와 같은 규칙으로 보이는 인원 수 (1차·2차 담당은 항상 포함) */
+  function scopeCount(m) {
+    const all = isFull(m) || !m.scope || m.scope === SCOPE_ALL, list = scopeList(m);
+    return A.assign.filter(([o, o2]) => all || o === m.name || o2 === m.name || (o ? list.includes(o) : list.includes(UNASSIGNED))).length;
+  }
+  function adminScope() {
+    // 열: 실제로 1차 담당이 있는 이름 + 응대담당 (총괄·2차검토만 하는 사람은 뺀다)
+    const cols = [...new Set(Object.keys(A.owners).filter(k => k !== UNASSIGNED).concat(aDraft.filter(m => m.name && m.role === '응대담당').map(m => m.name)))].concat(UNASSIGNED);
+    const head = cols.map(c => `<th style="text-align:center;white-space:nowrap">${esc(c)}<br><span style="font-weight:400">${A.owners[c] || 0}명</span></th>`).join('');
+    const rows = aDraft.map((m, i) => {
+      if (!m.name) return '';
+      if (isFull(m)) return `<tr><td class="strong">${esc(m.name)}<br><span style="color:var(--muted);font-size:12px">${esc(m.role)}${m.admin ? '·관리자' : ''}</span></td>
+        <td colspan="${cols.length + 1}" style="color:var(--muted)">총괄·관리자는 항상 모든 대상자를 봅니다.</td><td class="num">${scopeCount(m)}명</td></tr>`;
+      const all = !m.scope || m.scope === SCOPE_ALL, list = scopeList(m);
+      return `<tr><td class="strong">${esc(m.name)}<br><span style="color:var(--muted);font-size:12px">${esc(m.role)}</span></td>
+        <td style="text-align:center"><input type="checkbox" class="check" ${all ? 'checked' : ''} onchange="setScopeAll(${i}, this.checked)" aria-label="${esc(m.name)} 전체"></td>
+        ${cols.map(c => c === m.name
+          ? `<td style="text-align:center"><input type="checkbox" class="check" checked disabled title="본인 담당은 항상 보입니다" aria-label="본인 담당"></td>`
+          : `<td style="text-align:center"><input type="checkbox" class="check" ${all || list.includes(c) ? 'checked' : ''} ${all ? 'disabled' : ''} onchange="toggleScope(${i}, '${esc(c)}', this.checked)" aria-label="${esc(m.name)}에게 ${esc(c)} 담당 보이기"></td>`).join('')}
+        <td class="num"><b>${scopeCount(m)}명</b></td></tr>`;
+    }).join('');
+    return `
+      <div class="head"><div><h1>열람 범위</h1><p>담당자마다 어느 담당자의 대상자까지 볼 수 있는지 정합니다. 체크하지 않은 대상자는 화면에 나오지 않고, 서버에서도 보내지 않습니다.</p></div></div>
+      <section class="panel">
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>볼 사람 ＼ 담당자</th><th style="text-align:center">전체</th>${head}<th class="num">보이는 인원</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <p style="color:var(--muted);font-size:12.5px;margin:12px 0 0;line-height:1.7">
+          · 본인이 1차 담당이거나 2차검토 담당인 대상자는 항상 보입니다.<br>
+          · <b>(미배정)</b>을 체크하면 담당자가 비어 있는 대상자를 보고 「내가 담당하기」로 맡을 수 있습니다.<br>
+          · 응대기록과 대상자 증빙 첨부도 보이는 대상자 것만 나옵니다.<br>
+          · 바꾼 뒤 아래 「변경사항 저장」을 누르세요. 담당자는 새로고침하면 반영됩니다.
+        </p>
+      </section>
+      <div class="save-bar" id="aBar" ${aDirty ? '' : 'hidden'}><div class="left">변경사항이 있습니다. 저장해야 반영됩니다.</div>
+        <div style="display:flex;gap:8px"><button class="btn" onclick="setAdmin(A)">되돌리기</button><button class="btn primary" id="aSave" onclick="saveMembers()">변경사항 저장</button></div></div>`;
+  }
+  function setScopeAll(i, on) {
+    aDraft[i].scope = on ? SCOPE_ALL : '본인';
+    aDirty = true; render();
+  }
+  function toggleScope(i, name, on) {
+    const list = scopeList(aDraft[i]).filter(x => x !== name);
+    if (on) list.push(name);
+    aDraft[i].scope = ['본인'].concat(list).join(',');
+    aDirty = true; render();
   }
 
   function adminMenus() {

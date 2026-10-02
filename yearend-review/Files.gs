@@ -41,6 +41,10 @@ function apiUploadFile(file) {
   const area = FILES.AREAS[file.area] ? file.area : 'etc';
   requireMenu_(me, FILES.MENU[area]);
 
+  if (area === 'person') {
+    const p = cached_(CK.people, () => readPeople_(ctx.ss)).find(x => (x.empNo || x.id) === String(file.ref || ''));
+    if (!p || !canSee_(me, p)) throw new Error('열람 범위 밖의 대상자에게는 파일을 올릴 수 없습니다.');
+  }
   const name = String(file.name || '').trim() || '첨부파일';
   const bytes = Utilities.base64Decode(String(file.data || ''));
   if (!bytes.length) throw new Error('빈 파일은 올릴 수 없습니다.');

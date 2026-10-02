@@ -130,11 +130,14 @@ function setConfigValue(key, value) {
   sh.appendRow([key, value]);
 }
 
-/** [담당자] 시트: 순서 | 이름 | 이메일 | 역할(응대담당/2차검토/총괄) | 관리자(Y/N) */
+/**
+ * [담당자] 시트: 순서 | 이름 | 이메일 | 역할(응대담당/2차검토/총괄) | 관리자(Y/N) | 열람범위
+ * 열람범위: 비우거나 '전체' = 모든 대상자 / '본인' = 내 담당만 / '본인,이수민,(미배정)' = 내 담당 + 고른 담당자의 대상자
+ */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -142,17 +145,38 @@ function getMembers() {
       email: String(r[2]).trim(),
       role: String(r[3]).trim(),
       admin: String(r[4]).trim().toUpperCase() === 'Y',
+      scope: normScope_(r[5]),
     }))
     .sort((a, b) => a.order - b.order);
 }
 
+const SCOPE_ALL = '전체';
+const SCOPE_UNASSIGNED = '(미배정)';
+
+/** 열람범위 칸 → '전체' 또는 '본인,이름,…' (본인은 항상 포함) */
+function normScope_(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s || s === SCOPE_ALL) return SCOPE_ALL;
+  const names = s.split(/[,，\n]/).map(x => x.trim()).filter(x => x && x !== '본인' && x !== SCOPE_ALL);
+  return ['본인'].concat(names.filter((x, i) => names.indexOf(x) === i)).join(',');
+}
+
+/**
+ * 매 요청에 필요한 설정·담당자 목록. 두 시트를 매번 읽지 않도록 60초 캐시한다
+ * (웹앱에서 담당자·설정을 저장하면 바로 지워지고, 시트를 직접 고치면 최대 60초 뒤 반영).
+ */
 function getContext() {
-  const cfg = getConfig();
+  const base = cached_(CK.ctx, () => {
+    const c = getConfig();
+    const cfg = {};
+    Object.keys(c).forEach(k => { cfg[k] = c[k] instanceof Date ? ymd(c[k]) : c[k]; });
+    return { cfg: cfg, members: getMembers() };
+  });
   return {
     ss: SpreadsheetApp.getActive(),
-    cfg: cfg,
-    year: String(cfg[CFG.YEAR] || defaultYear_()),
-    members: getMembers(),
+    cfg: base.cfg,
+    year: String(base.cfg[CFG.YEAR] || defaultYear_()),
+    members: base.members,
   };
 }
 

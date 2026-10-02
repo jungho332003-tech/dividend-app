@@ -32,11 +32,13 @@ const CK = {
   rules: 'rules',
   files: 'files',
   owner: 'owner',
+  ctx: 'ctx',
 };
 
-function cached_(key, build, ttl) {
-  const cache = CacheService.getDocumentCache();
+/** 캐시에 있으면 값, 없으면 null (새로 만들지 않는다) */
+function peekCache_(key) {
   try {
+    const cache = CacheService.getDocumentCache();
     const hit = cache.get(key);
     if (hit && hit.indexOf('CHUNKS:') === 0) {
       const n = Number(hit.slice(7));
@@ -46,7 +48,13 @@ function cached_(key, build, ttl) {
     } else if (hit) {
       return JSON.parse(hit);
     }
-  } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
+  } catch (e) { /* 캐시 오류는 없는 것으로 본다 */ }
+  return null;
+}
+
+function cached_(key, build, ttl) {
+  const hit = peekCache_(key);
+  if (hit !== null) return hit;
   const value = build();
   putCache_(key, value, ttl);
   return value;
@@ -69,13 +77,21 @@ function putCache_(key, value, ttl) {
   } catch (e) { /* 캐시할 수 없으면 건너뛴다 */ }
 }
 
+/** 캐시된 목록이 있으면 그 자리에서 고친다. 없으면 다음 조회 때 시트에서 새로 읽으므로 그냥 둔다 */
+function patchCache_(key, fn) {
+  const list = peekCache_(key);
+  if (list === null) return;
+  fn(list);
+  putCache_(key, list);
+}
+
 function dropCache_(key) {
   try { CacheService.getDocumentCache().remove(key); } catch (e) { /* 캐시 없음 */ }
 }
 
 function clearCaches_() {
   try {
-    CacheService.getDocumentCache().removeAll([CK.people, CK.logs, CK.notices, CK.rules, CK.files, 'menus', 'access']);
+    CacheService.getDocumentCache().removeAll([CK.people, CK.logs, CK.notices, CK.rules, CK.files, CK.ctx, 'menus', 'access']);
   } catch (e) { /* 캐시 없음 */ }
 }
 
@@ -86,8 +102,41 @@ function refreshPart_(part) {
   const value = READERS[part](SpreadsheetApp.getActive());
   putCache_(CK[part], value);
   const out = {};
-  out[part] = part === 'files' ? visibleFiles_(value, currentMember_(getMembers())) : value;
+  out[part] = forMe_(part, value, currentMember_(getContext().members));
   return out;
+}
+
+/**
+ * 접속자에게 보낼 만큼만 거른다 (캐시는 전체를 두고, 보낼 때마다 거른다)
+ *  - 대상자·응대기록·대상자 증빙: 열람범위 안의 대상자만
+ *  - 첨부: 메뉴 권한이 있는 구분만
+ */
+function forMe_(part, value, me) {
+  if (part === 'people') return value.filter(p => canSee_(me, p));
+  if (part === 'logs' || part === 'files') {
+    const list = part === 'files' ? visibleFiles_(value, me) : value;
+    const seen = visibleEmpNos_(me);
+    if (!seen) return list;
+    if (part === 'logs') return list.filter(l => seen.has(String(l.empNo)));
+    return list.filter(f => f.area !== 'person' || seen.has(String(f.ref)));
+  }
+  return value;
+}
+
+/** 열람범위로 볼 수 있는 대상자인가 */
+function canSee_(me, p) {
+  if (me.isLeader || me.isAdmin || me.scope === SCOPE_ALL) return true;
+  if (!me.name) return false;
+  if (p.owner === me.name || p.owner2 === me.name) return true;
+  const list = me.scope.split(',');
+  return p.owner ? list.indexOf(p.owner) >= 0 : list.indexOf(SCOPE_UNASSIGNED) >= 0;
+}
+
+/** 범위가 제한된 사람이 볼 수 있는 사원번호(또는 행 id) 모음. 전체면 null */
+function visibleEmpNos_(me) {
+  if (me.isLeader || me.isAdmin || me.scope === SCOPE_ALL) return null;
+  const people = cached_(CK.people, () => readPeople_(SpreadsheetApp.getActive()));
+  return new Set(people.filter(p => canSee_(me, p)).map(p => p.empNo || p.id));
 }
 
 /** 메뉴 권한이 없는 구분의 첨부는 보내지 않는다 (예: 서류 검토 권한이 없으면 대상자 증빙 제외) */
@@ -117,12 +166,12 @@ function apiBootstrap() {
     noticeLeaderOnly: NOTICE.LEADER_ONLY,
     ruleCategories: RULES.CATEGORIES,
     fileAreas: FILES.AREAS,
-    people: seesPeople ? cached_(CK.people, () => readPeople_(ss)) : [],
-    logs: can('review') ? cached_(CK.logs, () => readLogs_(ss)) : [],
+    people: seesPeople ? forMe_('people', cached_(CK.people, () => readPeople_(ss)), me) : [],
+    logs: can('review') ? forMe_('logs', cached_(CK.logs, () => readLogs_(ss)), me) : [],
     notices: can('notice') || can('dash') ? cached_(CK.notices, () => readNotices_(ss)) : [],
     reads: getReads_(),
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
-    files: can('files') || can('review') ? visibleFiles_(cached_(CK.files, () => readFiles_(ss)), me) : [],
+    files: can('files') || can('review') ? forMe_('files', cached_(CK.files, () => readFiles_(ss)), me) : [],
   };
 }
 
@@ -138,6 +187,8 @@ function currentMember_(members) {
     role: m ? m.role : '',
     isLeader: !!(m && m.role === LEADER_ROLE),
     isAdmin: isAdmin,
+    // 총괄·관리자는 항상 전체
+    scope: (m && m.role === LEADER_ROLE) || isAdmin ? SCOPE_ALL : (m ? m.scope : SCOPE_ALL),
   };
   me.menus = allowedMenus_(me);
   return me;

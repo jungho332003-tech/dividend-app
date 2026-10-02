@@ -20,8 +20,9 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
 
   // 담당자 등록 (소유자 owner@x.com = 관리자)
   const mem = ss.getSheetByName('담당자');
-  mem.getRange(2, 1, 5, 5).clearContent();
-  mem.getRange(2, 1, 4, 5).setValues([[1, '정해린', 'lead@x.com', '총괄', 'N'], [2, '김도현', 'kim@x.com', '응대담당', 'N'], [3, '이수민', 'lee@x.com', '응대담당', 'N'], [4, '최유나', 'choi@x.com', '2차검토', 'N']]);
+  ok('new member rows default to 본인 scope', () => assert.strictEqual(mem.get(3, 6), '본인'));
+  mem.getRange(2, 1, 5, 6).clearContent();
+  mem.getRange(2, 1, 4, 6).setValues([[1, '정해린', 'lead@x.com', '총괄', 'N', ''], [2, '김도현', 'kim@x.com', '응대담당', 'N', '전체'], [3, '이수민', 'lee@x.com', '응대담당', 'N', ''], [4, '최유나', 'choi@x.com', '2차검토', 'N', '전체']]);
   ss.getSheetByName('설정').getRange('B4').setValue('FOLDER');
 
   ok('unregistered user has no menus', () => { as('stranger@x.com'); const b = api.apiBootstrap(); assert.strictEqual(b.me.menus.length, 0); assert.strictEqual(b.people.length, 0); });
@@ -82,7 +83,8 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
   ok('응대기록', () => {
     as('lee@x.com'); // 담당이 아니어도 기록 가능
     const r = api.apiAddLog('1001', '전화', '영수증 요청');
-    assert.strictEqual(r.logs[0].name, '오민재'); assert.strictEqual(r.logs[0].author, '이수민');
+    assert.strictEqual(r.logAdded.name, '오민재'); assert.strictEqual(r.logAdded.author, '이수민');
+    assert.strictEqual(api.apiBootstrap().logs[0].body, '영수증 요청');
     throwsMsg(() => api.apiAddLog('1001', '전화', ' '), /내용/);
   });
 
@@ -106,7 +108,8 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     assert(!api.apiBootstrap().reads.includes(n.id));
     api.apiMarkRead(n.id); assert(api.apiBootstrap().reads.includes(n.id));
     api.apiMarkUnread(n.id); assert(!api.apiBootstrap().reads.includes(n.id));
-    r = api.apiAddNoticeComment(n.id, '확인'); assert.strictEqual(r.notices.find(x => x.id === n.id).comments.length, 1);
+    r = api.apiAddNoticeComment(n.id, '확인'); assert.strictEqual(r.commentAdded.comment.body, '확인');
+    assert.strictEqual(api.apiBootstrap().notices.find(x => x.id === n.id).comments.length, 1);
   });
 
   ok('rules', () => {
@@ -146,6 +149,38 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     assert.strictEqual(b.rules.length, 0);
     assert(b.files.every(f => f.area === 'person' || f.area === 'notice'), 'only visible areas');
     throwsMsg(() => api.apiUploadFile({ name: 'a', data: 'YQ==', area: 'etc' }), /첨부파일\] 메뉴/);
+  });
+
+  ok('열람 범위: 본인 / 본인+담당자 / (미배정) / 전체', () => {
+    as('owner@x.com');
+    const d = api.apiAdminData(false);
+    assert(d.owners['김도현'] >= 1);
+    const save = scopes => api.apiSaveMembers(d.members.map(m => Object.assign({}, m, { scope: scopes[m.name] || '전체' })));
+    // 사람 현황: 1001 김도현/최유나, 2002 김도현, 1003 김도현 → 1002 바꿔 이수민 담당 하나와 미배정 하나 만든다
+    as('lead@x.com');
+    api.apiSavePerson('2002', { owner: '이수민', owner2: '' });
+    api.apiAddPerson({ empNo: '1005', name: '미배정씨' });
+    as('owner@x.com');
+    save({ '김도현': '본인' });
+    assert.strictEqual(api.apiAdminData(false).members.find(m => m.name === '김도현').scope, '본인');
+    as('kim@x.com');
+    let b = api.apiBootstrap();
+    assert.deepStrictEqual(b.people.map(p => p.empNo).sort().join(), '1001,1003');
+    assert(b.logs.every(l => ['1001', '1003'].includes(l.empNo)));
+    assert(b.files.every(f => f.area !== 'person' || ['1001', '1003'].includes(f.ref)));
+    throwsMsg(() => api.apiSavePerson('2002', { note1: 'x' }), /열람 범위/);
+    throwsMsg(() => api.apiAddLog('2002', '전화', 'x'), /열람 범위/);
+    throwsMsg(() => api.apiUploadFile({ name: 'a.pdf', data: 'YQ==', area: 'person', ref: '2002' }), /열람 범위/);
+    throwsMsg(() => api.apiSavePerson('1005', { owner: '김도현' }), /열람 범위/);
+    as('owner@x.com'); save({ '김도현': '본인,이수민,(미배정)' });
+    as('kim@x.com');
+    b = api.apiBootstrap();
+    assert.strictEqual(b.me.scope, '본인,이수민,(미배정)');
+    assert.deepStrictEqual(b.people.map(p => p.empNo).sort().join(), '1001,1003,1005,2002');
+    api.apiSavePerson('1005', { owner: '김도현' }); // 미배정을 볼 수 있으면 맡을 수 있다
+    as('choi@x.com'); assert.strictEqual(api.apiBootstrap().people.length, 4); // 전체
+    as('lead@x.com'); assert.strictEqual(api.apiBootstrap().me.scope, '전체'); // 총괄은 항상 전체
+    as('owner@x.com'); save({});
   });
 
   ok('admin save members / settings / apply', () => {

@@ -98,6 +98,22 @@ function readLogs_(ss) {
     .reverse();
 }
 
+/**
+ * id로 대상자 행을 찾아 그 행 값을 함께 돌려준다.
+ * 캐시에 있는 행 번호부터 확인하고(읽기 1번), 맞지 않으면 사원번호 열에서 찾는다.
+ */
+function readPersonRow_(sh, map, id) {
+  const width = sh.getLastColumn();
+  const hit = (peekCache_(CK.people) || []).find(p => p.id === id);
+  if (hit && hit.row >= 2) {
+    const values = sh.getRange(hit.row, 1, 1, width).getValues()[0];
+    const emp = map.empNo ? cellText_(values[map.empNo - 1]) : '';
+    if ((emp || 'r' + hit.row) === id) return { row: hit.row, values: values };
+  }
+  const row = findPersonRow_(sh, map, id);
+  return row < 0 ? null : { row: row, values: sh.getRange(row, 1, 1, width).getValues()[0] };
+}
+
 /** id(사원번호 또는 'r행번호')로 행 찾기 */
 function findPersonRow_(sh, map, id) {
   const last = sh.getLastRow();
@@ -124,14 +140,10 @@ function canEdit_(me, cur, col, patch) {
   return cur.owner === me.name || takes;
 }
 
-function writeCell_(range, col, value) {
-  if (col.t === 'bool') {
-    const now = range.getValue();
-    // 체크박스 칸이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다
-    range.setValue(typeof now === 'boolean' ? !!value : (value ? 'O' : ''));
-  } else {
-    range.setValue(String(value == null ? '' : value).trim());
-  }
+/** 저장할 값. 체크박스 칸(지금 값이 true/false)이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다 */
+function cellValue_(col, now, value) {
+  if (col.t === 'bool') return typeof now === 'boolean' ? !!value : (value ? 'O' : '');
+  return String(value == null ? '' : value).trim();
 }
 
 /** 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게) */
@@ -145,9 +157,11 @@ function apiSavePerson(id, patch) {
   try {
     const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
     const map = colMap_(sh);
-    const row = findPersonRow_(sh, map, String(id));
-    if (row < 0) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
-    const cur = rowToPerson_(sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0], map, row);
+    const found = readPersonRow_(sh, map, String(id));
+    if (!found) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
+    const { row, values } = found;
+    const cur = rowToPerson_(values, map, row);
+    if (!canSee_(me, cur)) throw new Error('열람 범위 밖의 대상자입니다. 관리자에게 열람 범위를 요청하세요.');
 
     const keys = Object.keys(patch || {}).filter(k => COLS.some(c => c.k === k));
     if (!keys.length) return { personPatch: cur };
@@ -162,13 +176,22 @@ function apiSavePerson(id, patch) {
       const emp = String(patch.empNo || '').trim();
       if (emp && emp !== cur.empNo && findPersonRow_(sh, map, emp) > 0) throw new Error(`사원번호 ${emp}가 이미 있습니다.`);
     }
-    keys.forEach(k => writeCell_(sh.getRange(row, map[k]), COLS.find(c => c.k === k), patch[k]));
-    if (map.updated) sh.getRange(row, map.updated).setValue(new Date());
-    if (map.editor) sh.getRange(row, map.editor).setValue(me.name || me.email);
-    SpreadsheetApp.flush();
+    // 바뀐 칸만 쓴다 (수식이 있는 다른 칸은 건드리지 않는다). 쓰기만 이어서 하면 Apps Script가 한 번에 보낸다
+    const now = new Date();
+    keys.forEach(k => {
+      const v = cellValue_(COLS.find(c => c.k === k), values[map[k] - 1], patch[k]);
+      sh.getRange(row, map[k]).setValue(v);
+      values[map[k] - 1] = v;
+    });
+    if (map.updated) { sh.getRange(row, map.updated).setValue(now); values[map.updated - 1] = now; }
+    if (map.editor) { sh.getRange(row, map.editor).setValue(me.name || me.email); values[map.editor - 1] = me.name || me.email; }
 
-    const saved = rowToPerson_(sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0], map, row);
-    dropCache_(CK.people);
+    // 다시 읽지 않고 저장한 값으로 결과를 만들고, 캐시의 그 사람만 바꾼다
+    const saved = rowToPerson_(values, map, row);
+    patchCache_(CK.people, list => {
+      const i = list.findIndex(p => p.id === String(id));
+      if (i >= 0) list[i] = saved; else list.push(saved);
+    });
     return { personPatch: saved, oldId: String(id) };
   } finally {
     lock.releaseLock();
@@ -258,8 +281,17 @@ function apiAddLog(id, kind, body) {
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 응대기록을 남길 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('응대 내용을 입력해 주세요.');
-  const p = readPeople_(ctx.ss).find(x => x.id === String(id));
-  if (!p) throw new Error('대상자를 찾을 수 없습니다.');
-  ctx.ss.getSheetByName(SHEET.LOGS).appendRow([new Date(), p.empNo, p.name, me.name || me.email, LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타', text]);
-  return refreshPart_('logs');
+  const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+  const map = colMap_(sh);
+  const found = readPersonRow_(sh, map, String(id));
+  if (!found) throw new Error('대상자를 찾을 수 없습니다.');
+  const p = rowToPerson_(found.values, map, found.row);
+  if (!canSee_(me, p)) throw new Error('열람 범위 밖의 대상자입니다.');
+  const now = new Date();
+  const k = LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타';
+  ctx.ss.getSheetByName(SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
+  // 응대기록 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다
+  const entry = { date: fmt(now, 'yyyy-MM-dd HH:mm'), empNo: p.empNo, name: p.name, author: me.name || me.email, kind: k, body: text };
+  patchCache_(CK.logs, list => { list.unshift(entry); });
+  return { logAdded: entry };
 }
