@@ -1139,7 +1139,7 @@
   /** CSV: UTF-8로 읽고 글자가 깨지면 엑셀 기본 저장 형식(EUC-KR)으로 다시 읽는다 */
   function decodeCsv(buf) {
     let text = new TextDecoder('utf-8').decode(buf);
-    if (text.includes('�')) { try { text = new TextDecoder('euc-kr').decode(buf); } catch (e) { /* 지원 안 하는 브라우저 */ } }
+    if (text.includes('\uFFFD')) { try { text = new TextDecoder('euc-kr').decode(buf); } catch (e) { /* 지원 안 하는 브라우저 */ } }
     return text.replace(/^﻿/, '');
   }
   function parseCSV(text) {
