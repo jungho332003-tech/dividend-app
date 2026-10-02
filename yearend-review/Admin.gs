@@ -97,7 +97,8 @@ function adminData_(ctx, useCache) {
     menuAccess: getMenuAccess_(),
     settings: {
       team: String(cfg[CFG.TEAM] || ''),
-      year: ctx.year,
+      year: ctx.baseYear,
+      years: ctx.years,
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -214,12 +215,88 @@ function apiSaveSettings(s) {
   const ctx = getContext();
   requireAdmin_(ctx);
   const year = String(s.year || '').trim();
-  if (!/^\d{4}$/.test(year)) throw new Error('귀속연도는 2026처럼 네 자리로 입력해 주세요.');
+  if (!/^\d{4}$/.test(year)) throw new Error('기본 연도는 2026처럼 네 자리로 입력해 주세요.');
+  if (year !== ctx.baseYear) {
+    if (ctx.years.indexOf(year) < 0) throw new Error(`${year}년 시트가 아직 없습니다. 「새 연도 시작」으로 만들어 주세요.`);
+    // 예전 이름의 시트가 남아 있으면 지금 기본 연도 이름으로 먼저 고정한다
+    migrateLegacySheets_(ctx.ss, ctx.baseYear);
+  }
   setConfigValue(CFG.TEAM, String(s.team || '').trim());
   setConfigValue(CFG.YEAR, Number(year));
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_();
   return adminData_(getContext(), false);
+}
+
+/* ---------- 새 연도 시작 ---------- */
+
+/**
+ * opts: { year, carry: 이전 연도 대상자의 기본 정보·담당 가져오기, copyRules: 기준 복사, makeBase: 기본 연도로 지정 }
+ * 대상자_YYYY·응대기록_YYYY·일정_YYYY 시트를 만든다. 이전 연도 시트는 그대로 남아 연도 선택으로 볼 수 있다.
+ */
+function apiStartYear(opts) {
+  const ctx = getContext();
+  const me = requireAdmin_(ctx);
+  const year = String(opts && opts.year || '').trim();
+  if (!/^\d{4}$/.test(year)) throw new Error('연도는 2027처럼 네 자리로 입력해 주세요.');
+  if (ctx.years.indexOf(year) >= 0 && ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`)) throw new Error(`${year}년은 이미 있습니다.`);
+  const from = String(opts.from || ctx.baseYear);
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  let carried = 0, copied = 0;
+  try {
+    migrateLegacySheets_(ctx.ss, ctx.baseYear);
+    setupPeopleSheets_(ctx.ss, year);
+    setupEventSheet_(ctx.ss, year);
+
+    // 이전 연도 명단: 기본 정보와 담당 배정만 가져오고, 진행 체크·특이사항은 비운다
+    if (opts.carry) {
+      const src = ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${from}`);
+      const dst = ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`);
+      if (src && src.getLastRow() >= 2) {
+        const smap = colMap_(src), dmap = colMap_(dst);
+        const keep = COLS.filter(c => c.who === 'info' || c.who === 'assign');
+        const rows = src.getRange(2, 1, src.getLastRow() - 1, src.getLastColumn()).getValues()
+          .filter(r => keep.some(c => smap[c.k] && String(r[smap[c.k] - 1]).trim()))
+          .map(r => {
+            const out = new Array(dst.getLastColumn()).fill('');
+            keep.forEach(c => { if (smap[c.k] && dmap[c.k]) out[dmap[c.k] - 1] = c.t === 'bool' ? (boolOf_(c, r[smap[c.k] - 1]) ? 'O' : '') : r[smap[c.k] - 1]; });
+            return out;
+          });
+        if (rows.length) dst.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+        carried = rows.length;
+      }
+    }
+
+    // 기준 복사: 이전 연도 기준을 새 연도로 한 벌 더 만든다 (개정 이력은 새로 시작)
+    if (opts.copyRules) {
+      const sh = ctx.ss.getSheetByName(RULES.SHEET);
+      const hsh = ctx.ss.getSheetByName(RULES.HISTORY);
+      if (sh && sh.getLastRow() >= 2) {
+        const all = sh.getRange(2, 1, sh.getLastRow() - 1, RCOL.FILES).getValues();
+        let next = Math.max.apply(null, all.map(r => Number(r[0]) || 0)) + 1;
+        const now = new Date();
+        const rows = all.filter(r => String(r[0]) && String(r[RCOL.DELETED - 1]).toUpperCase() !== 'Y' && cellText_(r[RCOL.YEAR - 1]) === from)
+          .map(r => { const x = r.slice(); x[0] = next++; x[RCOL.YEAR - 1] = year; x[RCOL.UPDATED - 1] = now; x[RCOL.EDITOR - 1] = me.name || me.email; return x; });
+        if (rows.length) {
+          sh.getRange(sh.getLastRow() + 1, 1, rows.length, RCOL.FILES).setValues(rows);
+          hsh.getRange(hsh.getLastRow() + 1, 1, rows.length, 4).setValues(rows.map(x => [String(x[0]), now, me.name || me.email, `${from}년 기준에서 복사`]));
+        }
+        copied = rows.length;
+      }
+    }
+
+    if (opts.makeBase !== false) setConfigValue(CFG.YEAR, Number(year));
+    try { applyProtections_(getContext()); } catch (e) { /* 보호는 권한 한 번에 적용에서 다시 걸 수 있다 */ }
+  } finally {
+    lock.releaseLock();
+  }
+  clearCaches_();
+  // 시작한 관리자는 바로 새 연도를 보게 한다
+  PropertiesService.getUserProperties().setProperty('VIEW_YEAR', year);
+  VIEW_MEMO_ = null;
+  return { carried: carried, copied: copied, data: adminData_(getContext(), true) };
 }
 
 /* ---------- 권한 한 번에 적용 ---------- */

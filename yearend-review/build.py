@@ -1,6 +1,6 @@
 """
 한 파일 설치본 만들기: python3 build.py
-  dist/Code.gs          스크립트 8개를 하나로 합친 파일
+  dist/Code.gs          스크립트 9개를 하나로 합친 파일
   dist/App.html         웹앱 화면 (그대로 복사)
   dist/appsscript.json
   dist/demo.html        예시 데이터로 바로 열어보는 화면 (App.html + demo/Mock.js)
@@ -9,7 +9,7 @@
 import json, os, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ORDER = ['Config', 'Setup', 'People', 'Notice', 'Rules', 'Files', 'Admin', 'WebApp']
+ORDER = ['Config', 'Setup', 'People', 'Events', 'Notice', 'Rules', 'Files', 'Admin', 'WebApp']
 
 def read(name):
     with open(os.path.join(HERE, name), encoding='utf-8') as f:

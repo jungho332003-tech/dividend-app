@@ -16,16 +16,16 @@ const FILES = {
   MENU: { person: 'review', notice: 'notice', rules: 'rules', etc: 'files' },
 };
 
-const FCOL = { ID: 1, DATE: 2, UPLOADER: 3, AREA: 4, REF: 5, REF_LABEL: 6, NAME: 7, URL: 8, SIZE: 9, MIME: 10, MEMO: 11, DELETED: 12 };
+const FCOL = { ID: 1, DATE: 2, UPLOADER: 3, AREA: 4, REF: 5, REF_LABEL: 6, NAME: 7, URL: 8, SIZE: 9, MIME: 10, MEMO: 11, DELETED: 12, YEAR: 13 };
 
 function setupFileSheet_(ss) {
-  if (ss.getSheetByName(FILES.SHEET)) return;
+  if (ss.getSheetByName(FILES.SHEET)) { ensureHeader_(ss.getSheetByName(FILES.SHEET), FCOL.YEAR, '귀속연도'); return; }
   const sh = ss.insertSheet(FILES.SHEET);
-  const header = ['파일ID', '올린일시', '올린사람', '구분', '대상번호', '대상', '파일명', 'URL', '크기', '형식', '메모', '삭제(Y)'];
+  const header = ['파일ID', '올린일시', '올린사람', '구분', '대상번호', '대상', '파일명', 'URL', '크기', '형식', '메모', '삭제(Y)', '귀속연도'];
   sh.getRange(1, 1, 1, header.length).setValues([header]);
   styleHeader_(sh.getRange(1, 1, 1, header.length));
   sh.getRange('B2:B').setNumberFormat('yyyy-mm-dd hh:mm');
-  [120, 130, 80, 100, 80, 160, 260, 220, 80, 120, 200, 60].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  [120, 130, 80, 100, 80, 160, 260, 220, 80, 120, 200, 60, 80].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.hideColumns(1);
   sh.setFrozenRows(1);
 }
@@ -84,7 +84,7 @@ function registerFiles_(area, ref, refLabel, files, me, memo) {
   const have = new Set(last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => String(v)) : []);
   const now = new Date();
   const rows = list.filter(f => !have.has(String(f.id))).map(f => [
-    String(f.id), now, me.name || me.email, FILES.AREAS[area], ref, refLabel, String(f.name), String(f.url || ''), Number(f.size) || 0, String(f.mime || ''), memo || '', '',
+    String(f.id), now, me.name || me.email, FILES.AREAS[area], ref, refLabel, String(f.name), String(f.url || ''), Number(f.size) || 0, String(f.mime || ''), memo || '', '', viewYear_(),
   ]);
   if (rows.length) sh.getRange(last + 1, 1, rows.length, rows[0].length).setValues(rows);
   dropCache_(CK.files);
@@ -95,8 +95,10 @@ function readFiles_(ss) {
   if (!sh || sh.getLastRow() < 2) return [];
   const areaKey = {};
   Object.keys(FILES.AREAS).forEach(k => { areaKey[FILES.AREAS[k]] = k; });
-  return sh.getRange(2, 1, sh.getLastRow() - 1, FCOL.DELETED).getValues()
+  const year = viewYear_();
+  return sh.getRange(2, 1, sh.getLastRow() - 1, FCOL.YEAR).getValues()
     .filter(r => String(r[0]) && String(r[FCOL.DELETED - 1]).toUpperCase() !== 'Y')
+    .filter(r => !cellText_(r[FCOL.YEAR - 1]) || cellText_(r[FCOL.YEAR - 1]) === year)
     .map(r => ({
       id: String(r[0]),
       date: r[1] instanceof Date ? fmt(r[1], 'yyyy-MM-dd HH:mm') : String(r[1]),

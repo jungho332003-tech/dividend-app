@@ -8,9 +8,12 @@ const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 const SHEET = {
   CONFIG: '설정',
   MEMBERS: '담당자',
+  // 아래 셋은 귀속연도별 시트: 대상자_2026, 응대기록_2026, 일정_2026 …
   PEOPLE: '대상자',
   LOGS: '응대기록',
+  EVENTS: '일정',
 };
+const YEAR_SHEETS = [SHEET.PEOPLE, SHEET.LOGS, SHEET.EVENTS];
 
 // [설정] 시트의 항목명 (A열) — 값은 B열
 const CFG = {
@@ -175,14 +178,75 @@ function getContext() {
     const c = getConfig();
     const cfg = {};
     Object.keys(c).forEach(k => { cfg[k] = c[k] instanceof Date ? ymd(c[k]) : c[k]; });
-    return { cfg: cfg, members: getMembers() };
+    return { cfg: cfg, members: getMembers(), years: findYears_() };
   });
+  const baseYear = String(base.cfg[CFG.YEAR] || defaultYear_());
   return {
     ss: SpreadsheetApp.getActive(),
     cfg: base.cfg,
-    year: String(base.cfg[CFG.YEAR] || defaultYear_()),
+    baseYear: baseYear,                     // 관리자가 정한 기본(진행 중) 연도
+    years: yearsWith_(base.years, baseYear), // 관리하는 연도 목록 (최근 연도 먼저)
+    year: viewYear_(),                      // 지금 접속자가 보고 있는 연도
     members: base.members,
   };
+}
+
+/* ---------- 귀속연도 ---------- */
+
+/** 시트 이름(대상자_2026 …)에서 연도 목록을 찾는다 */
+function findYears_() {
+  const set = {};
+  SpreadsheetApp.getActive().getSheets().forEach(sh => {
+    const m = /^대상자_(\d{4})$/.exec(sh.getName());
+    if (m) set[m[1]] = true;
+  });
+  return Object.keys(set);
+}
+
+function yearsWith_(years, baseYear) {
+  const all = years.indexOf(baseYear) >= 0 ? years.slice() : years.concat(baseYear);
+  return all.sort((a, b) => Number(b) - Number(a));
+}
+
+/**
+ * 접속자가 보고 있는 연도. 사람마다 사용자 속성(VIEW_YEAR)에 저장하고, 없으면 기본 연도.
+ * 한 번 실행하는 동안은 같은 값을 쓴다 (접속자가 바뀌면 다시 읽는다).
+ */
+let VIEW_MEMO_ = null;
+function viewYear_() {
+  const email = Session.getActiveUser().getEmail();
+  if (VIEW_MEMO_ && VIEW_MEMO_.email === email) return VIEW_MEMO_.year;
+  const base = peekCache_(CK.ctx);
+  const baseYear = String((base && base.cfg[CFG.YEAR]) || getConfig()[CFG.YEAR] || defaultYear_());
+  const years = yearsWith_(base ? base.years : findYears_(), baseYear);
+  let y = String(PropertiesService.getUserProperties().getProperty('VIEW_YEAR') || baseYear);
+  if (years.indexOf(y) < 0) y = baseYear;
+  VIEW_MEMO_ = { email: email, year: y };
+  return y;
+}
+
+/**
+ * 연도별 시트. 예전 설치본의 "대상자"·"응대기록"(연도 없는 이름)은 기본 연도 시트로 보고 이름을 바꿔 쓴다.
+ */
+function yearSheet_(ss, base, year) {
+  const y = String(year || viewYear_());
+  const sh = ss.getSheetByName(`${base}_${y}`);
+  if (sh) return sh;
+  const legacy = ss.getSheetByName(base);
+  const baseYear = String(getConfig()[CFG.YEAR] || defaultYear_());
+  if (legacy && y === baseYear) {
+    try { legacy.setName(`${base}_${y}`); } catch (e) { /* 이름을 못 바꾸면 그대로 쓴다 */ }
+    return legacy;
+  }
+  return null;
+}
+
+/** 예전 이름의 연도별 시트를 지정한 연도 이름으로 바꾼다 (기본 연도를 바꾸기 전에 호출) */
+function migrateLegacySheets_(ss, year) {
+  YEAR_SHEETS.forEach(base => {
+    const legacy = ss.getSheetByName(base);
+    if (legacy && !ss.getSheetByName(`${base}_${year}`)) legacy.setName(`${base}_${year}`);
+  });
 }
 
 /** 하반기에는 올해 귀속, 상반기(연말정산 진행 중)에는 작년 귀속 */

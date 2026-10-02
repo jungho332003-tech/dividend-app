@@ -17,9 +17,12 @@ const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 const SHEET = {
   CONFIG: '설정',
   MEMBERS: '담당자',
+  // 아래 셋은 귀속연도별 시트: 대상자_2026, 응대기록_2026, 일정_2026 …
   PEOPLE: '대상자',
   LOGS: '응대기록',
+  EVENTS: '일정',
 };
+const YEAR_SHEETS = [SHEET.PEOPLE, SHEET.LOGS, SHEET.EVENTS];
 
 // [설정] 시트의 항목명 (A열) — 값은 B열
 const CFG = {
@@ -184,14 +187,75 @@ function getContext() {
     const c = getConfig();
     const cfg = {};
     Object.keys(c).forEach(k => { cfg[k] = c[k] instanceof Date ? ymd(c[k]) : c[k]; });
-    return { cfg: cfg, members: getMembers() };
+    return { cfg: cfg, members: getMembers(), years: findYears_() };
   });
+  const baseYear = String(base.cfg[CFG.YEAR] || defaultYear_());
   return {
     ss: SpreadsheetApp.getActive(),
     cfg: base.cfg,
-    year: String(base.cfg[CFG.YEAR] || defaultYear_()),
+    baseYear: baseYear,                     // 관리자가 정한 기본(진행 중) 연도
+    years: yearsWith_(base.years, baseYear), // 관리하는 연도 목록 (최근 연도 먼저)
+    year: viewYear_(),                      // 지금 접속자가 보고 있는 연도
     members: base.members,
   };
+}
+
+/* ---------- 귀속연도 ---------- */
+
+/** 시트 이름(대상자_2026 …)에서 연도 목록을 찾는다 */
+function findYears_() {
+  const set = {};
+  SpreadsheetApp.getActive().getSheets().forEach(sh => {
+    const m = /^대상자_(\d{4})$/.exec(sh.getName());
+    if (m) set[m[1]] = true;
+  });
+  return Object.keys(set);
+}
+
+function yearsWith_(years, baseYear) {
+  const all = years.indexOf(baseYear) >= 0 ? years.slice() : years.concat(baseYear);
+  return all.sort((a, b) => Number(b) - Number(a));
+}
+
+/**
+ * 접속자가 보고 있는 연도. 사람마다 사용자 속성(VIEW_YEAR)에 저장하고, 없으면 기본 연도.
+ * 한 번 실행하는 동안은 같은 값을 쓴다 (접속자가 바뀌면 다시 읽는다).
+ */
+let VIEW_MEMO_ = null;
+function viewYear_() {
+  const email = Session.getActiveUser().getEmail();
+  if (VIEW_MEMO_ && VIEW_MEMO_.email === email) return VIEW_MEMO_.year;
+  const base = peekCache_(CK.ctx);
+  const baseYear = String((base && base.cfg[CFG.YEAR]) || getConfig()[CFG.YEAR] || defaultYear_());
+  const years = yearsWith_(base ? base.years : findYears_(), baseYear);
+  let y = String(PropertiesService.getUserProperties().getProperty('VIEW_YEAR') || baseYear);
+  if (years.indexOf(y) < 0) y = baseYear;
+  VIEW_MEMO_ = { email: email, year: y };
+  return y;
+}
+
+/**
+ * 연도별 시트. 예전 설치본의 "대상자"·"응대기록"(연도 없는 이름)은 기본 연도 시트로 보고 이름을 바꿔 쓴다.
+ */
+function yearSheet_(ss, base, year) {
+  const y = String(year || viewYear_());
+  const sh = ss.getSheetByName(`${base}_${y}`);
+  if (sh) return sh;
+  const legacy = ss.getSheetByName(base);
+  const baseYear = String(getConfig()[CFG.YEAR] || defaultYear_());
+  if (legacy && y === baseYear) {
+    try { legacy.setName(`${base}_${y}`); } catch (e) { /* 이름을 못 바꾸면 그대로 쓴다 */ }
+    return legacy;
+  }
+  return null;
+}
+
+/** 예전 이름의 연도별 시트를 지정한 연도 이름으로 바꾼다 (기본 연도를 바꾸기 전에 호출) */
+function migrateLegacySheets_(ss, year) {
+  YEAR_SHEETS.forEach(base => {
+    const legacy = ss.getSheetByName(base);
+    if (legacy && !ss.getSheetByName(`${base}_${year}`)) legacy.setName(`${base}_${year}`);
+  });
 }
 
 /** 하반기에는 올해 귀속, 상반기(연말정산 진행 중)에는 작년 귀속 */
@@ -266,7 +330,11 @@ function initialize() {
   }
 
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '열람범위');
-  setupPeopleSheets_(ss);
+  // 연도별 시트: 예전 이름(대상자·응대기록·일정)이 있으면 기본 연도 이름으로 바꾸고, 없으면 새로 만든다
+  const year = String(getConfig()[CFG.YEAR] || defaultYear_());
+  migrateLegacySheets_(ss, year);
+  setupPeopleSheets_(ss, year);
+  setupEventSheet_(ss, year);
   setupNoticeSheets_(ss);
   setupRuleSheets_(ss);
   setupFileSheet_(ss);
@@ -275,7 +343,7 @@ function initialize() {
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n' +
     '1. [담당자] 시트에 이름·이메일·역할을 입력하세요.\n' +
-    '2. 기존 검토 시트 내용을 [대상자] 시트 2행부터 붙여넣으세요. (열 이름이 같으면 순서가 달라도 됩니다)\n' +
+    `2. 기존 검토 시트 내용을 [${SHEET.PEOPLE}_${year}] 시트 2행부터 붙여넣으세요. (열 이름이 같으면 순서가 달라도 됩니다)\n` +
     '3. 웹앱을 배포한 뒤 관리 메뉴에서 "권한 한 번에 적용"을 누르세요.');
 }
 
@@ -304,9 +372,15 @@ function applyProtections_(ctx) {
     const sh = ss.getSheetByName(name);
     if (sh) protectSheet_(sh, leaders.concat(admins));
   });
-  [SHEET.PEOPLE, SHEET.LOGS, NOTICE.SHEET, NOTICE.COMMENTS, FILES.SHEET].forEach(name => {
+  [NOTICE.SHEET, NOTICE.COMMENTS, FILES.SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
     if (sh) warnOnlyProtect_(sh);
+  });
+  // 연도별 시트(대상자_2026, 응대기록_2026, 일정_2026 …): 대상자·응대기록은 경고만, 일정은 총괄·관리자만
+  ss.getSheets().forEach(sh => {
+    const n = sh.getName();
+    if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
+    else if (new RegExp(`^${SHEET.EVENTS}_\\d{4}$`).test(n)) protectSheet_(sh, leaders.concat(admins));
   });
 }
 
@@ -390,10 +464,10 @@ function restrictEditors_(p, editors) {
 
 const LOG_KINDS = ['전화', '메일', '메신저', '방문', '보완요청', '기타'];
 
-function setupPeopleSheets_(ss) {
-  let sh = ss.getSheetByName(SHEET.PEOPLE);
+function setupPeopleSheets_(ss, year) {
+  let sh = yearSheet_(ss, SHEET.PEOPLE, year);
   if (!sh) {
-    sh = ss.insertSheet(SHEET.PEOPLE);
+    sh = ss.insertSheet(`${SHEET.PEOPLE}_${year}`);
     const header = COLS.concat(META_COLS).map(c => c.l);
     sh.getRange(1, 1, 1, header.length).setValues([header]);
     styleHeader_(sh.getRange(1, 1, 1, header.length));
@@ -417,8 +491,8 @@ function setupPeopleSheets_(ss) {
     });
   }
 
-  if (!ss.getSheetByName(SHEET.LOGS)) {
-    const lg = ss.insertSheet(SHEET.LOGS);
+  if (!yearSheet_(ss, SHEET.LOGS, year)) {
+    const lg = ss.insertSheet(`${SHEET.LOGS}_${year}`);
     lg.getRange(1, 1, 1, 6).setValues([['일시', '사원번호', '성명', '작성자', '구분', '내용']]);
     styleHeader_(lg.getRange(1, 1, 1, 6));
     lg.getRange('A2:A').setNumberFormat('yyyy-mm-dd hh:mm');
@@ -457,7 +531,7 @@ function rowToPerson_(r, map, row) {
 }
 
 function readPeople_(ss) {
-  const sh = ss.getSheetByName(SHEET.PEOPLE);
+  const sh = yearSheet_(ss, SHEET.PEOPLE);
   if (!sh || sh.getLastRow() < 2) return [];
   const map = colMap_(sh);
   return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues()
@@ -466,7 +540,7 @@ function readPeople_(ss) {
 }
 
 function readLogs_(ss) {
-  const sh = ss.getSheetByName(SHEET.LOGS);
+  const sh = yearSheet_(ss, SHEET.LOGS);
   if (!sh || sh.getLastRow() < 2) return [];
   return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
     .filter(r => String(r[5]).trim())
@@ -540,7 +614,7 @@ function apiSavePerson(id, patch) {
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
-    const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+    const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
     const found = readPersonRow_(sh, map, String(id));
     if (!found) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
@@ -603,7 +677,7 @@ function apiDeletePerson(id) {
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
-    const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+    const sh = peopleSheetOrThrow_(ctx.ss);
     const row = findPersonRow_(sh, colMap_(sh), String(id));
     if (row < 0) throw new Error('대상자를 찾을 수 없습니다.');
     sh.deleteRow(row);
@@ -627,7 +701,7 @@ function apiImportPeople(rows) {
   lock.waitLock(30000);
   let added = 0, updated = 0;
   try {
-    const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+    const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
     const width = sh.getLastColumn();
     const last = sh.getLastRow();
@@ -666,7 +740,7 @@ function apiAddLog(id, kind, body) {
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 응대기록을 남길 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('응대 내용을 입력해 주세요.');
-  const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+  const sh = peopleSheetOrThrow_(ctx.ss);
   const map = colMap_(sh);
   const found = readPersonRow_(sh, map, String(id));
   if (!found) throw new Error('대상자를 찾을 수 없습니다.');
@@ -674,7 +748,7 @@ function apiAddLog(id, kind, body) {
   if (!canSee_(me, p)) throw new Error('열람 범위 밖의 대상자입니다.');
   const now = new Date();
   const k = LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타';
-  ctx.ss.getSheetByName(SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
+  yearSheet_(ctx.ss, SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
   // 응대기록 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다
   const entry = { date: fmt(now, 'yyyy-MM-dd HH:mm'), empNo: p.empNo, name: p.name, author: me.name || me.email, kind: k, body: text };
   patchCache_(CK.logs, list => { list.unshift(entry); });
@@ -770,6 +844,121 @@ function apiTemplateLink(withPeople) {
   };
 }
 
+/** 보고 있는 연도의 대상자 시트 (없으면 안내) */
+function peopleSheetOrThrow_(ss) {
+  const sh = yearSheet_(ss, SHEET.PEOPLE);
+  if (!sh) throw new Error(`${viewYear_()}년 대상자 시트가 없습니다. 관리자에게 「새 연도 시작」을 요청하세요.`);
+  return sh;
+}
+
+// ===================================================================
+// Events.gs
+// ===================================================================
+
+/**
+ * 일정 (대시보드 캘린더). 구글 캘린더와 연결하지 않고 연도별 시트에 저장한다.
+ *
+ * [일정_2026]  번호 | 시작일 | 종료일 | 제목 | 구분 | 메모 | 작성자 | 삭제(Y)
+ *
+ * 누구나 조회, 총괄·관리자만 등록/수정/삭제.
+ */
+
+const EVENT_KINDS = ['마감', '일정', '교육', '휴무', '기타'];
+const ECOL = { ID: 1, START: 2, END: 3, TITLE: 4, KIND: 5, MEMO: 6, AUTHOR: 7, DELETED: 8 };
+
+function setupEventSheet_(ss, year) {
+  if (yearSheet_(ss, SHEET.EVENTS, year)) return;
+  const sh = ss.insertSheet(`${SHEET.EVENTS}_${year}`);
+  const header = ['번호', '시작일', '종료일', '제목', '구분', '메모', '작성자', '삭제(Y)'];
+  sh.getRange(1, 1, 1, header.length).setValues([header]);
+  styleHeader_(sh.getRange(1, 1, 1, header.length));
+  sh.getRange('B2:C').setNumberFormat('yyyy-mm-dd');
+  sh.getRange('E2:E').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_KINDS).build());
+  [50, 100, 100, 260, 70, 320, 80, 60].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  sh.setFrozenRows(1);
+  // 연말정산 기본 일정 예시 (회사 일정에 맞게 고쳐 쓰도록 표시). 지급명세서 제출 기한은 다음 해 3월 10일
+  const next = Number(year) + 1;
+  const d = s => parseDate_(s);
+  const rows = [
+    [1, d(`${next}-01-15`), '', '간소화 자료 조회 시작 (예시)', '일정', '국세청 연말정산 간소화 서비스 개시일을 확인해 고쳐 주세요', '설치 예시', ''],
+    [2, d(`${next}-01-31`), '', '직원 서류 제출 마감 (예시)', '마감', '', '설치 예시', ''],
+    [3, d(`${next}-02-01`), d(`${next}-02-10`), '1차 검토·보완 요청 (예시)', '일정', '', '설치 예시', ''],
+    [4, d(`${next}-03-10`), '', '근로소득 지급명세서 제출 기한', '마감', '', '설치 예시', ''],
+  ];
+  sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+}
+
+function readEvents_(ss) {
+  const sh = yearSheet_(ss, SHEET.EVENTS);
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, ECOL.DELETED).getValues()
+    .filter(r => String(r[0]) && cellText_(r[1]) && String(r[ECOL.DELETED - 1]).toUpperCase() !== 'Y')
+    .map(r => {
+      const start = cellText_(r[1]);
+      const end = cellText_(r[2]) || start;
+      return {
+        id: String(r[0]),
+        start: start,
+        end: end < start ? start : end,
+        title: String(r[3]),
+        kind: EVENT_KINDS.indexOf(String(r[4])) >= 0 ? String(r[4]) : '기타',
+        memo: String(r[5] || ''),
+        author: String(r[6] || ''),
+      };
+    })
+    .sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** 등록/수정. ev: { id?, start:'yyyy-mm-dd', end?, title, kind, memo } */
+function apiSaveEvent(ev) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'dash');
+  if (!me.isLeader && !me.isAdmin) throw new Error('일정은 총괄 또는 관리자만 등록·수정할 수 있습니다.');
+  const title = String(ev.title || '').trim();
+  const start = String(ev.start || '').trim();
+  const end = String(ev.end || '').trim();
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(start)) throw new Error('제목과 날짜를 입력해 주세요.');
+  if (end && end < start) throw new Error('종료일이 시작일보다 빠릅니다.');
+  const kind = EVENT_KINDS.indexOf(ev.kind) >= 0 ? ev.kind : '기타';
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  let id;
+  try {
+    let sh = yearSheet_(ctx.ss, SHEET.EVENTS);
+    if (!sh) { setupEventSheet_(ctx.ss, ctx.year); sh = yearSheet_(ctx.ss, SHEET.EVENTS); }
+    const last = sh.getLastRow();
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => String(v)) : [];
+    const values = [parseDate_(start), end && end !== start ? parseDate_(end) : '', title, kind, String(ev.memo || '').trim(), me.name || me.email];
+    id = String(ev.id || '');
+    const idx = id ? ids.indexOf(id) : -1;
+    if (idx >= 0) {
+      sh.getRange(idx + 2, ECOL.START, 1, values.length).setValues([values]);
+    } else {
+      id = String((ids.length ? Math.max.apply(null, ids.map(Number).filter(n => !isNaN(n))) : 0) + 1);
+      sh.getRange(last + 1, 1, 1, ECOL.DELETED).setValues([[id].concat(values, [''])]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  return Object.assign(refreshPart_('events'), { savedId: id });
+}
+
+function apiDeleteEvent(id) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'dash');
+  if (!me.isLeader && !me.isAdmin) throw new Error('일정은 총괄 또는 관리자만 삭제할 수 있습니다.');
+  const sh = yearSheet_(ctx.ss, SHEET.EVENTS);
+  if (!sh) throw new Error('일정 시트가 없습니다.');
+  const ids = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 1).getValues().map(([v]) => String(v));
+  const idx = ids.indexOf(String(id));
+  if (idx < 0) throw new Error('일정을 찾을 수 없습니다.');
+  sh.getRange(idx + 2, ECOL.DELETED).setValue('Y');
+  return refreshPart_('events');
+}
+
 // ===================================================================
 // Notice.gs
 // ===================================================================
@@ -791,21 +980,22 @@ const NOTICE = {
   LEVELS: ['긴급', '중요', '일반'],
 };
 
-const NCOL = { ID: 1, DATE: 2, AUTHOR: 3, CATEGORY: 4, LEVEL: 5, TITLE: 6, BODY: 7, START: 8, END: 9, PINNED: 10, DELETED: 11, FILES: 12, UPDATED: 13 };
+const NCOL = { ID: 1, DATE: 2, AUTHOR: 3, CATEGORY: 4, LEVEL: 5, TITLE: 6, BODY: 7, START: 8, END: 9, PINNED: 10, DELETED: 11, FILES: 12, UPDATED: 13, YEAR: 14 };
 
 function setupNoticeSheets_(ss) {
   if (!ss.getSheetByName(NOTICE.SHEET)) {
     const sh = ss.insertSheet(NOTICE.SHEET);
-    const header = ['번호', '작성일시', '작성자', '분류', '중요도', '제목', '내용', '게시시작', '게시종료', '고정(Y)', '삭제(Y)', '첨부', '수정일시'];
+    const header = ['번호', '작성일시', '작성자', '분류', '중요도', '제목', '내용', '게시시작', '게시종료', '고정(Y)', '삭제(Y)', '첨부', '수정일시', '귀속연도'];
     sh.getRange(1, 1, 1, header.length).setValues([header]);
     styleHeader_(sh.getRange(1, 1, 1, header.length));
     sh.getRange('B2:B').setNumberFormat('yyyy-mm-dd hh:mm');
     sh.getRange('H2:I').setNumberFormat('yyyy-mm-dd');
     sh.getRange('M2:M').setNumberFormat('yyyy-mm-dd hh:mm');
     sh.getRange('G2:G').setWrap(true);
-    [50, 130, 80, 80, 60, 260, 420, 100, 100, 60, 60, 200, 130].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+    [50, 130, 80, 80, 60, 260, 420, 100, 100, 60, 60, 200, 130, 80].forEach((w, i) => sh.setColumnWidth(i + 1, w));
     sh.setFrozenRows(1);
   }
+  ensureHeader_(ss.getSheetByName(NOTICE.SHEET), NCOL.YEAR, '귀속연도');
   if (!ss.getSheetByName(NOTICE.COMMENTS)) {
     const sh = ss.insertSheet(NOTICE.COMMENTS);
     sh.getRange(1, 1, 1, 4).setValues([['번호', '작성일시', '작성자', '내용']]);
@@ -837,8 +1027,11 @@ function readNotices_(ss) {
   }
 
   const dt = v => v instanceof Date ? fmt(v, 'yyyy-MM-dd HH:mm') : String(v || '');
-  return sh.getRange(2, 1, sh.getLastRow() - 1, NCOL.UPDATED).getValues()
+  // 보고 있는 연도의 글 + 연도가 비어 있는 글(예전 글·공통)
+  const year = viewYear_();
+  return sh.getRange(2, 1, sh.getLastRow() - 1, NCOL.YEAR).getValues()
     .filter(r => String(r[0]) && String(r[NCOL.DELETED - 1]).toUpperCase() !== 'Y')
+    .filter(r => !cellText_(r[NCOL.YEAR - 1]) || cellText_(r[NCOL.YEAR - 1]) === year)
     .map(r => ({
       id: String(r[0]),
       date: dt(r[1]),
@@ -892,7 +1085,7 @@ function apiSaveNotice(n) {
       sh.getRange(idx + 2, NCOL.FILES, 1, 2).setValues([[filesToCell_(n.files), now]]);
     } else {
       id = String((rows.length ? Math.max.apply(null, rows.map(r => Number(r[0]) || 0)) : 0) + 1);
-      sh.getRange(last + 1, 1, 1, NCOL.UPDATED).setValues([[id, now, me.name || me.email].concat(values, ['', filesToCell_(n.files), now])]);
+      sh.getRange(last + 1, 1, 1, NCOL.YEAR).setValues([[id, now, me.name || me.email].concat(values, ['', filesToCell_(n.files), now, viewYear_()])]);
     }
   } finally {
     lock.releaseLock();
@@ -1045,7 +1238,9 @@ function readRules_(ss) {
       editor: String(r[8] || ''),
       files: filesFromCell_(r[RCOL.FILES - 1]),
       history: (history[String(r[0])] || []).reverse(),
-    }));
+    }))
+    // 보고 있는 연도의 기준 + 적용 연도가 비어 있는 기준(공통)
+    .filter(r => !r.year || r.year === viewYear_());
 }
 
 /** 등록/수정. rule: { id?, category, title, body, year, owner, link, changeNote, files } */
@@ -1126,16 +1321,16 @@ const FILES = {
   MENU: { person: 'review', notice: 'notice', rules: 'rules', etc: 'files' },
 };
 
-const FCOL = { ID: 1, DATE: 2, UPLOADER: 3, AREA: 4, REF: 5, REF_LABEL: 6, NAME: 7, URL: 8, SIZE: 9, MIME: 10, MEMO: 11, DELETED: 12 };
+const FCOL = { ID: 1, DATE: 2, UPLOADER: 3, AREA: 4, REF: 5, REF_LABEL: 6, NAME: 7, URL: 8, SIZE: 9, MIME: 10, MEMO: 11, DELETED: 12, YEAR: 13 };
 
 function setupFileSheet_(ss) {
-  if (ss.getSheetByName(FILES.SHEET)) return;
+  if (ss.getSheetByName(FILES.SHEET)) { ensureHeader_(ss.getSheetByName(FILES.SHEET), FCOL.YEAR, '귀속연도'); return; }
   const sh = ss.insertSheet(FILES.SHEET);
-  const header = ['파일ID', '올린일시', '올린사람', '구분', '대상번호', '대상', '파일명', 'URL', '크기', '형식', '메모', '삭제(Y)'];
+  const header = ['파일ID', '올린일시', '올린사람', '구분', '대상번호', '대상', '파일명', 'URL', '크기', '형식', '메모', '삭제(Y)', '귀속연도'];
   sh.getRange(1, 1, 1, header.length).setValues([header]);
   styleHeader_(sh.getRange(1, 1, 1, header.length));
   sh.getRange('B2:B').setNumberFormat('yyyy-mm-dd hh:mm');
-  [120, 130, 80, 100, 80, 160, 260, 220, 80, 120, 200, 60].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  [120, 130, 80, 100, 80, 160, 260, 220, 80, 120, 200, 60, 80].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.hideColumns(1);
   sh.setFrozenRows(1);
 }
@@ -1194,7 +1389,7 @@ function registerFiles_(area, ref, refLabel, files, me, memo) {
   const have = new Set(last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => String(v)) : []);
   const now = new Date();
   const rows = list.filter(f => !have.has(String(f.id))).map(f => [
-    String(f.id), now, me.name || me.email, FILES.AREAS[area], ref, refLabel, String(f.name), String(f.url || ''), Number(f.size) || 0, String(f.mime || ''), memo || '', '',
+    String(f.id), now, me.name || me.email, FILES.AREAS[area], ref, refLabel, String(f.name), String(f.url || ''), Number(f.size) || 0, String(f.mime || ''), memo || '', '', viewYear_(),
   ]);
   if (rows.length) sh.getRange(last + 1, 1, rows.length, rows[0].length).setValues(rows);
   dropCache_(CK.files);
@@ -1205,8 +1400,10 @@ function readFiles_(ss) {
   if (!sh || sh.getLastRow() < 2) return [];
   const areaKey = {};
   Object.keys(FILES.AREAS).forEach(k => { areaKey[FILES.AREAS[k]] = k; });
-  return sh.getRange(2, 1, sh.getLastRow() - 1, FCOL.DELETED).getValues()
+  const year = viewYear_();
+  return sh.getRange(2, 1, sh.getLastRow() - 1, FCOL.YEAR).getValues()
     .filter(r => String(r[0]) && String(r[FCOL.DELETED - 1]).toUpperCase() !== 'Y')
+    .filter(r => !cellText_(r[FCOL.YEAR - 1]) || cellText_(r[FCOL.YEAR - 1]) === year)
     .map(r => ({
       id: String(r[0]),
       date: r[1] instanceof Date ? fmt(r[1], 'yyyy-MM-dd HH:mm') : String(r[1]),
@@ -1360,7 +1557,8 @@ function adminData_(ctx, useCache) {
     menuAccess: getMenuAccess_(),
     settings: {
       team: String(cfg[CFG.TEAM] || ''),
-      year: ctx.year,
+      year: ctx.baseYear,
+      years: ctx.years,
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -1477,12 +1675,88 @@ function apiSaveSettings(s) {
   const ctx = getContext();
   requireAdmin_(ctx);
   const year = String(s.year || '').trim();
-  if (!/^\d{4}$/.test(year)) throw new Error('귀속연도는 2026처럼 네 자리로 입력해 주세요.');
+  if (!/^\d{4}$/.test(year)) throw new Error('기본 연도는 2026처럼 네 자리로 입력해 주세요.');
+  if (year !== ctx.baseYear) {
+    if (ctx.years.indexOf(year) < 0) throw new Error(`${year}년 시트가 아직 없습니다. 「새 연도 시작」으로 만들어 주세요.`);
+    // 예전 이름의 시트가 남아 있으면 지금 기본 연도 이름으로 먼저 고정한다
+    migrateLegacySheets_(ctx.ss, ctx.baseYear);
+  }
   setConfigValue(CFG.TEAM, String(s.team || '').trim());
   setConfigValue(CFG.YEAR, Number(year));
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_();
   return adminData_(getContext(), false);
+}
+
+/* ---------- 새 연도 시작 ---------- */
+
+/**
+ * opts: { year, carry: 이전 연도 대상자의 기본 정보·담당 가져오기, copyRules: 기준 복사, makeBase: 기본 연도로 지정 }
+ * 대상자_YYYY·응대기록_YYYY·일정_YYYY 시트를 만든다. 이전 연도 시트는 그대로 남아 연도 선택으로 볼 수 있다.
+ */
+function apiStartYear(opts) {
+  const ctx = getContext();
+  const me = requireAdmin_(ctx);
+  const year = String(opts && opts.year || '').trim();
+  if (!/^\d{4}$/.test(year)) throw new Error('연도는 2027처럼 네 자리로 입력해 주세요.');
+  if (ctx.years.indexOf(year) >= 0 && ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`)) throw new Error(`${year}년은 이미 있습니다.`);
+  const from = String(opts.from || ctx.baseYear);
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  let carried = 0, copied = 0;
+  try {
+    migrateLegacySheets_(ctx.ss, ctx.baseYear);
+    setupPeopleSheets_(ctx.ss, year);
+    setupEventSheet_(ctx.ss, year);
+
+    // 이전 연도 명단: 기본 정보와 담당 배정만 가져오고, 진행 체크·특이사항은 비운다
+    if (opts.carry) {
+      const src = ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${from}`);
+      const dst = ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`);
+      if (src && src.getLastRow() >= 2) {
+        const smap = colMap_(src), dmap = colMap_(dst);
+        const keep = COLS.filter(c => c.who === 'info' || c.who === 'assign');
+        const rows = src.getRange(2, 1, src.getLastRow() - 1, src.getLastColumn()).getValues()
+          .filter(r => keep.some(c => smap[c.k] && String(r[smap[c.k] - 1]).trim()))
+          .map(r => {
+            const out = new Array(dst.getLastColumn()).fill('');
+            keep.forEach(c => { if (smap[c.k] && dmap[c.k]) out[dmap[c.k] - 1] = c.t === 'bool' ? (boolOf_(c, r[smap[c.k] - 1]) ? 'O' : '') : r[smap[c.k] - 1]; });
+            return out;
+          });
+        if (rows.length) dst.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+        carried = rows.length;
+      }
+    }
+
+    // 기준 복사: 이전 연도 기준을 새 연도로 한 벌 더 만든다 (개정 이력은 새로 시작)
+    if (opts.copyRules) {
+      const sh = ctx.ss.getSheetByName(RULES.SHEET);
+      const hsh = ctx.ss.getSheetByName(RULES.HISTORY);
+      if (sh && sh.getLastRow() >= 2) {
+        const all = sh.getRange(2, 1, sh.getLastRow() - 1, RCOL.FILES).getValues();
+        let next = Math.max.apply(null, all.map(r => Number(r[0]) || 0)) + 1;
+        const now = new Date();
+        const rows = all.filter(r => String(r[0]) && String(r[RCOL.DELETED - 1]).toUpperCase() !== 'Y' && cellText_(r[RCOL.YEAR - 1]) === from)
+          .map(r => { const x = r.slice(); x[0] = next++; x[RCOL.YEAR - 1] = year; x[RCOL.UPDATED - 1] = now; x[RCOL.EDITOR - 1] = me.name || me.email; return x; });
+        if (rows.length) {
+          sh.getRange(sh.getLastRow() + 1, 1, rows.length, RCOL.FILES).setValues(rows);
+          hsh.getRange(hsh.getLastRow() + 1, 1, rows.length, 4).setValues(rows.map(x => [String(x[0]), now, me.name || me.email, `${from}년 기준에서 복사`]));
+        }
+        copied = rows.length;
+      }
+    }
+
+    if (opts.makeBase !== false) setConfigValue(CFG.YEAR, Number(year));
+    try { applyProtections_(getContext()); } catch (e) { /* 보호는 권한 한 번에 적용에서 다시 걸 수 있다 */ }
+  } finally {
+    lock.releaseLock();
+  }
+  clearCaches_();
+  // 시작한 관리자는 바로 새 연도를 보게 한다
+  PropertiesService.getUserProperties().setProperty('VIEW_YEAR', year);
+  VIEW_MEMO_ = null;
+  return { carried: carried, copied: copied, data: adminData_(getContext(), true) };
 }
 
 /* ---------- 권한 한 번에 적용 ---------- */
@@ -1601,12 +1875,14 @@ function doGet() {
 
 const CACHE_TTL = 60;
 const CHUNK = 90000;
+// 연도별 데이터는 보고 있는 연도를 붙여 따로 캐시한다 (people:2026, people:2027 …)
 const CK = {
-  people: 'people',
-  logs: 'logs',
-  notices: 'notices',
-  rules: 'rules',
-  files: 'files',
+  get people() { return 'people:' + viewYear_(); },
+  get logs() { return 'logs:' + viewYear_(); },
+  get notices() { return 'notices:' + viewYear_(); },
+  get rules() { return 'rules:' + viewYear_(); },
+  get files() { return 'files:' + viewYear_(); },
+  get events() { return 'events:' + viewYear_(); },
   owner: 'owner',
   ctx: 'ctx',
 };
@@ -1667,11 +1943,14 @@ function dropCache_(key) {
 
 function clearCaches_() {
   try {
-    CacheService.getDocumentCache().removeAll([CK.people, CK.logs, CK.notices, CK.rules, CK.files, CK.ctx, 'menus', 'access']);
+    const keys = [CK.ctx, 'menus', 'access'];
+    const years = yearsWith_(findYears_(), String(getConfig()[CFG.YEAR] || defaultYear_()));
+    years.forEach(y => ['people', 'logs', 'notices', 'rules', 'files', 'events'].forEach(k => keys.push(`${k}:${y}`)));
+    CacheService.getDocumentCache().removeAll(keys);
   } catch (e) { /* 캐시 없음 */ }
 }
 
-const READERS = { people: readPeople_, logs: readLogs_, notices: readNotices_, rules: readRules_, files: readFiles_ };
+const READERS = { people: readPeople_, logs: readLogs_, notices: readNotices_, rules: readRules_, files: readFiles_, events: readEvents_ };
 
 /** 저장 후 바뀐 부분만 새로 읽어 캐시에 넣고 화면에 돌려준다 */
 function refreshPart_(part) {
@@ -1734,6 +2013,10 @@ function apiBootstrap() {
   return {
     team: String(ctx.cfg[CFG.TEAM] || '연말정산 검토'),
     year: ctx.year,
+    baseYear: ctx.baseYear,
+    years: ctx.years,
+    eventKinds: EVENT_KINDS,
+    events: can('dash') ? cached_(CK.events, () => readEvents_(ss)) : [],
     sheetUrl: ss.getUrl(),
     me: me,
     staff: ctx.members.map(m => ({ name: m.name, role: m.role })),
@@ -1750,6 +2033,16 @@ function apiBootstrap() {
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
     files: can('files') || can('review') ? forMe_('files', cached_(CK.files, () => readFiles_(ss)), me) : [],
   };
+}
+
+/** 보는 연도 바꾸기 (사람마다 따로 저장). 바꾼 연도의 화면 데이터를 돌려준다 */
+function apiSetYear(year) {
+  const ctx = getContext();
+  const y = String(year || '');
+  if (ctx.years.indexOf(y) < 0) throw new Error(`${y}년 자료가 없습니다.`);
+  PropertiesService.getUserProperties().setProperty('VIEW_YEAR', y);
+  VIEW_MEMO_ = null;
+  return apiBootstrap();
 }
 
 /** 접속자 → 담당자 정보 */

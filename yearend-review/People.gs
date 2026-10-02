@@ -7,10 +7,10 @@
 
 const LOG_KINDS = ['전화', '메일', '메신저', '방문', '보완요청', '기타'];
 
-function setupPeopleSheets_(ss) {
-  let sh = ss.getSheetByName(SHEET.PEOPLE);
+function setupPeopleSheets_(ss, year) {
+  let sh = yearSheet_(ss, SHEET.PEOPLE, year);
   if (!sh) {
-    sh = ss.insertSheet(SHEET.PEOPLE);
+    sh = ss.insertSheet(`${SHEET.PEOPLE}_${year}`);
     const header = COLS.concat(META_COLS).map(c => c.l);
     sh.getRange(1, 1, 1, header.length).setValues([header]);
     styleHeader_(sh.getRange(1, 1, 1, header.length));
@@ -34,8 +34,8 @@ function setupPeopleSheets_(ss) {
     });
   }
 
-  if (!ss.getSheetByName(SHEET.LOGS)) {
-    const lg = ss.insertSheet(SHEET.LOGS);
+  if (!yearSheet_(ss, SHEET.LOGS, year)) {
+    const lg = ss.insertSheet(`${SHEET.LOGS}_${year}`);
     lg.getRange(1, 1, 1, 6).setValues([['일시', '사원번호', '성명', '작성자', '구분', '내용']]);
     styleHeader_(lg.getRange(1, 1, 1, 6));
     lg.getRange('A2:A').setNumberFormat('yyyy-mm-dd hh:mm');
@@ -74,7 +74,7 @@ function rowToPerson_(r, map, row) {
 }
 
 function readPeople_(ss) {
-  const sh = ss.getSheetByName(SHEET.PEOPLE);
+  const sh = yearSheet_(ss, SHEET.PEOPLE);
   if (!sh || sh.getLastRow() < 2) return [];
   const map = colMap_(sh);
   return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues()
@@ -83,7 +83,7 @@ function readPeople_(ss) {
 }
 
 function readLogs_(ss) {
-  const sh = ss.getSheetByName(SHEET.LOGS);
+  const sh = yearSheet_(ss, SHEET.LOGS);
   if (!sh || sh.getLastRow() < 2) return [];
   return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
     .filter(r => String(r[5]).trim())
@@ -157,7 +157,7 @@ function apiSavePerson(id, patch) {
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
-    const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+    const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
     const found = readPersonRow_(sh, map, String(id));
     if (!found) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
@@ -220,7 +220,7 @@ function apiDeletePerson(id) {
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
-    const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+    const sh = peopleSheetOrThrow_(ctx.ss);
     const row = findPersonRow_(sh, colMap_(sh), String(id));
     if (row < 0) throw new Error('대상자를 찾을 수 없습니다.');
     sh.deleteRow(row);
@@ -244,7 +244,7 @@ function apiImportPeople(rows) {
   lock.waitLock(30000);
   let added = 0, updated = 0;
   try {
-    const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+    const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
     const width = sh.getLastColumn();
     const last = sh.getLastRow();
@@ -283,7 +283,7 @@ function apiAddLog(id, kind, body) {
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 응대기록을 남길 수 있습니다.');
   const text = String(body || '').trim();
   if (!text) throw new Error('응대 내용을 입력해 주세요.');
-  const sh = ctx.ss.getSheetByName(SHEET.PEOPLE);
+  const sh = peopleSheetOrThrow_(ctx.ss);
   const map = colMap_(sh);
   const found = readPersonRow_(sh, map, String(id));
   if (!found) throw new Error('대상자를 찾을 수 없습니다.');
@@ -291,7 +291,7 @@ function apiAddLog(id, kind, body) {
   if (!canSee_(me, p)) throw new Error('열람 범위 밖의 대상자입니다.');
   const now = new Date();
   const k = LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타';
-  ctx.ss.getSheetByName(SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
+  yearSheet_(ctx.ss, SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
   // 응대기록 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다
   const entry = { date: fmt(now, 'yyyy-MM-dd HH:mm'), empNo: p.empNo, name: p.name, author: me.name || me.email, kind: k, body: text };
   patchCache_(CK.logs, list => { list.unshift(entry); });
@@ -385,4 +385,11 @@ function apiTemplateLink(withPeople) {
     fileName: `연말정산_대상자_${withPeople ? '명단' : '양식'}_${stamp}.xlsx`,
     count: count,
   };
+}
+
+/** 보고 있는 연도의 대상자 시트 (없으면 안내) */
+function peopleSheetOrThrow_(ss) {
+  const sh = yearSheet_(ss, SHEET.PEOPLE);
+  if (!sh) throw new Error(`${viewYear_()}년 대상자 시트가 없습니다. 관리자에게 「새 연도 시작」을 요청하세요.`);
+  return sh;
 }

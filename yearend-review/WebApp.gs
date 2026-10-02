@@ -25,12 +25,14 @@ function doGet() {
 
 const CACHE_TTL = 60;
 const CHUNK = 90000;
+// 연도별 데이터는 보고 있는 연도를 붙여 따로 캐시한다 (people:2026, people:2027 …)
 const CK = {
-  people: 'people',
-  logs: 'logs',
-  notices: 'notices',
-  rules: 'rules',
-  files: 'files',
+  get people() { return 'people:' + viewYear_(); },
+  get logs() { return 'logs:' + viewYear_(); },
+  get notices() { return 'notices:' + viewYear_(); },
+  get rules() { return 'rules:' + viewYear_(); },
+  get files() { return 'files:' + viewYear_(); },
+  get events() { return 'events:' + viewYear_(); },
   owner: 'owner',
   ctx: 'ctx',
 };
@@ -91,11 +93,14 @@ function dropCache_(key) {
 
 function clearCaches_() {
   try {
-    CacheService.getDocumentCache().removeAll([CK.people, CK.logs, CK.notices, CK.rules, CK.files, CK.ctx, 'menus', 'access']);
+    const keys = [CK.ctx, 'menus', 'access'];
+    const years = yearsWith_(findYears_(), String(getConfig()[CFG.YEAR] || defaultYear_()));
+    years.forEach(y => ['people', 'logs', 'notices', 'rules', 'files', 'events'].forEach(k => keys.push(`${k}:${y}`)));
+    CacheService.getDocumentCache().removeAll(keys);
   } catch (e) { /* 캐시 없음 */ }
 }
 
-const READERS = { people: readPeople_, logs: readLogs_, notices: readNotices_, rules: readRules_, files: readFiles_ };
+const READERS = { people: readPeople_, logs: readLogs_, notices: readNotices_, rules: readRules_, files: readFiles_, events: readEvents_ };
 
 /** 저장 후 바뀐 부분만 새로 읽어 캐시에 넣고 화면에 돌려준다 */
 function refreshPart_(part) {
@@ -158,6 +163,10 @@ function apiBootstrap() {
   return {
     team: String(ctx.cfg[CFG.TEAM] || '연말정산 검토'),
     year: ctx.year,
+    baseYear: ctx.baseYear,
+    years: ctx.years,
+    eventKinds: EVENT_KINDS,
+    events: can('dash') ? cached_(CK.events, () => readEvents_(ss)) : [],
     sheetUrl: ss.getUrl(),
     me: me,
     staff: ctx.members.map(m => ({ name: m.name, role: m.role })),
@@ -174,6 +183,16 @@ function apiBootstrap() {
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
     files: can('files') || can('review') ? forMe_('files', cached_(CK.files, () => readFiles_(ss)), me) : [],
   };
+}
+
+/** 보는 연도 바꾸기 (사람마다 따로 저장). 바꾼 연도의 화면 데이터를 돌려준다 */
+function apiSetYear(year) {
+  const ctx = getContext();
+  const y = String(year || '');
+  if (ctx.years.indexOf(y) < 0) throw new Error(`${y}년 자료가 없습니다.`);
+  PropertiesService.getUserProperties().setProperty('VIEW_YEAR', y);
+  VIEW_MEMO_ = null;
+  return apiBootstrap();
 }
 
 /** 접속자 → 담당자 정보 */

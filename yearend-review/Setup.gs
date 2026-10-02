@@ -52,7 +52,11 @@ function initialize() {
   }
 
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '열람범위');
-  setupPeopleSheets_(ss);
+  // 연도별 시트: 예전 이름(대상자·응대기록·일정)이 있으면 기본 연도 이름으로 바꾸고, 없으면 새로 만든다
+  const year = String(getConfig()[CFG.YEAR] || defaultYear_());
+  migrateLegacySheets_(ss, year);
+  setupPeopleSheets_(ss, year);
+  setupEventSheet_(ss, year);
   setupNoticeSheets_(ss);
   setupRuleSheets_(ss);
   setupFileSheet_(ss);
@@ -61,7 +65,7 @@ function initialize() {
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n' +
     '1. [담당자] 시트에 이름·이메일·역할을 입력하세요.\n' +
-    '2. 기존 검토 시트 내용을 [대상자] 시트 2행부터 붙여넣으세요. (열 이름이 같으면 순서가 달라도 됩니다)\n' +
+    `2. 기존 검토 시트 내용을 [${SHEET.PEOPLE}_${year}] 시트 2행부터 붙여넣으세요. (열 이름이 같으면 순서가 달라도 됩니다)\n` +
     '3. 웹앱을 배포한 뒤 관리 메뉴에서 "권한 한 번에 적용"을 누르세요.');
 }
 
@@ -90,9 +94,15 @@ function applyProtections_(ctx) {
     const sh = ss.getSheetByName(name);
     if (sh) protectSheet_(sh, leaders.concat(admins));
   });
-  [SHEET.PEOPLE, SHEET.LOGS, NOTICE.SHEET, NOTICE.COMMENTS, FILES.SHEET].forEach(name => {
+  [NOTICE.SHEET, NOTICE.COMMENTS, FILES.SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
     if (sh) warnOnlyProtect_(sh);
+  });
+  // 연도별 시트(대상자_2026, 응대기록_2026, 일정_2026 …): 대상자·응대기록은 경고만, 일정은 총괄·관리자만
+  ss.getSheets().forEach(sh => {
+    const n = sh.getName();
+    if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
+    else if (new RegExp(`^${SHEET.EVENTS}_\\d{4}$`).test(n)) protectSheet_(sh, leaders.concat(admins));
   });
 }
 

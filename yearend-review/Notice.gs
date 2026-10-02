@@ -15,21 +15,22 @@ const NOTICE = {
   LEVELS: ['긴급', '중요', '일반'],
 };
 
-const NCOL = { ID: 1, DATE: 2, AUTHOR: 3, CATEGORY: 4, LEVEL: 5, TITLE: 6, BODY: 7, START: 8, END: 9, PINNED: 10, DELETED: 11, FILES: 12, UPDATED: 13 };
+const NCOL = { ID: 1, DATE: 2, AUTHOR: 3, CATEGORY: 4, LEVEL: 5, TITLE: 6, BODY: 7, START: 8, END: 9, PINNED: 10, DELETED: 11, FILES: 12, UPDATED: 13, YEAR: 14 };
 
 function setupNoticeSheets_(ss) {
   if (!ss.getSheetByName(NOTICE.SHEET)) {
     const sh = ss.insertSheet(NOTICE.SHEET);
-    const header = ['번호', '작성일시', '작성자', '분류', '중요도', '제목', '내용', '게시시작', '게시종료', '고정(Y)', '삭제(Y)', '첨부', '수정일시'];
+    const header = ['번호', '작성일시', '작성자', '분류', '중요도', '제목', '내용', '게시시작', '게시종료', '고정(Y)', '삭제(Y)', '첨부', '수정일시', '귀속연도'];
     sh.getRange(1, 1, 1, header.length).setValues([header]);
     styleHeader_(sh.getRange(1, 1, 1, header.length));
     sh.getRange('B2:B').setNumberFormat('yyyy-mm-dd hh:mm');
     sh.getRange('H2:I').setNumberFormat('yyyy-mm-dd');
     sh.getRange('M2:M').setNumberFormat('yyyy-mm-dd hh:mm');
     sh.getRange('G2:G').setWrap(true);
-    [50, 130, 80, 80, 60, 260, 420, 100, 100, 60, 60, 200, 130].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+    [50, 130, 80, 80, 60, 260, 420, 100, 100, 60, 60, 200, 130, 80].forEach((w, i) => sh.setColumnWidth(i + 1, w));
     sh.setFrozenRows(1);
   }
+  ensureHeader_(ss.getSheetByName(NOTICE.SHEET), NCOL.YEAR, '귀속연도');
   if (!ss.getSheetByName(NOTICE.COMMENTS)) {
     const sh = ss.insertSheet(NOTICE.COMMENTS);
     sh.getRange(1, 1, 1, 4).setValues([['번호', '작성일시', '작성자', '내용']]);
@@ -61,8 +62,11 @@ function readNotices_(ss) {
   }
 
   const dt = v => v instanceof Date ? fmt(v, 'yyyy-MM-dd HH:mm') : String(v || '');
-  return sh.getRange(2, 1, sh.getLastRow() - 1, NCOL.UPDATED).getValues()
+  // 보고 있는 연도의 글 + 연도가 비어 있는 글(예전 글·공통)
+  const year = viewYear_();
+  return sh.getRange(2, 1, sh.getLastRow() - 1, NCOL.YEAR).getValues()
     .filter(r => String(r[0]) && String(r[NCOL.DELETED - 1]).toUpperCase() !== 'Y')
+    .filter(r => !cellText_(r[NCOL.YEAR - 1]) || cellText_(r[NCOL.YEAR - 1]) === year)
     .map(r => ({
       id: String(r[0]),
       date: dt(r[1]),
@@ -116,7 +120,7 @@ function apiSaveNotice(n) {
       sh.getRange(idx + 2, NCOL.FILES, 1, 2).setValues([[filesToCell_(n.files), now]]);
     } else {
       id = String((rows.length ? Math.max.apply(null, rows.map(r => Number(r[0]) || 0)) : 0) + 1);
-      sh.getRange(last + 1, 1, 1, NCOL.UPDATED).setValues([[id, now, me.name || me.email].concat(values, ['', filesToCell_(n.files), now])]);
+      sh.getRange(last + 1, 1, 1, NCOL.YEAR).setValues([[id, now, me.name || me.email].concat(values, ['', filesToCell_(n.files), now, viewYear_()])]);
     }
   } finally {
     lock.releaseLock();

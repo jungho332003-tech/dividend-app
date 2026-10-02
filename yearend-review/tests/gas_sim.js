@@ -66,6 +66,7 @@ function makeEnv() {
   const books = {};
   const ss = {
     getSheetByName: n => sheets.find(s => s.name === n) || null,
+    getSheets: () => sheets,
     insertSheet: n => { const s = new Sheet(n, sid++); sheets.push(s); return s; },
     getUrl: () => 'https://sheet', getName: () => '연말정산 검토', getId: () => 'SSID',
     setSpreadsheetTimeZone() {}, getOwner: () => ({ getEmail: () => 'owner@x.com' }),
@@ -111,7 +112,7 @@ function makeEnv() {
     HtmlService: { createHtmlOutputFromFile: () => chain, createHtmlOutput: () => chain },
   };
   vm.createContext(g);
-  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, setupProtections, apiTemplateLink, CtxDate: Date };', g);
+  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiSetYear, CtxDate: Date };', g);
   return { api: g.__api, ss, state, cacheStore, books };
 }
 

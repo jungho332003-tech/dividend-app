@@ -50,7 +50,7 @@ window.MockApi = (function () {
     o.prevWork = !!(o.prevWork || o.prevCount);
     ['manual', 'prevCount', 'rentLoan', 'mort', 'mortPrev', 'saving', 'rent'].forEach(k => delete o[k]);
     const p = Object.assign(blank(), o); p.id = p.empNo; p.updated = p.updated || '2027-02-03 17:20'; p.editor = p.editor || p.owner || ''; return p; };
-  const people = [
+  let people = [
     person({ no: '1', dept: '인사팀', empNo: '20110321', name: '오민재', subgroup: '정규직', payArea: '본사', rank: '차장', phone: '010-2201-1101', email: 'minjae.oh@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, review2: true, rentApply: true, rent: '7,200,000', note1: '월세 계약서 주소와 주민등록 주소 일치 확인함', editor: '최유나', updated: '2027-02-03 15:02' }),
     person({ no: '2', dept: '재무팀', empNo: '20150702', name: '서지안', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1102', email: 'jian.seo@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, mortApply: true, mort: '4,350,000', mortNts: true, mortPrev: 'O (2019-03-15)', note1: '부친 인적공제 — 동생(타사 재직)과 중복 여부 본인 확인 완료, 동생은 공제 안 함' }),
     person({ no: '3', dept: '영업1팀', empNo: '20180115', name: '윤하람', subgroup: '정규직', payArea: '본사', rank: '대리', phone: '010-2201-1103', email: 'haram.yoon@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, missing: '안경 구입 영수증(간소화 자료 없음), 월세 이체 내역 12월분', rentApply: true, rent: '6,000,000', note1: '의료비 중 실손보험 수령액 차감 필요 — 보험사 확인서 요청' }),
@@ -84,7 +84,7 @@ window.MockApi = (function () {
     person({ no: '30', dept: '연구소', empNo: '20220103', name: '도아름', subgroup: '정규직', payArea: '연구소', rank: '선임', phone: '010-2201-1130', email: 'areum.do@example.com', owner: '', owner2: '', ehr: true, note1: '배우자 카드 사용분 공제 문의 — 배우자 소득 확인 필요' }),
   ];
 
-  const logs = [
+  let logs = [
     { date: '2027-02-04 09:40', empNo: '20120905', name: '노승현', author: '김도현', kind: '전화', body: '모친 중복공제 — 형과 상의 후 2/5까지 누가 공제할지 알려주기로 함' },
     { date: '2027-02-04 09:05', empNo: '20150603', name: '석준기', author: '이수민', kind: '보완요청', body: '이자상환증명서·등기사항증명서 요청 메일 발송' },
     { date: '2027-02-03 17:50', empNo: '20230310', name: '리밍', author: '김도현', kind: '방문', body: '단일세율과 일반 정산 비교표 보여주고 설명함. 본인이 일반 정산 선택' },
@@ -102,11 +102,13 @@ window.MockApi = (function () {
   ];
 
   const notices = [
-    { id: '5', date: '2027-02-03 18:00', author: '정해린', category: '공지', level: '긴급', title: '미비서류 보완 마감 2/10(수) 18시', body: '보완 요청한 직원은 2/10(수) 18시까지 받아주세요.\n마감 후 들어온 서류는 3월 급여 재정산으로 처리합니다.\n미비서류 칸이 비어 있어야 검토완료로 넘어갑니다.', start: '2027-02-01', end: '2027-02-10', pinned: true, files: [], updated: '2027-02-03 18:00', comments: [{ date: '2027-02-03 18:20', author: '박지호', body: '휴직자도 같은 마감인가요?' }, { date: '2027-02-03 18:31', author: '정해린', body: '휴직자는 2/12(금)까지 받아주세요.' }] },
-    { id: '4', date: '2027-02-02 09:00', author: '정해린', category: '응대지침', level: '중요', title: '부양가족 중복공제 확인 방법', body: '맞벌이·형제가 같은 부모님을 공제하는 사례가 많습니다.\n1. 본인에게 다른 가족의 공제 여부를 확인\n2. 확인한 내용은 특이사항 칸에 적기\n3. 중복이 의심되면 2차 검토 담당자에게 메신저로 알려주세요', start: '', end: '', pinned: true, files: [F('부양가족_중복확인_체크리스트.pdf', 214000)], updated: '2027-02-02 09:00', comments: [] },
-    { id: '3', date: '2027-01-27 13:40', author: '이수민', category: '자료', title: '종전근무지 원천징수영수증 요청 안내문', level: '일반', body: '중도입사자에게 보내는 안내문입니다. 필요하면 복사해서 쓰세요.', start: '', end: '', pinned: false, files: [F('종전근무지_서류요청_안내문.hwp', 31744)], updated: '2027-01-27 13:40', comments: [{ date: '2027-01-27 14:02', author: '김도현', body: '감사합니다!' }] },
-    { id: '2', date: '2027-01-20 10:10', author: '박지호', category: '질문', title: '안경 구입비는 1인당 얼마까지인가요?', level: '일반', body: '직원 문의가 와서요. 기준 메뉴에 없어서 여쭤봅니다.', start: '', end: '', pinned: false, files: [], updated: '2027-01-20 10:10', comments: [{ date: '2027-01-20 11:00', author: '정해린', body: '1인당 연 50만원까지입니다. 안경점 영수증(사용자 성명·시력교정용 표시) 받아주세요. 기준 메뉴에도 추가할게요.' }] },
-    { id: '1', date: '2027-01-12 09:00', author: '정해린', category: '공지', level: '일반', title: '2026 귀속 연말정산 일정', body: '· 1/15(금) 간소화 자료 조회 시작\n· 1/29(금) 직원 서류 제출 마감\n· 2/1(월)~2/10(수) 1차 검토·보완 요청\n· 2/11(목)~2/12(금) 2차 검토\n· 2월 급여에 정산 결과 반영', start: '', end: '', pinned: false, files: [], updated: '2027-01-12 09:00', comments: [] },
+    { id: '91', date: '2026-01-10 09:00', author: '정해린', category: '공지', level: '일반', title: '2025 귀속 연말정산 일정', body: '· 1/15 간소화 자료 조회 시작\n· 1/30 서류 제출 마감\n· 2월 급여에 정산 결과 반영', start: '', end: '', pinned: false, files: [], updated: '2026-01-10 09:00', comments: [], year: '2025' },
+    { id: '92', date: '2026-02-03 10:00', author: '정해린', category: '응대지침', level: '중요', title: '월세 공제 한도 문의 응대 (2025 귀속)', body: '2025 귀속부터 바뀐 월세 공제 기준은 기준 메뉴를 보고 안내해 주세요.', start: '', end: '', pinned: false, files: [], updated: '2026-02-03 10:00', comments: [], year: '2025' },
+    { id: '5', date: '2027-02-03 18:00', author: '정해린', category: '공지', level: '긴급', title: '미비서류 보완 마감 2/10(수) 18시', body: '보완 요청한 직원은 2/10(수) 18시까지 받아주세요.\n마감 후 들어온 서류는 3월 급여 재정산으로 처리합니다.\n미비서류 칸이 비어 있어야 검토완료로 넘어갑니다.', start: '2027-02-01', end: '2027-02-10', pinned: true, files: [], updated: '2027-02-03 18:00', year: '2026', comments: [{ date: '2027-02-03 18:20', author: '박지호', body: '휴직자도 같은 마감인가요?' }, { date: '2027-02-03 18:31', author: '정해린', body: '휴직자는 2/12(금)까지 받아주세요.' }] },
+    { id: '4', date: '2027-02-02 09:00', author: '정해린', category: '응대지침', level: '중요', title: '부양가족 중복공제 확인 방법', body: '맞벌이·형제가 같은 부모님을 공제하는 사례가 많습니다.\n1. 본인에게 다른 가족의 공제 여부를 확인\n2. 확인한 내용은 특이사항 칸에 적기\n3. 중복이 의심되면 2차 검토 담당자에게 메신저로 알려주세요', start: '', end: '', pinned: true, files: [F('부양가족_중복확인_체크리스트.pdf', 214000)], updated: '2027-02-02 09:00', comments: [], year: '2026' },
+    { id: '3', date: '2027-01-27 13:40', author: '이수민', category: '자료', title: '종전근무지 원천징수영수증 요청 안내문', level: '일반', body: '중도입사자에게 보내는 안내문입니다. 필요하면 복사해서 쓰세요.', start: '', end: '', pinned: false, files: [F('종전근무지_서류요청_안내문.hwp', 31744)], updated: '2027-01-27 13:40', year: '2026', comments: [{ date: '2027-01-27 14:02', author: '김도현', body: '감사합니다!' }] },
+    { id: '2', date: '2027-01-20 10:10', author: '박지호', category: '질문', title: '안경 구입비는 1인당 얼마까지인가요?', level: '일반', body: '직원 문의가 와서요. 기준 메뉴에 없어서 여쭤봅니다.', start: '', end: '', pinned: false, files: [], updated: '2027-01-20 10:10', year: '2026', comments: [{ date: '2027-01-20 11:00', author: '정해린', body: '1인당 연 50만원까지입니다. 안경점 영수증(사용자 성명·시력교정용 표시) 받아주세요. 기준 메뉴에도 추가할게요.' }] },
+    { id: '1', date: '2027-01-12 09:00', author: '정해린', category: '공지', level: '일반', title: '2026 귀속 연말정산 일정', body: '· 1/15(금) 간소화 자료 조회 시작\n· 1/29(금) 직원 서류 제출 마감\n· 2/1(월)~2/10(수) 1차 검토·보완 요청\n· 2/11(목)~2/12(금) 2차 검토\n· 2월 급여에 정산 결과 반영', start: '', end: '', pinned: false, files: [], updated: '2027-01-12 09:00', comments: [], year: '2026' },
   ];
 
   const rules = [
@@ -118,25 +120,70 @@ window.MockApi = (function () {
     { id: '6', category: '응대 기준', title: '증빙 서류 받는 방법', year: '2026', owner: '정해린', link: '', files: [], updated: '2027-01-10', editor: '정해린', body: '(예시 · 회사 기준에 맞게 고쳐 쓰세요)\n· 증빙은 지정된 경로(웹앱 첨부 또는 회사 메일)로만 받습니다. 개인 메신저 금지\n· 전화 문의는 본인 확인 후 안내\n· 안내한 내용은 응대기록에 남겨 다른 담당자도 볼 수 있게 합니다', history: [{ date: '2027-01-10', editor: '정해린', note: '최초 등록' }] },
   ];
 
+  rules.push(
+    { id: '51', category: '주택자금·월세', title: '월세액 세액공제', year: '2025', owner: '정해린', link: '', files: [], updated: '2026-01-08', editor: '정해린', body: '(예시) 2025 귀속 기준으로 정리한 월세 공제 안내', history: [{ date: '2026-01-08', editor: '정해린', note: '최초 등록' }] },
+    { id: '52', category: '제출서류', title: '공통 제출 서류', year: '2025', owner: '이수민', link: '', files: [], updated: '2026-01-08', editor: '정해린', body: '(예시) 소득·세액공제신고서, 간소화 자료 PDF', history: [{ date: '2026-01-08', editor: '정해린', note: '최초 등록' }] },
+  );
   const files = [
-    { id: 'demo-f1', date: '2027-02-04 09:20', uploader: '김도현', area: 'person', ref: '20180115', refLabel: '윤하람(20180115)', name: '윤하람_간소화자료.pdf', url: '#demo-file', size: 512000, mime: '', memo: '' },
-    { id: 'demo-f2', date: '2027-02-03 15:10', uploader: '김도현', area: 'person', ref: '20150702', refLabel: '서지안(20150702)', name: '서지안_주택자금상환증명서.pdf', url: '#demo-file', size: 230000, mime: '', memo: '' },
-    { id: 'demo-f3', date: '2027-02-03 11:40', uploader: '박지호', area: 'person', ref: '20130612', refLabel: '권도윤(20130612)', name: '권도윤_기부금영수증_사본.jpg', url: '#demo-file', size: 1830000, mime: '', memo: '' },
-    { id: 'demo-f4', date: '2027-02-02 10:30', uploader: '김도현', area: 'person', ref: '20200901', refLabel: '임채원(20200901)', name: '임채원_종전근무지_원천징수영수증.pdf', url: '#demo-file', size: 160000, mime: '', memo: '' },
-    { id: 'demo-부양가족_중복확인_체크리스트.pdf', date: '2027-02-02 09:00', uploader: '정해린', area: 'notice', ref: '4', refLabel: '부양가족 중복공제 확인 방법', name: '부양가족_중복확인_체크리스트.pdf', url: '#demo-file', size: 214000, mime: '', memo: '' },
-    { id: 'demo-종전근무지_서류요청_안내문.hwp', date: '2027-01-27 13:40', uploader: '이수민', area: 'notice', ref: '3', refLabel: '종전근무지 원천징수영수증 요청 안내문', name: '종전근무지_서류요청_안내문.hwp', url: '#demo-file', size: 31744, mime: '', memo: '' },
-    { id: 'demo-의료비_공제_안내.pdf', date: '2027-01-20 11:10', uploader: '정해린', area: 'rules', ref: '4', refLabel: '의료비 세액공제', name: '의료비_공제_안내.pdf', url: '#demo-file', size: 388000, mime: '', memo: '' },
-    { id: 'demo-소득세액공제신고서_양식.xlsx', date: '2027-01-10 09:00', uploader: '정해린', area: 'rules', ref: '5', refLabel: '공통 제출 서류', name: '소득세액공제신고서_양식.xlsx', url: '#demo-file', size: 58000, mime: '', memo: '' },
-    { id: 'demo-f10', date: '2027-02-03 15:40', uploader: '박지호', area: 'person', ref: '20260302', refLabel: '봉예린(20260302)', name: '봉예린_종전근무지1_사아물류.pdf', url: '#demo-file', size: 148000, mime: '', memo: '' },
-    { id: 'demo-f11', date: '2027-02-03 13:30', uploader: '박지호', area: 'person', ref: '20070516', refLabel: '마동철(20070516)', name: '마동철_수기제출_공제신고서.jpg', url: '#demo-file', size: 2240000, mime: '', memo: '' },
-    { id: 'demo-f12', date: '2027-02-02 14:00', uploader: '이수민', area: 'person', ref: '20181107', refLabel: '어지민(20181107)', name: '어지민_간소화자료.pdf', url: '#demo-file', size: 486000, mime: '', memo: '' },
-    { id: 'demo-f13', date: '2027-02-02 10:15', uploader: '김도현', area: 'person', ref: '20230310', refLabel: '리밍(20230310)', name: '리밍_외국인등록증_사본.pdf', url: '#demo-file', size: 205000, mime: '', memo: '' },
-    { id: 'demo-f9', date: '2027-01-09 16:00', uploader: '정해린', area: 'etc', ref: '', refLabel: '', name: '2026귀속_연말정산_직원안내문.pdf', url: '#demo-file', size: 742000, mime: '', memo: '직원 배포용 안내문' },
+    { id: 'demo-f1', date: '2027-02-04 09:20', uploader: '김도현', area: 'person', ref: '20180115', refLabel: '윤하람(20180115)', name: '윤하람_간소화자료.pdf', url: '#demo-file', size: 512000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f2', date: '2027-02-03 15:10', uploader: '김도현', area: 'person', ref: '20150702', refLabel: '서지안(20150702)', name: '서지안_주택자금상환증명서.pdf', url: '#demo-file', size: 230000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f3', date: '2027-02-03 11:40', uploader: '박지호', area: 'person', ref: '20130612', refLabel: '권도윤(20130612)', name: '권도윤_기부금영수증_사본.jpg', url: '#demo-file', size: 1830000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f4', date: '2027-02-02 10:30', uploader: '김도현', area: 'person', ref: '20200901', refLabel: '임채원(20200901)', name: '임채원_종전근무지_원천징수영수증.pdf', url: '#demo-file', size: 160000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-부양가족_중복확인_체크리스트.pdf', date: '2027-02-02 09:00', uploader: '정해린', area: 'notice', ref: '4', refLabel: '부양가족 중복공제 확인 방법', name: '부양가족_중복확인_체크리스트.pdf', url: '#demo-file', size: 214000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-종전근무지_서류요청_안내문.hwp', date: '2027-01-27 13:40', uploader: '이수민', area: 'notice', ref: '3', refLabel: '종전근무지 원천징수영수증 요청 안내문', name: '종전근무지_서류요청_안내문.hwp', url: '#demo-file', size: 31744, mime: '', memo: '', year: '2026' },
+    { id: 'demo-의료비_공제_안내.pdf', date: '2027-01-20 11:10', uploader: '정해린', area: 'rules', ref: '4', refLabel: '의료비 세액공제', name: '의료비_공제_안내.pdf', url: '#demo-file', size: 388000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-소득세액공제신고서_양식.xlsx', date: '2027-01-10 09:00', uploader: '정해린', area: 'rules', ref: '5', refLabel: '공통 제출 서류', name: '소득세액공제신고서_양식.xlsx', url: '#demo-file', size: 58000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f10', date: '2027-02-03 15:40', uploader: '박지호', area: 'person', ref: '20260302', refLabel: '봉예린(20260302)', name: '봉예린_종전근무지1_사아물류.pdf', url: '#demo-file', size: 148000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f11', date: '2027-02-03 13:30', uploader: '박지호', area: 'person', ref: '20070516', refLabel: '마동철(20070516)', name: '마동철_수기제출_공제신고서.jpg', url: '#demo-file', size: 2240000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f12', date: '2027-02-02 14:00', uploader: '이수민', area: 'person', ref: '20181107', refLabel: '어지민(20181107)', name: '어지민_간소화자료.pdf', url: '#demo-file', size: 486000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f13', date: '2027-02-02 10:15', uploader: '김도현', area: 'person', ref: '20230310', refLabel: '리밍(20230310)', name: '리밍_외국인등록증_사본.pdf', url: '#demo-file', size: 205000, mime: '', memo: '', year: '2026' },
+    { id: 'demo-f9', date: '2027-01-09 16:00', uploader: '정해린', area: 'etc', ref: '', refLabel: '', name: '2026귀속_연말정산_직원안내문.pdf', url: '#demo-file', size: 742000, mime: '', memo: '직원 배포용 안내문', year: '2026' },
   ];
+  // 연도별 자료: 대상자·응대기록·일정은 연도마다 따로
+  const events2026 = [
+    { id: '1', start: '2027-01-15', end: '2027-01-15', title: '간소화 자료 조회 시작', kind: '일정', memo: '직원 안내 메일 발송', author: '정해린' },
+    { id: '2', start: '2027-01-29', end: '2027-01-29', title: '직원 서류 제출 마감', kind: '마감', memo: '', author: '정해린' },
+    { id: '3', start: '2027-02-01', end: '2027-02-10', title: '1차 검토·보완 요청', kind: '일정', memo: '', author: '정해린' },
+    { id: '4', start: '2027-02-05', end: '2027-02-05', title: '담당자 응대 교육 (부양가족 중복)', kind: '교육', memo: '본관 3층 소회의실 14시', author: '정해린' },
+    { id: '5', start: '2027-02-10', end: '2027-02-10', title: '미비서류 보완 마감', kind: '마감', memo: '휴직자는 2/12까지', author: '정해린' },
+    { id: '6', start: '2027-02-11', end: '2027-02-12', title: '2차 검토', kind: '일정', memo: '', author: '정해린' },
+    { id: '7', start: '2027-02-15', end: '2027-02-15', title: '박지호 연차', kind: '휴무', memo: '', author: '정해린' },
+    { id: '8', start: '2027-02-19', end: '2027-02-19', title: '정산 결과 급여 반영 확정', kind: '마감', memo: '2월 급여', author: '정해린' },
+    { id: '9', start: '2027-03-10', end: '2027-03-10', title: '근로소득 지급명세서 제출 기한', kind: '마감', memo: '', author: '정해린' },
+  ];
+  const old = (no, dept, empNo, name, rank, owner, owner2, note1) => person({ no, dept, empNo, name, subgroup: '정규직', payArea: '본사', rank, phone: '', email: '', owner, owner2, ehr: true, arrived: true, verified: true, review2: true, note1, updated: '2026-02-13 17:00', editor: owner2 });
+  const stores = {
+    '2026': { people, logs, events: events2026 },
+    '2025': {
+      people: [
+        old('1', '인사팀', '20110321', '오민재', '차장', '김도현', '최유나', '월세 공제 — 계약서 확인'),
+        old('2', '재무팀', '20150702', '서지안', '과장', '김도현', '최유나', '장기주택저당차입금 이자상환증명서 확인'),
+        old('3', '영업1팀', '20180115', '윤하람', '사원', '이수민', '한서준', ''),
+        old('4', '개발팀', '20160222', '조은우', '대리', '이수민', '최유나', '주택임차차입금'),
+        old('5', '총무팀', '20090817', '배준혁', '부장', '박지호', '한서준', '부친 경로우대 추가공제'),
+        old('6', '생산팀', '20130612', '권도윤', '과장', '박지호', '최유나', '기부금 영수증 원본 받음'),
+      ],
+      logs: [{ date: '2026-02-05 10:00', empNo: '20130612', name: '권도윤', author: '박지호', kind: '방문', body: '기부금 영수증 원본 받음' }],
+      events: [
+        { id: '1', start: '2026-01-15', end: '2026-01-15', title: '간소화 자료 조회 시작', kind: '일정', memo: '', author: '정해린' },
+        { id: '2', start: '2026-01-30', end: '2026-01-30', title: '직원 서류 제출 마감', kind: '마감', memo: '', author: '정해린' },
+        { id: '3', start: '2026-03-10', end: '2026-03-10', title: '근로소득 지급명세서 제출 기한', kind: '마감', memo: '', author: '정해린' },
+      ],
+    },
+  };
+  let events = events2026;
+  const viewYears = {};
+  const curYear = () => viewYears[me] || settings.year;
+  const applyYear = () => { const st = stores[curYear()]; people = st.people; logs = st.logs; events = st.events; };
+  const years = () => Object.keys(stores).sort((a, b) => b - a);
+  const yNotices = () => sortNotices().filter(n => !n.year || n.year === curYear());
+  const yRules = () => rules.filter(r => !r.year || r.year === curYear());
+
   const AREAS = { person: '대상자 증빙', notice: '공지사항', rules: '연말정산 기준', etc: '일반 자료' };
   const AREA_MENU = { person: 'review', notice: 'notice', rules: 'rules', etc: 'files' };
 
   function meInfo() {
+    applyYear();
     const p = staff.find(x => x.email === me);
     const info = { email: p.email, name: p.name, role: p.role, isLeader: p.role === '총괄', isAdmin: !!p.admin };
     info.scope = info.isLeader || info.isAdmin ? '전체' : (p.scope || '전체');
@@ -156,7 +203,7 @@ window.MockApi = (function () {
   const myLogs = m => { const s = seen(m); return logs.filter(l => s.has(l.empNo)); };
   const need = (m, k) => { if (m.menus.indexOf(k) < 0) throw new Error(`[${(MENUS.find(x => x.key === k) || { label: k }).label}] 메뉴를 사용할 권한이 없습니다.`); };
   const myReads = () => (reads[me] = reads[me] || ['1', '2', '3']);
-  const visFiles = m => { const s = seen(m); return files.filter(f => m.menus.indexOf(AREA_MENU[f.area]) >= 0 && (f.area !== 'person' || s.has(f.ref))); };
+  const visFiles = m => { const s = seen(m); return files.filter(f => (!f.year || f.year === curYear()) && m.menus.indexOf(AREA_MENU[f.area]) >= 0 && (f.area !== 'person' || s.has(f.ref))); };
   const sortNotices = () => notices.sort((a, b) => (b.pinned - a.pinned) || (['긴급', '중요', '일반'].indexOf(a.level) - ['긴급', '중요', '일반'].indexOf(b.level)) || b.date.localeCompare(a.date));
   function canEdit(m, cur, c, patch) {
     if (lead(m)) return true;
@@ -166,7 +213,7 @@ window.MockApi = (function () {
     return cur.owner === m.name || takes;
   }
   function register(area, ref, refLabel, list, m, memo) {
-    (list || []).forEach(f => { if (!files.some(x => x.id === f.id)) files.unshift({ id: f.id, date: stamp(), uploader: m.name, area, ref, refLabel, name: f.name, url: f.url, size: f.size, mime: f.mime || '', memo: memo || '' }); });
+    (list || []).forEach(f => { if (!files.some(x => x.id === f.id)) files.unshift({ id: f.id, date: stamp(), uploader: m.name, area, ref, refLabel, name: f.name, url: f.url, size: f.size, mime: f.mime || '', memo: memo || '', year: curYear() }); });
   }
   function adminData() {
     const st = {};
@@ -177,7 +224,7 @@ window.MockApi = (function () {
       members: staff.map((p, i) => ({ order: i + 1, name: p.name, email: p.email, role: p.role, admin: !!p.admin, scope: p.scope || '전체' })),
       owners: people.reduce((o, p) => { const k = p.owner || '(미배정)'; o[k] = (o[k] || 0) + 1; return o; }, {}),
       assign: people.map(p => [p.owner, p.owner2]),
-      menus: MENUS, roles: ROLES, menuAccess: JSON.parse(JSON.stringify(menuAccess)), settings: Object.assign({}, settings),
+      menus: MENUS, roles: ROLES, menuAccess: JSON.parse(JSON.stringify(menuAccess)), settings: Object.assign({ years: years() }, settings),
       webAppUrl: 'https://script.google.com/macros/s/AKfy...예시.../exec',
       status: { resources: { sheet: { ok: true, name: '2026 귀속 연말정산 검토 (스프레드시트)' }, folder: { ok: true, name: '연말정산 증빙 (담당자 전용)' } }, people: st },
     };
@@ -193,15 +240,15 @@ window.MockApi = (function () {
       const m = meInfo();
       const can = k => m.menus.indexOf(k) >= 0;
       return {
-        team: settings.team, year: settings.year, sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
+        team: settings.team, year: curYear(), baseYear: settings.year, years: years(), eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
         staff: staff.map(s => ({ name: s.name, role: s.role })), cols: COLS,
         logKinds: ['전화', '메일', '메신저', '방문', '보완요청', '기타'],
         noticeCategories: ['공지', '응대지침', '자료', '질문'], noticeLeaderOnly: ['공지', '응대지침'],
         ruleCategories: ['인적공제', '주택자금·월세', '의료비', '교육비', '기부금', '신용카드 등', '연금·보험', '제출서류', '응대 기준', '기타'],
         fileAreas: AREAS,
         people: can('review') || can('dash') ? myPeople(m) : [], logs: can('review') ? myLogs(m) : [],
-        notices: can('notice') || can('dash') ? sortNotices() : [], reads: myReads().slice(),
-        rules: can('rules') ? rules : [], files: can('files') || can('review') ? visFiles(m) : [],
+        notices: can('notice') || can('dash') ? yNotices() : [], reads: myReads().slice(),
+        rules: can('rules') ? yRules() : [], files: can('files') || can('review') ? visFiles(m) : [],
       };
     },
 
@@ -241,6 +288,29 @@ window.MockApi = (function () {
       return { people: myPeople(m), added, updated };
     },
     apiTemplateLink() { return { demo: true }; },
+    apiSetYear(y) { if (!stores[y]) throw new Error(`${y}년 자료가 없습니다.`); viewYears[me] = y; return this.apiBootstrap(); },
+    apiSaveEvent(ev) {
+      const m = meInfo(); if (!lead(m)) throw new Error('일정은 총괄 또는 관리자만 등록·수정할 수 있습니다.');
+      let id = ev.id; const vals = { start: ev.start, end: ev.end || ev.start, title: ev.title, kind: ev.kind, memo: ev.memo || '', author: m.name };
+      const ex = id && events.find(e => e.id === id);
+      if (ex) Object.assign(ex, vals); else { id = String(++seq); events.push(Object.assign({ id }, vals)); }
+      events.sort((a, b) => a.start.localeCompare(b.start));
+      return { events, savedId: id };
+    },
+    apiDeleteEvent(id) { const m = meInfo(); if (!lead(m)) throw new Error('일정은 총괄 또는 관리자만 삭제할 수 있습니다.'); events.splice(events.findIndex(e => e.id === id), 1); return { events }; },
+    apiStartYear(o) {
+      const m = meInfo(); if (!m.isAdmin) throw new Error('관리자만 사용할 수 있습니다.');
+      const y = String(o.year); if (stores[y]) throw new Error(`${y}년은 이미 있습니다.`);
+      const from = stores[o.from || settings.year];
+      const keep = COLS.filter(c => c.who === 'info' || c.who === 'assign').map(c => c.k);
+      const carried = o.carry ? from.people.map(p => { const n = blank(); keep.forEach(k => { n[k] = p[k]; }); n.id = n.empNo; n.updated = stamp(); n.editor = m.name; return n; }) : [];
+      stores[y] = { people: carried, logs: [], events: [] };
+      let copied = 0;
+      if (o.copyRules) rules.filter(r => r.year === (o.from || settings.year)).forEach(r => { rules.push(Object.assign({}, r, { id: String(++seq), year: y, history: [{ date: stamp().slice(0, 10), editor: m.name, note: `${r.year}년 기준에서 복사` }] })); copied++; });
+      if (o.makeBase !== false) settings.year = y;
+      viewYears[me] = y;
+      return { carried: carried.length, copied, data: adminData() };
+    },
     apiAddLog(id, kind, body) {
       const m = meInfo(); need(m, 'review');
       const p = people.find(x => x.id === id);
@@ -257,12 +327,12 @@ window.MockApi = (function () {
       const ex = id && notices.find(x => x.id === id);
       const vals = { category: n.category, level: lead(m) ? n.level : '일반', title: n.title, body: n.body, start: n.start, end: n.end, pinned: lead(m) && n.pinned, files: n.files, updated: stamp() };
       if (ex) Object.assign(ex, vals);
-      else { id = String(++seq); notices.push(Object.assign({ id, date: stamp(), author: m.name, comments: [] }, vals)); }
+      else { id = String(++seq); notices.push(Object.assign({ id, date: stamp(), author: m.name, comments: [], year: curYear() }, vals)); }
       register('notice', id, n.title, n.files, m);
       if (myReads().indexOf(id) < 0) myReads().push(id);
-      return { notices: sortNotices(), savedId: id, reads: myReads().slice() };
+      return { notices: yNotices(), savedId: id, reads: myReads().slice() };
     },
-    apiDeleteNotice(id) { notices.splice(notices.findIndex(n => n.id === id), 1); return { notices: sortNotices() }; },
+    apiDeleteNotice(id) { notices.splice(notices.findIndex(n => n.id === id), 1); return { notices: yNotices() }; },
     apiAddNoticeComment(id, body) { const c = { date: stamp(), author: meInfo().name, body }; notices.find(n => n.id === id).comments.push(c); return { commentAdded: { id, comment: c } }; },
     apiMarkRead(id) { if (myReads().indexOf(id) < 0) myReads().push(id); return { reads: myReads().slice() }; },
     apiMarkUnread(id) { reads[me] = myReads().filter(x => x !== id); return { reads: reads[me].slice() }; },
@@ -275,9 +345,9 @@ window.MockApi = (function () {
       if (ex) { Object.assign(ex, vals); ex.history.unshift({ date: vals.updated, editor: m.name, note: rule.changeNote || '내용 수정' }); }
       else { id = String(++seq); rules.push(Object.assign({ id, history: [{ date: vals.updated, editor: m.name, note: '최초 등록' }] }, vals)); }
       register('rules', id, rule.title, rule.files, m);
-      return { rules, savedId: id };
+      return { rules: yRules(), savedId: id };
     },
-    apiDeleteRule(id) { rules.splice(rules.findIndex(r => r.id === id), 1); return { rules }; },
+    apiDeleteRule(id) { rules.splice(rules.findIndex(r => r.id === id), 1); return { rules: yRules() }; },
 
     apiUploadFile(f) {
       const m = meInfo(); need(m, AREA_MENU[f.area] || 'files');

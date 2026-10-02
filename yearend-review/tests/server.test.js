@@ -8,16 +8,19 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
 {
   const { api, ss, state, books } = makeEnv();
   const as = email => { state.user = email; };
+  let Y = '';
   ok('initialize creates sheets', () => {
     api.initialize();
-    ['설정', '담당자', '대상자', '응대기록', '공지', '공지댓글', '기준', '기준개정이력', '첨부', '메뉴권한'].forEach(n => assert(ss.getSheetByName(n), n));
-    const hdr = ss.getSheetByName('대상자').getRange(1, 1, 1, 40).getValues()[0].filter(Boolean);
+    Y = String(ss.getSheetByName('설정').get(3, 2));
+    ['설정', '담당자', '대상자_' + Y, '응대기록_' + Y, '일정_' + Y, '공지', '공지댓글', '기준', '기준개정이력', '첨부', '메뉴권한'].forEach(n => assert(ss.getSheetByName(n), n));
+    assert(!ss.getSheetByName('대상자'));
+    const hdr = ss.getSheetByName('대상자_' + Y).getRange(1, 1, 1, 40).getValues()[0].filter(Boolean);
     assert.strictEqual(hdr.length, 30);
     assert.strictEqual(hdr[0], 'No.'); assert.strictEqual(hdr[13], '시스템 등록'); assert.strictEqual(hdr[28], '최종수정');
     assert(!hdr.includes('수기서류 제출') && !hdr.includes('월세액') && hdr.includes('종전근무지 여부'));
     assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7);
   });
-  ok('initialize twice is safe', () => { api.initialize(); assert.strictEqual(ss.getSheetByName('대상자').getLastColumn(), 30); assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7); });
+  ok('initialize twice is safe', () => { api.initialize(); assert.strictEqual(ss.getSheetByName('대상자_' + Y).getLastColumn(), 30); assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7); });
 
   // 담당자 등록 (소유자 owner@x.com = 관리자)
   const mem = ss.getSheetByName('담당자');
@@ -41,7 +44,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     const p = r.people[0];
     assert.strictEqual(p.ehr, true); assert.strictEqual(p.arrived, true); assert.strictEqual(p.verified, false);
     assert.strictEqual(p.note1, '줄1\n줄2'); assert.strictEqual(p.editor, '정해린');
-    const sh = ss.getSheetByName('대상자');
+    const sh = ss.getSheetByName('대상자_' + Y);
     assert.strictEqual(sh.get(2, 14), 'O'); // 시스템 등록 열(14번째)
   });
   ok('re-import updates by 사원번호', () => { const r = api.apiImportPeople([{ empNo: '1002', name: '서지안', dept: '재무2팀' }]); assert.strictEqual(r.updated, 1); assert.strictEqual(r.people.length, 3); assert.strictEqual(r.people[1].dept, '재무2팀'); assert.strictEqual(r.people[1].owner, '이수민'); });
@@ -200,6 +203,65 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     assert.strictEqual(sh.getLastRow(), r2.count + 1);
   });
 
+  ok('일정: 예시 4건, 총괄만 등록·수정·삭제', () => {
+    as('kim@x.com');
+    let b = api.apiBootstrap();
+    assert.strictEqual(b.events.length, 4); assert(b.eventKinds.includes('마감'));
+    throwsMsg(() => api.apiSaveEvent({ title: 'x', start: '2027-01-02' }), /총괄 또는 관리자/);
+    as('lead@x.com');
+    throwsMsg(() => api.apiSaveEvent({ title: 'x', start: '2027-01-05', end: '2027-01-01' }), /종료일/);
+    let r = api.apiSaveEvent({ title: '담당자 회의', start: '2027-01-20', end: '2027-01-21', kind: '일정', memo: '3층' });
+    const e = r.events.find(x => x.id === r.savedId);
+    assert.strictEqual(e.end, '2027-01-21'); assert.strictEqual(e.memo, '3층');
+    r = api.apiSaveEvent({ id: e.id, title: '담당자 회의(변경)', start: '2027-01-22', kind: '교육' });
+    assert.strictEqual(r.events.find(x => x.id === e.id).end, '2027-01-22');
+    r = api.apiDeleteEvent(e.id); assert.strictEqual(r.events.length, 4);
+  });
+
+  ok('연도별 관리: 새 연도 시작(명단·담당 가져오기, 기준 복사), 연도 전환, 연도별 분리', () => {
+    as('lead@x.com');
+    const before = api.apiBootstrap();
+    const oldYear = before.year;
+    const next = String(Number(oldYear) + 1);
+    api.apiSaveNotice({ category: '공지', title: `${oldYear} 전용`, body: 'b' });
+    as('kim@x.com'); throwsMsg(() => api.apiStartYear({ year: next }), /관리자만/);
+    as('owner@x.com');
+    throwsMsg(() => api.apiStartYear({ year: oldYear }), /이미 있습니다/);
+    throwsMsg(() => api.apiSaveSettings({ team: 't', year: '2030', folderId: 'FOLDER' }), /새 연도 시작/);
+    const r = api.apiStartYear({ year: next, carry: true, copyRules: true });
+    assert.strictEqual(r.carried, before.people.length);
+    assert(r.copied >= 1);
+    assert(ss.getSheetByName('대상자_' + next) && ss.getSheetByName('응대기록_' + next) && ss.getSheetByName('일정_' + next));
+    assert.strictEqual(r.data.settings.year, next); assert.deepStrictEqual(r.data.settings.years.join(), [next, oldYear].join());
+    // 관리자(시작한 사람)는 바로 새 연도
+    let b = api.apiBootstrap();
+    assert.strictEqual(b.year, next); assert.strictEqual(b.baseYear, next);
+    const p = b.people.find(x => x.empNo === '1001');
+    assert.strictEqual(p.name, '오민재'); assert.strictEqual(p.owner, '김도현');
+    assert.strictEqual(p.verified, false); assert.strictEqual(p.note1, ''); // 진행·특이사항은 비움
+    assert.strictEqual(b.logs.length, 0);
+    assert(b.rules.every(x => x.year === next || !x.year));
+    assert(!b.notices.some(n => n.title === `${oldYear} 전용`));
+    assert(b.files.every(f => f.area !== 'person'));
+    // 다른 사람: 기본 연도(새 연도)로 보다가 지난 연도로 전환
+    as('kim@x.com');
+    assert.strictEqual(api.apiBootstrap().year, next);
+    api.apiSavePerson('1001', { ehr: true });
+    b = api.apiSetYear(oldYear);
+    assert.strictEqual(b.year, oldYear);
+    assert.strictEqual(b.people.find(x => x.empNo === '1001').verified, true); // 지난 연도 자료 그대로
+    assert(b.logs.length > 0);
+    assert(b.notices.some(n => n.title === `${oldYear} 전용`));
+    assert.strictEqual(api.apiBootstrap().year, oldYear, '사람별로 기억');
+    throwsMsg(() => api.apiSetYear('1999'), /자료가 없습니다/);
+    as('lead@x.com'); assert.strictEqual(api.apiBootstrap().year, next, '다른 사람은 영향 없음');
+    // 기본 연도를 되돌려도 된다 (이미 있는 연도)
+    as('owner@x.com');
+    api.apiSaveSettings({ team: '연말정산', year: oldYear, folderId: 'FOLDER' });
+    as('choi@x.com'); assert.strictEqual(api.apiBootstrap().year, oldYear);
+    as('owner@x.com'); api.apiSetYear(oldYear);
+  });
+
   ok('admin save members / settings / apply', () => {
     as('owner@x.com');
     throwsMsg(() => api.apiSaveMembers([{ name: 'A', email: 'a@x.com' }, { name: 'A', email: 'b@x.com' }]), /겹칩니다/);
@@ -212,7 +274,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
     const res = api.apiApplyPermissions();
     assert(res.log.some(l => /스프레드시트 편집 권한/.test(l.text)));
     assert(ss.getSheetByName('설정').getProtections().length === 1);
-    assert(ss.getSheetByName('대상자').getProtections()[0].isWarningOnly());
+    assert(ss.getSheetByName('대상자_' + Y).getProtections()[0].isWarningOnly());
     as('lee@x.com'); assert.strictEqual(api.apiBootstrap().me.menus.length, 0); // 담당자에서 빠짐
   });
 
@@ -236,6 +298,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
   sh.getRange(2, 1, 1, hdr.length).setValues([row]);
   ok('existing sheet: only meta columns appended', () => {
     api.initialize();
+    assert(!ss.getSheetByName('대상자') && ss.getSheetByName('대상자_' + String(ss.getSheetByName('설정').get(3, 2))) === sh, '예전 대상자 시트를 연도 이름으로 바꿔 씀');
     assert.strictEqual(sh.getLastColumn(), 37);
     assert.strictEqual(sh.get(1, 36), '최종수정');
   });

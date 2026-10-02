@@ -83,7 +83,9 @@ function readRules_(ss) {
       editor: String(r[8] || ''),
       files: filesFromCell_(r[RCOL.FILES - 1]),
       history: (history[String(r[0])] || []).reverse(),
-    }));
+    }))
+    // 보고 있는 연도의 기준 + 적용 연도가 비어 있는 기준(공통)
+    .filter(r => !r.year || r.year === viewYear_());
 }
 
 /** 등록/수정. rule: { id?, category, title, body, year, owner, link, changeNote, files } */
