@@ -602,7 +602,9 @@
   let ruleCat = 'all';
   let ruleQuery = '';
   let openRule = null;
-  let draft = null;
+  let draft = null;        // 지금 편집 중인 목록 (내 주간업무 또는 다음 주 미리 쓰기)
+  let draftMine = null;
+  let draftPre = null;
   let calMonth = null;       // 보고 있는 달의 1일
   let calSel = null;         // 선택한 날짜 key
   let calCache = {};         // 'yyyy-mm' -> {calendarName, events}
@@ -683,7 +685,7 @@
     });
 
     $('#main').innerHTML = PAGES[page]();
-    if (page === 'weekly' && weeklyTab === 'mine') bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = null;
+    if (page === 'weekly' && (weeklyTab === 'mine' || weeklyTab === 'pre')) bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = null;
     if (page === 'dash' && !upcoming && can('calendar')) loadUpcoming();
     if (page === 'admin' && !A) loadAdmin(false);
     if (page === 'calendar') loadMonth();
@@ -725,7 +727,7 @@
         <div class="list-row">
           <span class="who">${esc(m.name)}</span>
           ${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
-          <span class="meta">금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건${m.note ? ` · ${esc(m.note)}` : ''}</span>
+          <span class="meta">금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건${m.note ? ` · ${esc(m.note)}` : ''}${m.pre && m.pre.exists ? ' · 다음 주 미리 작성' : ''}</span>
         </div>`).join('');
 
       const dues = [];
@@ -835,9 +837,10 @@
       const mine = mineMember();
       const tabs = `<div class="subtabs" role="tablist">
         <button role="tab" aria-selected="${weeklyTab === 'mine'}" onclick="setTab('weekly','mine')">내 주간업무 ${mine ? (mine.done ? '<span class="chip ok">완료</span>' : '<span class="chip no">작성 전</span>') : ''}</button>
+        <button role="tab" aria-selected="${weeklyTab === 'pre'}" onclick="setTab('weekly','pre')">다음 주 미리 쓰기 ${mine && mine.pre && mine.pre.exists ? '<span class="chip ok">✓</span>' : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'team'}" onclick="setTab('weekly','team')">팀 주간보고 <span class="chip plain">${s.done}/${s.total}</span></button>
       </div>`;
-      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : VIEWS.report());
+      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : VIEWS.report());
     },
 
     budget() {
@@ -860,12 +863,12 @@
         return `<div class="head"><div><h1>내 주간업무</h1></div></div>
           <div class="notice">${D.me.isLeader ? '팀장님은 작성 대상이 아닙니다. [팀 주간보고]에서 코멘트를 남길 수 있습니다.' : '작성 대상 팀원으로 등록되어 있지 않습니다. 관리자에게 [팀원] 시트 등록을 요청하세요.'}</div>`;
       }
-      if (!draft || draft.name !== m.name || draft.week !== D.week.key) {
-        const conv = list => list.map(it => ({ task: it.task, dueIso: it.dueIso, cont: it.due === '지속', raw: it.dueIso || it.due === '지속' ? '' : it.due }));
-        draft = { name: m.name, week: D.week.key, thisWeek: conv(m.thisWeek), nextWeek: conv(m.nextWeek), note: m.note, done: m.done };
-        if (!draft.thisWeek.length) draft.thisWeek.push(blank());
-        if (!draft.nextWeek.length) draft.nextWeek.push(blank());
+      if (!draftMine || draftMine.name !== m.name || draftMine.week !== D.week.key) {
+        draftMine = { name: m.name, week: D.week.key, thisWeek: convItems(m.thisWeek), nextWeek: convItems(m.nextWeek), note: m.note, done: m.done };
+        if (!draftMine.thisWeek.length) draftMine.thisWeek.push(blank());
+        if (!draftMine.nextWeek.length) draftMine.nextWeek.push(blank());
       }
+      draft = draftMine;
       return `
         <div class="head">
           <div><h1>내 주간업무</h1><p>월요일에 지난주 차주 계획이 금주로 자동 이월됩니다. "지속" 업무는 차주에도 남습니다.</p></div>
@@ -888,6 +891,47 @@
             <label><input type="checkbox" class="check" id="doneIn" ${draft.done ? 'checked' : ''}> 작성완료</label>
           </div>
           <button class="btn primary" id="saveMine">저장</button>
+        </div>`;
+    },
+
+    pre() {
+      const m = mineMember();
+      if (!D.me.writer || !m) return VIEWS.mine();
+      const p = m.pre || { exists: false, thisWeek: [], nextWeek: [], note: '' };
+      if (!draftPre || draftPre.name !== m.name || draftPre.week !== D.week.key) {
+        // 처음이면 이번 주에 적어둔 "차주 주요업무"를 다음 주의 금주로 불러온다
+        const src = p.exists ? p : { thisWeek: m.nextWeek, nextWeek: m.nextWeek.filter(x => x.due === '지속'), note: '' };
+        draftPre = { name: m.name, week: D.week.key, thisWeek: convItems(src.thisWeek), nextWeek: convItems(src.nextWeek), note: src.note || '' };
+        if (!draftPre.thisWeek.length) draftPre.thisWeek.push(blank());
+        if (!draftPre.nextWeek.length) draftPre.nextWeek.push(blank());
+      }
+      draft = draftPre;
+      return `
+        <div class="head">
+          <div><h1>다음 주 미리 쓰기 ${p.exists ? '<span class="chip ok">✓ 미리 써둠</span>' : ''}</h1>
+          <p>다음 주(${esc(D.week.nextLabel)}) 보고를 미리 써두면 <b>월요일에 내 주간업무로 그대로 들어가고 작성완료로 표시</b>됩니다. 휴가·출장으로 다음 주 마감에 자리를 비울 때 쓰세요.</p></div>
+        </div>
+        ${p.exists ? '' : '<div class="notice">아직 미리 쓴 내용이 없습니다. 이번 주에 적은 "차주 주요업무"를 불러왔으니 고쳐서 저장하세요.</div>'}
+        <div class="edit-cols">
+          <section class="panel">
+            <div class="panel-head"><h2>금주 주요업무</h2><span>${esc(D.week.nextLabel)}</span></div>
+            <div class="items" id="list-thisWeek">${itemsHtml('thisWeek')}</div>
+            <button class="btn small add" data-add="thisWeek">+ 업무 추가</button>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>차주 주요업무</h2><span>${esc(D.week.afterLabel || '')}</span></div>
+            <div class="items" id="list-nextWeek">${itemsHtml('nextWeek')}</div>
+            <button class="btn small add" data-add="nextWeek">+ 업무 추가</button>
+          </section>
+        </div>
+        <div class="save-bar">
+          <div class="left">
+            <input class="field-in note-in" id="noteIn" placeholder="다음 주 휴무계획/특이사항 (예: 10/8(목)~10/9(금) 연차)" value="${esc(draft.note)}">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${p.exists ? '<button class="btn danger" id="clearPre">미리 쓴 내용 지우기</button>' : ''}
+            <button class="btn primary" id="savePre">미리 저장</button>
+          </div>
         </div>`;
     },
 
@@ -1668,6 +1712,11 @@
 
   /* ================= 내 주간업무 편집 ================= */
   function blank() { return { task: '', dueIso: '', cont: false, raw: '' }; }
+  function convItems(list) {
+    return (list || []).map(it => ({ task: it.task, dueIso: it.dueIso, cont: it.due === '지속', raw: it.dueIso || it.due === '지속' ? '' : it.due }));
+  }
+  const draftOut = list => list.filter(x => x.task.trim()).map(x => ({ task: x.task.trim(), due: x.cont ? '지속' : (x.dueIso || x.raw || '') }));
+  const toItem = x => /^\d{4}-\d{2}-\d{2}$/.test(x.due) ? { task: x.task, due: fmtDue(x.due), dueIso: x.due } : { task: x.task, due: x.due, dueIso: '' };
 
   function itemsHtml(key) {
     return draft[key].map((it, i) => `
@@ -1705,20 +1754,23 @@
         $(`#list-${t.dataset.k}`).innerHTML = itemsHtml(t.dataset.k);
       } else if (t.id === 'saveMine') {
         saveMine();
+      } else if (t.id === 'savePre') {
+        savePre(false);
+      } else if (t.id === 'clearPre') {
+        savePre(true);
       }
     };
   }
 
   /** 누르자마자 화면에 반영하고, 서버 저장은 뒤에서 한다. 실패하면 되돌리고 작성 내용을 살려둔다. */
   function saveMine() {
-    const out = list => list.filter(x => x.task.trim()).map(x => ({ task: x.task.trim(), due: x.cont ? '지속' : (x.dueIso || x.raw || '') }));
+    const out = draftOut;
     const payload = { thisWeek: out(draft.thisWeek), nextWeek: out(draft.nextWeek), note: draft.note.trim(), done: draft.done };
     const i = D.members.findIndex(m => m.name === D.me.name);
     const before = D.members[i];
     const keepDraft = draft;
-    const toItem = x => /^\d{4}-\d{2}-\d{2}$/.test(x.due) ? { task: x.task, due: fmtDue(x.due), dueIso: x.due } : { task: x.task, due: x.due, dueIso: '' };
     D.members[i] = Object.assign({}, before, { done: payload.done, note: payload.note, thisWeek: payload.thisWeek.map(toItem), nextWeek: payload.nextWeek.map(toItem) });
-    draft = null;
+    draft = draftMine = null;
     render();
     toast(payload.done ? '저장했습니다. 작성완료로 표시됩니다.' : '저장했습니다. 다 쓰면 작성완료에 체크하세요.');
 
@@ -1726,7 +1778,30 @@
       .then(data => { applyData(data); if (page !== 'weekly' || weeklyTab !== 'mine') render(); })
       .catch(e => {
         D.members[i] = before;
-        draft = keepDraft;
+        draft = draftMine = keepDraft;
+        render();
+        toast(`저장하지 못했습니다. 작성 내용은 그대로 있으니 다시 저장해 주세요. (${e.message || e})`);
+      });
+  }
+
+  /** 다음 주 미리 쓰기 저장(clear=true면 지우기). 화면은 바로 바꾸고 저장은 뒤에서 한다. */
+  function savePre(clear) {
+    const payload = clear ? { clear: true } : { thisWeek: draftOut(draft.thisWeek), nextWeek: draftOut(draft.nextWeek), note: draft.note.trim() };
+    const i = D.members.findIndex(m => m.name === D.me.name);
+    const before = D.members[i];
+    const keepDraft = draft;
+    D.members[i] = Object.assign({}, before, {
+      pre: clear ? { exists: false, note: '', thisWeek: [], nextWeek: [] }
+        : { exists: true, note: payload.note, thisWeek: payload.thisWeek.map(toItem), nextWeek: payload.nextWeek.map(toItem) },
+    });
+    draft = draftPre = null;
+    render();
+    toast(clear ? '미리 쓴 내용을 지웠습니다. 월요일에는 평소처럼 차주 업무가 이월됩니다.' : '다음 주 보고를 미리 저장했습니다. 월요일에 자동으로 들어가고 작성완료로 표시됩니다.');
+    call('apiSavePreWeek', payload)
+      .then(data => applyData(data))
+      .catch(e => {
+        D.members[i] = before;
+        draft = draftPre = keepDraft;
         render();
         toast(`저장하지 못했습니다. 작성 내용은 그대로 있으니 다시 저장해 주세요. (${e.message || e})`);
       });
@@ -1885,7 +1960,7 @@
     bar.hidden = false;
     bar.innerHTML = `<b>예시 화면</b><span>모든 이름·금액은 예시 데이터입니다.</span>
       <label>보는 사람 <select id="demoUser">${MockApi.users().map(u => `<option value="${esc(u.email)}" ${u.email === D.me.email ? 'selected' : ''}>${esc(u.name)} (${esc(u.role)})</option>`).join('')}</select></label>`;
-    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); draft = null; upcoming = null; calCache = {}; A = null; load(); };
+    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); draft = draftMine = draftPre = null; upcoming = null; calCache = {}; A = null; load(); };
   }
 
   load();

@@ -33,6 +33,13 @@ const INPUT = {
   NEXT_LABEL: 'D5',
   FIRST_ROW: 7,
   ROWS: 20,
+  // 다음 주 미리 쓰기 (G~K열): 월요일에 금주·차주로 옮겨진다
+  PRE_FLAG: 'H2',        // 'Y'면 미리 쓴 내용이 있음
+  PRE_NOTE: 'H3',        // 다음 주 휴무계획/특이사항
+  PRE_THIS_COL: 7,       // G:H 다음 주의 "금주" 업무·기한
+  PRE_NEXT_COL: 10,      // J:K 다다음 주의 "차주" 업무·기한
+  PRE_THIS_LABEL: 'G5',
+  PRE_NEXT_LABEL: 'J5',
 };
 
 // 주간보고 시트 레이아웃
@@ -187,6 +194,7 @@ function getContext() {
     hour: hour,
     thisWeek: getWeekInfo(monday, holidays),
     nextWeek: getWeekInfo(addDays(monday, 7), holidays),
+    afterWeek: getWeekInfo(addDays(monday, 14), holidays),
     deadline: cfg[CFG.DEADLINE] instanceof Date ? cfg[CFG.DEADLINE] : defaultDeadline(monday, holidays, hour),
     members: getMembers(),
   };
@@ -195,9 +203,9 @@ function getContext() {
 /** 팀원 입력시트 읽기 */
 function readInput(ss, name) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
-  if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [] };
-  // 작성완료·특이사항·업무 목록을 한 번에 읽는다 (시트 요청 1회)
-  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, 5).getValues();
+  if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [], pre: emptyPre_() };
+  // 작성완료·특이사항·업무 목록·미리 쓰기를 한 번에 읽는다 (시트 요청 1회)
+  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 1).getValues();
   const at = a1 => { const r = sh.getRange(a1); return v[r.getRow() - 1][r.getColumn() - 1]; };
   const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
@@ -206,7 +214,25 @@ function readInput(ss, name) {
     note: String(at(INPUT.NOTE_CELL) || '').trim(),
     thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1] })),
     nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4] })),
+    pre: readPre_(rows, at),
   };
+}
+
+function emptyPre_() {
+  return { exists: false, note: '', thisWeek: [], nextWeek: [] };
+}
+
+/** 입력시트 G~K열의 "다음 주 미리 쓰기" */
+function readPre_(rows, at) {
+  const t = INPUT.PRE_THIS_COL - 1, n = INPUT.PRE_NEXT_COL - 1;
+  const pre = {
+    exists: String(at(INPUT.PRE_FLAG)).toUpperCase() === 'Y',
+    note: String(at(INPUT.PRE_NOTE) || '').trim(),
+    thisWeek: rows.filter(r => String(r[t]).trim()).map(r => ({ task: String(r[t]).trim(), due: r[t + 1] })),
+    nextWeek: rows.filter(r => String(r[n]).trim()).map(r => ({ task: String(r[n]).trim(), due: r[n + 1] })),
+  };
+  if (!pre.exists) return emptyPre_();
+  return pre;
 }
 
 function sheetUrl(ss, sh) {

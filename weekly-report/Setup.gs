@@ -181,12 +181,32 @@ function setupInputSheet_(ss, name, ctx) {
 
   sh.setColumnWidth(1, 380).setColumnWidth(2, 110).setColumnWidth(3, 16).setColumnWidth(4, 380).setColumnWidth(5, 110);
   sh.setFrozenRows(6);
+  ensurePreArea_(sh, ctx);
   return sh;
 }
 
 function writeInputLabels_(sh, ctx) {
   sh.getRange(INPUT.THIS_LABEL).setValue(ctx.thisWeek.label);
   sh.getRange(INPUT.NEXT_LABEL).setValue(ctx.nextWeek.label);
+  sh.getRange(INPUT.PRE_THIS_LABEL).setValue(ctx.nextWeek.label);
+  sh.getRange(INPUT.PRE_NEXT_LABEL).setValue(ctx.afterWeek.label);
+}
+
+/** 입력시트 오른쪽(G~K열)에 "다음 주 미리 쓰기" 칸을 만든다. 예전에 만든 시트에도 처음 저장할 때 추가된다. */
+function ensurePreArea_(sh, ctx) {
+  if (sh.getRange('G1').getValue()) return;
+  sh.getRange('G1').setValue('다음 주 미리 쓰기 (월요일에 왼쪽 금주·차주로 옮겨집니다)').setFontWeight('bold');
+  sh.getRange('G2:G3').setValues([['미리 씀(Y)'], ['다음 주 휴무/특이사항']]).setFontWeight('bold');
+  sh.getRange('H3:K3').merge();
+  sh.getRange('G5:H5').merge();
+  sh.getRange('J5:K5').merge();
+  sh.getRange('G6:K6').setValues([['금주 주요업무', '기한', '', '차주 주요업무', '기한']]);
+  styleHeader_(sh.getRange('G5:H6'));
+  styleHeader_(sh.getRange('J5:K6'));
+  sh.getRange(INPUT.PRE_THIS_LABEL).setValue(ctx.nextWeek.label);
+  sh.getRange(INPUT.PRE_NEXT_LABEL).setValue(ctx.afterWeek.label);
+  [8, 11].forEach(c => sh.getRange(INPUT.FIRST_ROW, c, INPUT.ROWS, 1).setNumberFormat('mm/dd (ddd)').setHorizontalAlignment('center'));
+  sh.setColumnWidth(6, 16).setColumnWidth(7, 320).setColumnWidth(8, 110).setColumnWidth(9, 16).setColumnWidth(10, 320).setColumnWidth(11, 110);
 }
 
 function styleHeader_(range) {

@@ -52,17 +52,37 @@ function carryOver_(ss, name, ctx) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
   if (!sh) return;
 
-  const rows = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).getValues().filter(r => String(r[0]).trim());
-  const keep = rows.filter(r => String(r[1]).trim() === '지속');
-
+  const pre = readInput(ss, name).pre;
+  const lastNext = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).getValues().filter(r => String(r[0]).trim());
   sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).clearContent();
   sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).clearContent();
-  if (rows.length) sh.getRange(INPUT.FIRST_ROW, 1, rows.length, 2).setValues(rows);
-  if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 2).setValues(keep);
 
-  sh.getRange(INPUT.DONE_CELL).setValue(false);
-  sh.getRange(INPUT.NOTE_CELL).clearContent();
+  if (pre.exists) {
+    // 미리 써둔 다음 주 보고를 그대로 옮기고 작성완료로 표시
+    const toRows = list => list.slice(0, INPUT.ROWS).map(x => [x.task, x.due]);
+    const thisRows = toRows(pre.thisWeek), nextRows = toRows(pre.nextWeek);
+    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 2).setValues(thisRows);
+    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
+    sh.getRange(INPUT.DONE_CELL).setValue(true);
+    sh.getRange(INPUT.NOTE_CELL).setValue(pre.note);
+    clearPre_(sh);
+  } else {
+    // 기본: 차주 → 금주, "지속" 업무는 차주에도 유지
+    const keep = lastNext.filter(r => String(r[1]).trim() === '지속');
+    if (lastNext.length) sh.getRange(INPUT.FIRST_ROW, 1, lastNext.length, 2).setValues(lastNext);
+    if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 2).setValues(keep);
+    sh.getRange(INPUT.DONE_CELL).setValue(false);
+    sh.getRange(INPUT.NOTE_CELL).clearContent();
+  }
   writeInputLabels_(sh, ctx);
+}
+
+/** 미리 쓰기 칸 비우기 */
+function clearPre_(sh) {
+  sh.getRange(INPUT.PRE_FLAG).clearContent();
+  sh.getRange(INPUT.PRE_NOTE).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).clearContent();
 }
 
 /** 현재 주간보고를 "보관_yyyy-MM-dd" 시트로 복사해 숨김 */

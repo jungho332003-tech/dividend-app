@@ -42,6 +42,13 @@ const INPUT = {
   NEXT_LABEL: 'D5',
   FIRST_ROW: 7,
   ROWS: 20,
+  // 다음 주 미리 쓰기 (G~K열): 월요일에 금주·차주로 옮겨진다
+  PRE_FLAG: 'H2',        // 'Y'면 미리 쓴 내용이 있음
+  PRE_NOTE: 'H3',        // 다음 주 휴무계획/특이사항
+  PRE_THIS_COL: 7,       // G:H 다음 주의 "금주" 업무·기한
+  PRE_NEXT_COL: 10,      // J:K 다다음 주의 "차주" 업무·기한
+  PRE_THIS_LABEL: 'G5',
+  PRE_NEXT_LABEL: 'J5',
 };
 
 // 주간보고 시트 레이아웃
@@ -196,6 +203,7 @@ function getContext() {
     hour: hour,
     thisWeek: getWeekInfo(monday, holidays),
     nextWeek: getWeekInfo(addDays(monday, 7), holidays),
+    afterWeek: getWeekInfo(addDays(monday, 14), holidays),
     deadline: cfg[CFG.DEADLINE] instanceof Date ? cfg[CFG.DEADLINE] : defaultDeadline(monday, holidays, hour),
     members: getMembers(),
   };
@@ -204,9 +212,9 @@ function getContext() {
 /** 팀원 입력시트 읽기 */
 function readInput(ss, name) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
-  if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [] };
-  // 작성완료·특이사항·업무 목록을 한 번에 읽는다 (시트 요청 1회)
-  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, 5).getValues();
+  if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [], pre: emptyPre_() };
+  // 작성완료·특이사항·업무 목록·미리 쓰기를 한 번에 읽는다 (시트 요청 1회)
+  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 1).getValues();
   const at = a1 => { const r = sh.getRange(a1); return v[r.getRow() - 1][r.getColumn() - 1]; };
   const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
@@ -215,7 +223,25 @@ function readInput(ss, name) {
     note: String(at(INPUT.NOTE_CELL) || '').trim(),
     thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1] })),
     nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4] })),
+    pre: readPre_(rows, at),
   };
+}
+
+function emptyPre_() {
+  return { exists: false, note: '', thisWeek: [], nextWeek: [] };
+}
+
+/** 입력시트 G~K열의 "다음 주 미리 쓰기" */
+function readPre_(rows, at) {
+  const t = INPUT.PRE_THIS_COL - 1, n = INPUT.PRE_NEXT_COL - 1;
+  const pre = {
+    exists: String(at(INPUT.PRE_FLAG)).toUpperCase() === 'Y',
+    note: String(at(INPUT.PRE_NOTE) || '').trim(),
+    thisWeek: rows.filter(r => String(r[t]).trim()).map(r => ({ task: String(r[t]).trim(), due: r[t + 1] })),
+    nextWeek: rows.filter(r => String(r[n]).trim()).map(r => ({ task: String(r[n]).trim(), due: r[n + 1] })),
+  };
+  if (!pre.exists) return emptyPre_();
+  return pre;
 }
 
 function sheetUrl(ss, sh) {
@@ -409,12 +435,32 @@ function setupInputSheet_(ss, name, ctx) {
 
   sh.setColumnWidth(1, 380).setColumnWidth(2, 110).setColumnWidth(3, 16).setColumnWidth(4, 380).setColumnWidth(5, 110);
   sh.setFrozenRows(6);
+  ensurePreArea_(sh, ctx);
   return sh;
 }
 
 function writeInputLabels_(sh, ctx) {
   sh.getRange(INPUT.THIS_LABEL).setValue(ctx.thisWeek.label);
   sh.getRange(INPUT.NEXT_LABEL).setValue(ctx.nextWeek.label);
+  sh.getRange(INPUT.PRE_THIS_LABEL).setValue(ctx.nextWeek.label);
+  sh.getRange(INPUT.PRE_NEXT_LABEL).setValue(ctx.afterWeek.label);
+}
+
+/** 입력시트 오른쪽(G~K열)에 "다음 주 미리 쓰기" 칸을 만든다. 예전에 만든 시트에도 처음 저장할 때 추가된다. */
+function ensurePreArea_(sh, ctx) {
+  if (sh.getRange('G1').getValue()) return;
+  sh.getRange('G1').setValue('다음 주 미리 쓰기 (월요일에 왼쪽 금주·차주로 옮겨집니다)').setFontWeight('bold');
+  sh.getRange('G2:G3').setValues([['미리 씀(Y)'], ['다음 주 휴무/특이사항']]).setFontWeight('bold');
+  sh.getRange('H3:K3').merge();
+  sh.getRange('G5:H5').merge();
+  sh.getRange('J5:K5').merge();
+  sh.getRange('G6:K6').setValues([['금주 주요업무', '기한', '', '차주 주요업무', '기한']]);
+  styleHeader_(sh.getRange('G5:H6'));
+  styleHeader_(sh.getRange('J5:K6'));
+  sh.getRange(INPUT.PRE_THIS_LABEL).setValue(ctx.nextWeek.label);
+  sh.getRange(INPUT.PRE_NEXT_LABEL).setValue(ctx.afterWeek.label);
+  [8, 11].forEach(c => sh.getRange(INPUT.FIRST_ROW, c, INPUT.ROWS, 1).setNumberFormat('mm/dd (ddd)').setHorizontalAlignment('center'));
+  sh.setColumnWidth(6, 16).setColumnWidth(7, 320).setColumnWidth(8, 110).setColumnWidth(9, 16).setColumnWidth(10, 320).setColumnWidth(11, 110);
 }
 
 function styleHeader_(range) {
@@ -665,17 +711,37 @@ function carryOver_(ss, name, ctx) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
   if (!sh) return;
 
-  const rows = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).getValues().filter(r => String(r[0]).trim());
-  const keep = rows.filter(r => String(r[1]).trim() === '지속');
-
+  const pre = readInput(ss, name).pre;
+  const lastNext = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).getValues().filter(r => String(r[0]).trim());
   sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).clearContent();
   sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).clearContent();
-  if (rows.length) sh.getRange(INPUT.FIRST_ROW, 1, rows.length, 2).setValues(rows);
-  if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 2).setValues(keep);
 
-  sh.getRange(INPUT.DONE_CELL).setValue(false);
-  sh.getRange(INPUT.NOTE_CELL).clearContent();
+  if (pre.exists) {
+    // 미리 써둔 다음 주 보고를 그대로 옮기고 작성완료로 표시
+    const toRows = list => list.slice(0, INPUT.ROWS).map(x => [x.task, x.due]);
+    const thisRows = toRows(pre.thisWeek), nextRows = toRows(pre.nextWeek);
+    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 2).setValues(thisRows);
+    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
+    sh.getRange(INPUT.DONE_CELL).setValue(true);
+    sh.getRange(INPUT.NOTE_CELL).setValue(pre.note);
+    clearPre_(sh);
+  } else {
+    // 기본: 차주 → 금주, "지속" 업무는 차주에도 유지
+    const keep = lastNext.filter(r => String(r[1]).trim() === '지속');
+    if (lastNext.length) sh.getRange(INPUT.FIRST_ROW, 1, lastNext.length, 2).setValues(lastNext);
+    if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 2).setValues(keep);
+    sh.getRange(INPUT.DONE_CELL).setValue(false);
+    sh.getRange(INPUT.NOTE_CELL).clearContent();
+  }
   writeInputLabels_(sh, ctx);
+}
+
+/** 미리 쓰기 칸 비우기 */
+function clearPre_(sh) {
+  sh.getRange(INPUT.PRE_FLAG).clearContent();
+  sh.getRange(INPUT.PRE_NOTE).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).clearContent();
 }
 
 /** 현재 주간보고를 "보관_yyyy-MM-dd" 시트로 복사해 숨김 */
@@ -1869,6 +1935,7 @@ function baseData_(ctx) {
       title: `${ctx.cfg[CFG.TEAM] || ''} 주간업무 ${deadlineText(ctx)}`,
       thisStart: ymd(ctx.thisWeek.start),
       thisEnd: ymd(ctx.thisWeek.end),
+      afterLabel: ctx.afterWeek.label,
     },
     ruleCategories: RULES.CATEGORIES,
   };
@@ -1890,6 +1957,12 @@ function readMember_(ctx, name, comment) {
     thisWeek: input.thisWeek.map(toClientItem_),
     nextWeek: input.nextWeek.map(toClientItem_),
     comment: String(comment || ''),
+    pre: {
+      exists: input.pre.exists,
+      note: input.pre.note,
+      thisWeek: input.pre.thisWeek.map(toClientItem_),
+      nextWeek: input.pre.nextWeek.map(toClientItem_),
+    },
   };
 }
 
@@ -2024,6 +2097,33 @@ function createMyInputSheet_(ctx, me) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 다음 주 보고 미리 쓰기. payload: { thisWeek, nextWeek, note } (clear:true면 지우기)
+ * 월요일 자동 이월 때 이 내용이 금주·차주로 옮겨지고 작성완료로 표시된다.
+ */
+function apiSavePreWeek(payload) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'weekly');
+  if (!me.writer) throw new Error('작성 대상 팀원으로 등록되어 있지 않습니다. 관리자에게 [팀원] 시트 등록을 요청하세요.');
+  const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name) || createMyInputSheet_(ctx, me);
+  ensurePreArea_(sh, ctx);
+
+  clearPre_(sh);
+  if (!payload.clear) {
+    const toRows = list => (list || [])
+      .filter(x => String(x.task || '').trim())
+      .slice(0, INPUT.ROWS)
+      .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+    const thisRows = toRows(payload.thisWeek), nextRows = toRows(payload.nextWeek);
+    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, thisRows.length, 2).setValues(thisRows);
+    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, nextRows.length, 2).setValues(nextRows);
+    sh.getRange(INPUT.PRE_NOTE).setValue(String(payload.note || '').trim());
+    sh.getRange(INPUT.PRE_FLAG).setValue('Y');
+  }
+  return memberPatch_(ctx, me.name);
 }
 
 function parseDue_(v) {

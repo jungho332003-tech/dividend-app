@@ -79,6 +79,7 @@ function baseData_(ctx) {
       title: `${ctx.cfg[CFG.TEAM] || ''} 주간업무 ${deadlineText(ctx)}`,
       thisStart: ymd(ctx.thisWeek.start),
       thisEnd: ymd(ctx.thisWeek.end),
+      afterLabel: ctx.afterWeek.label,
     },
     ruleCategories: RULES.CATEGORIES,
   };
@@ -100,6 +101,12 @@ function readMember_(ctx, name, comment) {
     thisWeek: input.thisWeek.map(toClientItem_),
     nextWeek: input.nextWeek.map(toClientItem_),
     comment: String(comment || ''),
+    pre: {
+      exists: input.pre.exists,
+      note: input.pre.note,
+      thisWeek: input.pre.thisWeek.map(toClientItem_),
+      nextWeek: input.pre.nextWeek.map(toClientItem_),
+    },
   };
 }
 
@@ -234,6 +241,33 @@ function createMyInputSheet_(ctx, me) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 다음 주 보고 미리 쓰기. payload: { thisWeek, nextWeek, note } (clear:true면 지우기)
+ * 월요일 자동 이월 때 이 내용이 금주·차주로 옮겨지고 작성완료로 표시된다.
+ */
+function apiSavePreWeek(payload) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'weekly');
+  if (!me.writer) throw new Error('작성 대상 팀원으로 등록되어 있지 않습니다. 관리자에게 [팀원] 시트 등록을 요청하세요.');
+  const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name) || createMyInputSheet_(ctx, me);
+  ensurePreArea_(sh, ctx);
+
+  clearPre_(sh);
+  if (!payload.clear) {
+    const toRows = list => (list || [])
+      .filter(x => String(x.task || '').trim())
+      .slice(0, INPUT.ROWS)
+      .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+    const thisRows = toRows(payload.thisWeek), nextRows = toRows(payload.nextWeek);
+    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, thisRows.length, 2).setValues(thisRows);
+    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, nextRows.length, 2).setValues(nextRows);
+    sh.getRange(INPUT.PRE_NOTE).setValue(String(payload.note || '').trim());
+    sh.getRange(INPUT.PRE_FLAG).setValue('Y');
+  }
+  return memberPatch_(ctx, me.name);
 }
 
 function parseDue_(v) {
