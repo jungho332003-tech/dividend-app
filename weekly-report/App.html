@@ -424,6 +424,123 @@
     .post-head { grid-template-columns: auto minmax(0, 1fr); }
     .post-meta { grid-column: 2; }
   }
+  /* ===== 휴대폰 ===== */
+  .mtop, .mcards, .short { display: none; }
+  .ph { color: var(--muted); }
+  .mcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .mcard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .mcard-head b { font-size: 16px; }
+  .mnote { margin: 0; font-size: 13px; color: var(--ink-2); background: var(--panel-2); border-radius: 6px; padding: 6px 8px; }
+  .msec h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+  .msec ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .msec li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .msec li:first-child { border-top: 0; }
+  .msec li em { font-style: normal; color: var(--muted); font-size: 12.5px; white-space: nowrap; padding-top: 1px; }
+  .msec .none { margin: 0; color: var(--muted); font-size: 13px; }
+  .mcm { background: var(--comment-bg); border-radius: 8px; padding: 9px 11px; font-size: 14px; white-space: pre-wrap; min-height: 38px; }
+  .mcm textarea { width: 100%; min-height: 80px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 8px; background: var(--panel); }
+  .unit { display: none; }
+
+  @media (max-width: 760px) {
+    body { padding-block: 0 calc(76px + env(safe-area-inset-bottom, 0px)); padding-inline: 12px; font-size: 15px; }
+    .demo-bar { margin: 10px 0 0; font-size: 12px; }
+
+    /* 위: 간단한 머리줄 */
+    .mtop {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; margin: 0 -12px 12px; padding: 10px 16px;
+      background: var(--bg); border-bottom: 1px solid var(--line);
+    }
+    .mtop div { display: flex; flex-direction: column; line-height: 1.3; }
+    .mtop b { font-size: 15px; }
+    .mtop span { color: var(--muted); font-size: 12px; }
+    .mtop .avatar {
+      width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-2);
+      display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none;
+    }
+
+    /* 아래: 탭 바 */
+    .app { display: block; }
+    .side {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 30; border-radius: 0; border: 0; border-top: 1px solid var(--line);
+      padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 16px rgba(0, 0, 0, .06);
+    }
+    .brand, .me { display: none; }
+    .nav { flex-direction: row; gap: 0; overflow: visible; }
+    .nav button {
+      flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 2px; border-radius: 8px;
+      position: relative; min-height: 52px;
+    }
+    .nav button .ni { flex-direction: column; gap: 2px; }
+    .nav button .ico { font-size: 18px; width: auto; }
+    .nav button .full { display: none; }
+    .nav button .short { display: inline; font-size: 11px; white-space: nowrap; }
+    .nav button[aria-current="page"] { background: none; }
+    .nav button[aria-current="page"] .short { font-weight: 700; }
+    .nav button > span:not(.ni) { position: absolute; top: 2px; left: 50%; margin-left: 6px; }
+    .nav .count { font-size: 10px; min-width: 16px; padding: 0 4px; }
+
+    .main { gap: 12px; }
+    .head h1 { font-size: 20px; }
+    .head p { font-size: 13px; }
+    .head-actions { width: 100%; }
+    .head-actions .btn { flex: 1 1 auto; justify-content: center; }
+    .panel { padding: 14px 12px; }
+    .btn { min-height: 40px; }
+    .btn.small { min-height: 34px; }
+
+    /* iPhone에서 입력할 때 화면이 확대되지 않도록 16px */
+    input, select, textarea, .field-in, .search { font-size: 16px !important; }
+
+    /* 표 → 카드 */
+    table.cards, table.cards tbody, table.cards tr, table.cards td { display: block; width: 100%; }
+    table.cards thead { display: none; }
+    table.cards tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    table.cards td { border: 0; padding: 0; text-align: left !important; white-space: normal !important; }
+    table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+    table.cards td.c-wide, table.cards td.c-full { grid-column: 1 / -1; }
+    .budget-cards td.c-id { grid-column: 1 / -1; order: 0; font-size: 12px; color: var(--muted); }
+    .budget-cards td.c-who { order: 1; }
+    .budget-cards td.c-amt { order: 2; }
+    .budget-cards td.c-move { order: 3; }
+    .budget-cards td.c-full { order: 4; }
+    .budget-cards td.c-act { order: 5; }
+    .budget-cards td.c-id br { display: none; }
+    .budget-cards td.c-id span { margin-left: 6px; }
+    .budget-cards td.c-who { font-size: 16px; }
+    .budget-cards td.c-amt { text-align: right !important; font-size: 16px; }
+    .budget-cards td.c-move { grid-column: 1 / -1; color: var(--ink-2); }
+    .budget-cards td.c-act:empty { display: none; }
+    .budget-cards td.c-act { grid-column: 1 / -1; }
+    .unit { display: inline; font-weight: 400; font-size: 13px; margin-left: 2px; }
+    .admin-cards td.c-x { position: absolute; right: 6px; top: 6px; width: auto; }
+    .admin-cards tr { position: relative; }
+    .admin-cards td input.field-in { width: 100%; min-width: 0 !important; }
+    .admin-cards td label { justify-content: flex-start !important; }
+
+    /* 팀 주간보고: 카드로 */
+    .mcards { display: flex; flex-direction: column; gap: 10px; }
+    .desk { display: none; }
+
+    /* 내 주간업무 */
+    .item { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .item > input[data-f="task"] { grid-column: 1 / -1; }
+    .save-bar { position: static; box-shadow: none; padding: 12px; gap: 10px; }
+    .desk-only { display: none; }
+    .save-bar .left { flex: 1 1 100%; }
+    .save-bar .btn.primary { flex: 1 1 auto; justify-content: center; }
+
+    /* 모달: 아래에서 올라오는 시트 */
+    .scrim { align-items: flex-end; padding: 0; }
+    .modal { max-width: none; border-radius: 16px 16px 0 0; max-height: 92vh; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+    .modal-actions .btn { flex: 1 1 0; justify-content: center; }
+
+    .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+    .cal-day { min-height: 54px; }
+    .subtabs { margin: 0 -12px; padding: 0 12px; }
+    .filters button { padding: 6px 14px; }
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .toast { animation: up .18s ease-out; }
     @keyframes up { from { transform: translate(-50%, 8px); opacity: .5; } }
@@ -432,17 +549,19 @@
 
 <div class="demo-bar" id="demoBar" hidden></div>
 
+<header class="mtop" id="mtop"></header>
+
 <div class="app">
   <aside class="side">
     <div class="brand"><b id="brandTeam">업무관리</b><span id="brandWeek"></span></div>
     <nav class="nav" id="nav" aria-label="메뉴">
-      <button data-page="dash"><span class="ni"><i class="ico">◧</i>대시보드</span></button>
-      <button data-page="weekly"><span class="ni"><i class="ico">☰</i>주간업무보고</span><span id="cReport"></span></button>
-      <button data-page="budget"><span class="ni"><i class="ico">₩</i>예산전용</span></button>
-      <button data-page="calendar"><span class="ni"><i class="ico">▦</i>일정</span></button>
-      <button data-page="board"><span class="ni"><i class="ico">✎</i>공유게시판</span><span id="cBoard"></span></button>
-      <button data-page="rules"><span class="ni"><i class="ico">§</i>회사 기준</span></button>
-      <button data-page="admin" hidden><span class="ni"><i class="ico">⚙</i>관리</span><span id="cAdmin"></span></button>
+      <button data-page="dash"><span class="ni"><i class="ico">◧</i><span class="full">대시보드</span><span class="short">홈</span></span></button>
+      <button data-page="weekly"><span class="ni"><i class="ico">☰</i><span class="full">주간업무보고</span><span class="short">주간보고</span></span><span id="cReport"></span></button>
+      <button data-page="budget"><span class="ni"><i class="ico">₩</i><span class="full">예산전용</span><span class="short">예산</span></span></button>
+      <button data-page="calendar"><span class="ni"><i class="ico">▦</i><span class="full">일정</span><span class="short">일정</span></span></button>
+      <button data-page="board"><span class="ni"><i class="ico">✎</i><span class="full">공유게시판</span><span class="short">게시판</span></span><span id="cBoard"></span></button>
+      <button data-page="rules"><span class="ni"><i class="ico">§</i><span class="full">회사 기준</span><span class="short">기준</span></span></button>
+      <button data-page="admin" hidden><span class="ni"><i class="ico">⚙</i><span class="full">관리</span><span class="short">관리</span></span><span id="cAdmin"></span></button>
     </nav>
     <div class="me" id="meBox"></div>
   </aside>
@@ -543,6 +662,8 @@
     $('#brandTeam').textContent = `${D.team} 업무관리`;
     $('#brandWeek').textContent = D.week.thisLabel;
     const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
+    $('#mtop').innerHTML = `<div><b>${esc(D.team)} 업무관리</b><span>${esc(D.week.thisLabel)}</span></div>
+      <span class="avatar" title="${esc(D.me.email || '')}">${esc(D.me.name ? D.me.name.slice(-2) : '?')}</span>`;
     $('#meBox').innerHTML = D.me.name
       ? `<b>${esc(D.me.name)} · ${role}</b><span>${esc(D.me.email)}</span>`
       : `<b>등록되지 않은 사용자</b><span>${esc(D.me.email || '')}</span>`;
@@ -567,6 +688,23 @@
     if (page === 'admin' && !A) loadAdmin();
     if (page === 'calendar') loadMonth();
     renderDemoBar();
+  }
+
+  /** 휴대폰용 팀 주간보고: 사람별 카드 */
+  function reportCards() {
+    const list = items => items.length
+      ? `<ul>${items.map(it => `<li><span>${esc(it.task)}</span><em>${esc(it.due)}</em></li>`).join('')}</ul>`
+      : '<p class="none">작성한 업무가 없습니다.</p>';
+    return D.members.map(m => `
+      <article class="mcard">
+        <div class="mcard-head">
+          <b>${esc(m.name)}</b>${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
+        </div>
+        ${m.note ? `<p class="mnote">🗓 ${esc(m.note)}</p>` : ''}
+        <div class="msec"><h4>금주 · ${esc(D.week.thisLabel)}</h4>${list(m.thisWeek)}</div>
+        <div class="msec"><h4>차주 · ${esc(D.week.nextLabel)}</h4>${list(m.nextWeek)}</div>
+        ${m.comment || D.me.isLeader ? `<div class="cm mcm ${D.me.isLeader ? 'editable' : ''}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" role="button"' : ''}>${m.comment ? esc(m.comment) : '<span class="ph">팀장 코멘트 남기기</span>'}</div>` : ''}
+      </article>`).join('');
   }
 
   function can(k) { return !!(D && D.me.menus && D.me.menus.indexOf(k) >= 0); }
@@ -782,7 +920,8 @@
         <section class="panel">
           <p class="report-title">■ ${esc(D.week.title)}</p>
           <p class="report-note">${D.me.isLeader ? '팀장 코멘트 칸을 누르면 바로 작성할 수 있습니다.' : '팀장 코멘트는 팀장님만 작성할 수 있습니다.'}</p>
-          <div class="table-wrap">
+          <div class="mcards">${reportCards()}</div>
+          <div class="table-wrap desk">
             <table class="report">
               <thead>
                 <tr><th rowspan="2">이 름</th><th colspan="2">${esc(D.week.thisLabel)}</th><th colspan="2">${esc(D.week.nextLabel)}</th><th rowspan="2">휴무계획/특이사항</th><th rowspan="2">팀장 코멘트</th></tr>
@@ -801,12 +940,12 @@
       const rows = list.map(r => {
         const canCancel = r.req === D.me.name || D.me.isLeader || D.me.isAdmin;
         return `<tr>
-          <td class="nowrap">${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">${esc(r.date)}</span></td>
-          <td class="nowrap strong">${esc(r.req)}</td>
-          <td class="nowrap">${esc(r.from)} → ${esc(r.to)}</td>
-          <td class="num strong">${won(r.amount)}</td>
-          <td>${esc(r.reason)}${filesView(r.files, true)}</td>
-          <td class="nowrap">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
+          <td class="nowrap c-id">${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">${esc(r.date)}</span></td>
+          <td class="nowrap strong c-who">${esc(r.req)}</td>
+          <td class="nowrap c-move">${esc(r.from)} → ${esc(r.to)}</td>
+          <td class="num strong c-amt">${won(r.amount)}<span class="unit">원</span></td>
+          <td class="c-full">${esc(r.reason)}${filesView(r.files, true)}</td>
+          <td class="nowrap c-act">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
         </tr>`;
       }).join('') || '<tr><td colspan="6" class="empty">신청 내역이 없습니다.</td></tr>';
       return `
@@ -817,7 +956,7 @@
         <section class="panel">
           <div class="panel-head"><div class="filters">${f('all', '전체', D.budget.requests.length)}${D.me.name ? f('mine', '내 신청', D.budget.requests.filter(r => r.req === D.me.name).length) : ''}</div></div>
           <div class="table-wrap">
-            <table class="t">
+            <table class="t cards budget-cards">
               <thead><tr><th>신청번호</th><th>신청자</th><th>전출 → 전입</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
@@ -1268,14 +1407,14 @@
       const st = A.status.people[m.name];
       const saved = A.members.some(x => x.name === m.name && x.email === m.email);
       return `<tr>
-        <td><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
-        <td><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일"></td>
-        <td>${sel(i, m.role)}</td>
-        <td>${chk(i, 'write', m.write, '주간보고 작성')}</td>
-        <td>${chk(i, 'admin', m.admin, '관리자')}</td>
-        ${st && saved ? `<td>${accessChip('sheet', st.sheet)}</td><td>${accessChip('input', st.input)}</td><td>${accessChip('folder', st.folder)}</td><td>${accessChip('calendar', st.calendar)}</td>`
-          : `<td colspan="4"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
-        <td><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">×</button></td>
+        <td data-label="이름"><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
+        <td data-label="이메일" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일"></td>
+        <td data-label="역할">${sel(i, m.role)}</td>
+        <td data-label="주간보고 작성">${chk(i, 'write', m.write, '주간보고 작성')}</td>
+        <td data-label="관리자">${chk(i, 'admin', m.admin, '관리자')}</td>
+        ${st && saved ? `<td data-label="스프레드시트">${accessChip('sheet', st.sheet)}</td><td data-label="입력시트">${accessChip('input', st.input)}</td><td data-label="첨부 폴더">${accessChip('folder', st.folder)}</td><td data-label="팀 캘린더">${accessChip('calendar', st.calendar)}</td>`
+          : `<td colspan="4" class="c-wide"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
+        <td class="c-x"><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">×</button></td>
       </tr>`;
     }).join('');
     return `
@@ -1294,7 +1433,7 @@
       </section>
       <section class="panel">
         <div class="table-wrap">
-          <table class="t">
+          <table class="t cards admin-cards">
             <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
@@ -1454,7 +1593,7 @@
 
   function uploaderHtml(key, label) {
     return `<div class="fld"><label for="drop-${key}">${label}</label>
-      <div class="drop" id="drop-${key}" tabindex="0" role="button">파일을 끌어다 놓거나 <u>눌러서 선택</u> · 한 파일 10MB 이하</div>
+      <div class="drop" id="drop-${key}" tabindex="0" role="button"><span class="desk-only">파일을 끌어다 놓거나 </span><u>눌러서 파일 선택</u> · 한 파일 10MB 이하</div>
       <input type="file" id="file-${key}" multiple hidden>
       <div class="files" id="up-${key}"></div></div>`;
   }
@@ -1587,12 +1726,12 @@
 
   /* ================= 팀장 코멘트 ================= */
   document.addEventListener('click', e => {
-    const cell = e.target.closest('td.cm.editable');
+    const cell = e.target.closest('.cm.editable');
     if (!cell || cell.querySelector('textarea')) return;
     openComment(cell);
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.target.matches && e.target.matches('td.cm.editable') && !e.target.querySelector('textarea')) {
+    if (e.key === 'Enter' && e.target.matches && e.target.matches('.cm.editable') && !e.target.querySelector('textarea')) {
       e.preventDefault();
       openComment(e.target);
     }

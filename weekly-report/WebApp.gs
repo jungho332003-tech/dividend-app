@@ -10,7 +10,11 @@
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('App')
     .setTitle('인사팀 업무관리')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+    // 휴대폰 홈 화면에 추가했을 때 앱처럼 보이게
+    .addMetaTag('mobile-web-app-capable', 'yes')
+    .addMetaTag('apple-mobile-web-app-capable', 'yes')
+    .addMetaTag('apple-mobile-web-app-title', '업무관리');
 }
 
 /* ---------- 캐시 ----------
