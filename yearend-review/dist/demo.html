@@ -599,6 +599,92 @@
     .people-cards td { white-space: normal; }
     .people-cards td.c-hide { display: none; }
   }
+
+  /* ===== 화면 정리 (간격·크기 통일) ===== */
+  .main { gap: 14px; }
+  .head { align-items: center; min-height: 36px; }
+  .head h1 { font-size: 20px; }
+  .head p { font-size: 13px; }
+  .head-meta { color: var(--muted); font-size: 13px; }
+  .panel { padding: 14px 16px; }
+  .panel-head { margin-bottom: 10px; }
+  .panel-head h2 { font-size: 14px; }
+  .demo-bar { padding: 6px 12px; font-size: 12px; }
+  .nav button { padding: 8px 10px; }
+  .subtabs button { padding: 8px 12px; }
+  .tab-n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 2px; border-radius: 99px; background: var(--panel-2); color: var(--muted); font-size: 11.5px; font-weight: 600; text-align: center; }
+  .subtabs button[aria-selected="true"] .tab-n { background: var(--accent-soft); color: var(--accent-2); }
+  .filters button { padding: 3px 11px; font-size: 12.5px; }
+  .sheet-grid th { font-size: 12px; font-weight: 600; color: var(--ink-2); height: 38px; }
+  .sheet-grid th, .sheet-grid td { padding: 6px 10px; }
+
+  /* 공지 알림 (한 줄) */
+  .alerts { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .alert-row { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 14px; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .alert-row:first-child { border-top: 0; }
+  .alert-row:hover { background: var(--panel-2); }
+  .alert-tag { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-2); }
+  .alert-row.lv-긴급 .alert-tag { background: var(--warn-bg); color: var(--warn-ink); }
+  .alert-row.lv-중요 .alert-tag { background: var(--pend-bg); color: var(--pend-ink); }
+  .alert-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .alert-date { color: var(--muted); font-size: 12px; }
+
+  /* 지표 막대 */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .stat { display: flex; flex-direction: column; gap: 1px; padding: 12px 16px; border: 0; border-left: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .stat:first-child { border-left: 0; }
+  .stat:hover { background: var(--panel-2); }
+  .stat-l { font-size: 12px; color: var(--muted); }
+  .stat-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; }
+  .stat-v small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 1px; }
+  .stat-s { font-size: 12px; color: var(--muted); }
+  .stat.hot .stat-v { color: var(--accent-2); }
+  .stat.warn .stat-v { color: var(--warn-ink); }
+  .stat .meter { margin-top: 5px; }
+
+  /* 아래 세 칸 */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .prog2 { display: grid; grid-template-columns: 64px 40px 52px minmax(40px, 1fr) 38px; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .prog2:first-of-type { border-top: 0; }
+  .prog2 .n { color: var(--muted); font-size: 12px; text-align: right; }
+  .prog2 .n.warn { color: var(--warn-ink); font-weight: 700; }
+  .prog2 .pc { color: var(--ink-2); }
+  .more-link { font-size: 12.5px; padding-top: 8px; }
+  .t td .file { border: 0; padding: 0; background: none; max-width: 360px; }
+  .t td .file:hover .fn { text-decoration: underline; }
+  .t td { vertical-align: middle; }
+  .list-row { padding: 7px 0; }
+
+  /* 캘린더 간격 */
+  .cal-day { min-height: 74px; }
+  .cal-layout { grid-template-columns: minmax(0, 1fr) 260px; }
+  .cal-layout .ag { padding: 7px 0; }
+  .cal-layout .ag .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 드롭다운 메뉴 · 도움말 */
+  details.menu { position: relative; }
+  details.menu > summary { list-style: none; cursor: pointer; }
+  details.menu > summary::-webkit-details-marker { display: none; }
+  .menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; display: flex; flex-direction: column; }
+  .menu-pop button { background: none; border: 0; text-align: left; padding: 8px 10px; border-radius: 6px; font: inherit; color: var(--ink); cursor: pointer; }
+  .menu-pop button:hover { background: var(--panel-2); }
+  details.help { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  details.help summary { cursor: pointer; width: fit-content; }
+  details.help > div { margin-top: 6px; line-height: 1.7; }
+
+  @media (max-width: 1080px) { .grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .cal-layout { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) {
+    .grid-3 { grid-template-columns: minmax(0, 1fr); }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat { border-left: 0; border-top: 1px solid var(--line); }
+    .stat:nth-child(-n+2) { border-top: 0; }
+    .stat:nth-child(even) { border-left: 1px solid var(--line); }
+    .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .stat.done .meter { max-width: 100%; }
+    .cal-day { min-height: 46px; }
+    .head-actions { width: auto; }
+    .head-actions .btn { flex: 0 0 auto; }
+  }
 </style>
 
 <div class="demo-bar" id="demoBar" hidden></div>
@@ -1224,10 +1310,11 @@ window.MockApi = (function () {
   function noticeBanners() {
     const top = D.notices.filter(n => activeNotice(n) && (n.pinned || n.level === '긴급'));
     if (!top.length) return '';
-    return `<div class="banners">${top.map(n => `
-      <button class="banner lv-${esc(n.level)}" onclick="openNotice='${esc(n.id)}';go('notice')">
-        <span>${n.level === '긴급' ? '🚨' : n.level === '중요' ? '⚠️' : '📌'}</span>
-        <span><b>${isRead(n) ? '' : '<span class="unread"></span>'}${esc(n.title)}</b><span class="txt">${esc(n.body)}</span></span>
+    return `<div class="alerts">${top.map(n => `
+      <button class="alert-row lv-${esc(n.level)}" onclick="openNotice='${esc(n.id)}';go('notice')">
+        <span class="alert-tag">${n.level === '일반' ? '고정' : esc(n.level)}</span>
+        <span class="alert-title">${isRead(n) ? '' : '<span class="unread"></span>'}${esc(n.title)}</span>
+        <span class="alert-date">${esc(n.date.slice(5, 10))}</span>
       </button>`).join('')}</div>`;
   }
 
@@ -1239,59 +1326,52 @@ window.MockApi = (function () {
     const leave = P.filter(p => p.leave).length;
     const mine = D.me.name ? P.filter(myTodo) : [];
 
-    const kpis = can('review') || can('dash') ? `
-      <div class="kpis">
-        <div class="kpi click" onclick="reviewTab='all';reviewStatus='all';go('review')"><span class="label">검토 대상</span><span class="value">${P.length}<small>명</small></span><span class="sub">${leave ? `휴직 ${leave}명 포함` : '&nbsp;'}</span></div>
-        ${D.me.name ? `<div class="kpi click ${mine.length ? 'alert' : ''}" onclick="reviewTab='mine';reviewStatus='all';go('review')"><span class="label">내가 처리할 대상자</span><span class="value">${mine.length}<small>명</small></span><span class="sub">1차 검토·미비서류·2차 대기</span></div>` : ''}
-        <div class="kpi click ${cnt('supp') ? 'alert' : ''}" onclick="reviewTab='all';reviewStatus='supp';go('review')"><span class="label">미비서류</span><span class="value">${cnt('supp')}<small>명</small></span><span class="sub">보완 요청 필요</span></div>
-        <div class="kpi click" onclick="reviewTab='all';reviewStatus='wait2';go('review')"><span class="label">2차 검토 대기</span><span class="value">${cnt('wait2')}<small>명</small></span><span class="sub">1차 검증 완료</span></div>
-        <div class="kpi click" onclick="reviewTab='all';reviewStatus='done';go('review')"><span class="label">검토완료</span><span class="value">${pct}<small>%</small></span><span class="sub">${done} / ${P.length}명</span><div class="meter"><i style="width:${pct}%"></i></div></div>
-      </div>` : '';
+    const stat = (label, value, sub, onclick, cls) => `<button class="stat ${cls || ''}" onclick="${onclick}"><span class="stat-l">${label}</span><span class="stat-v">${value}</span><span class="stat-s">${sub}</span></button>`;
+    const kpis = `
+      <div class="stats">
+        ${stat('검토 대상', `${P.length}<small>명</small>`, leave ? `휴직 ${leave}명` : '전체', "reviewTab='all';reviewStatus='all';go('review')")}
+        ${D.me.name ? stat('내 차례', `${mine.length}<small>명</small>`, '1차·미비·2차', "reviewTab='mine';reviewStatus='all';go('review')", mine.length ? 'hot' : '') : ''}
+        ${stat('미비서류', `${cnt('supp')}<small>명</small>`, '보완 요청', "reviewTab='all';reviewStatus='supp';go('review')", cnt('supp') ? 'warn' : '')}
+        ${stat('2차 대기', `${cnt('wait2')}<small>명</small>`, '1차 완료', "reviewTab='all';reviewStatus='wait2';go('review')")}
+        <button class="stat done" onclick="reviewTab='all';reviewStatus='done';go('review')"><span class="stat-l">검토완료</span><span class="stat-v">${pct}<small>%</small></span><span class="stat-s">${done} / ${P.length}명</span><span class="meter"><i style="width:${pct}%"></i></span></button>
+      </div>`;
 
     // 담당자별 진행
     const owners = [...new Set(P.map(p => p.owner || '(미배정)'))].sort((a, b) => (a === '(미배정)') - (b === '(미배정)') || a.localeCompare(b, 'ko'));
-    const progRows = owners.map(o => {
-      const list = P.filter(p => (p.owner || '(미배정)') === o);
-      const c = k => list.filter(p => pStatus(p) === k).length;
-      const d = c('done'), pc = list.length ? Math.round(d / list.length * 100) : 0;
-      return `<div class="prog-row"><b>${esc(o)}</b><span class="n">${list.length}</span><span class="n">${c('none')}</span><span class="n">${c('review')}</span><span class="n ${c('supp') ? 'warn' : ''}">${c('supp')}</span><span class="n">${c('wait2')}</span>
-        <div class="meter" title="검토완료 ${d}명 (${pc}%)"><i style="width:${pc}%"></i></div></div>`;
-    }).join('');
-
-    const todoRows = mine.slice(0, 8).map(p => `
+    const todoRows = mine.slice(0, 5).map(p => `
       <div class="list-row" style="cursor:pointer" onclick="openPerson('${esc(p.id)}')">
         <span class="who">${esc(p.name)}</span>${statusChip(p)}
         <span class="meta">${esc(p.dept)}${p.owner2 === D.me.name && pStatus(p) === 'wait2' ? ' · 2차 검토 차례' : ''}${p.missing ? ` · ⚠ ${esc(p.missing)}` : ''}</span>
-      </div>`).join('') || '<div class="empty">지금 처리할 대상자가 없습니다.</div>';
+      </div>`).join('') + (mine.length > 5 ? `<button class="linkish more-link" onclick="reviewTab='mine';reviewStatus='all';go('review')">외 ${mine.length - 5}명 더 보기</button>` : '') || '<div class="empty">지금 처리할 대상자가 없습니다.</div>';
 
-    const recentNotices = D.notices.filter(activeNotice).slice(0, 5).map(n => `
+    const recentNotices = D.notices.filter(activeNotice).slice(0, 4).map(n => `
       <div class="list-row" style="cursor:pointer;grid-template-columns:auto minmax(0,1fr) auto" onclick="openNotice='${esc(n.id)}';go('notice')">
         <span class="chip cat-${esc(n.category)}">${esc(n.category)}</span>
-        <span class="who" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isRead(n) ? '' : '<span class="unread"></span>'}${n.pinned ? '📌 ' : ''}${esc(n.title)}</span>
+        <span class="who" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isRead(n) ? '' : '<span class="unread"></span>'}${esc(n.title)}</span>
         <span class="meta">${esc(n.date.slice(5, 10))}</span>
       </div>`).join('') || '<div class="empty">게시 중인 공지가 없습니다.</div>';
 
-    const recentLogs = D.logs.slice(0, 5).map(logRow).join('') || '<div class="empty">응대기록이 없습니다.</div>';
-
     return `
       <div class="head">
-        <div><h1>${esc(D.year)}년 귀속 연말정산</h1><p>${esc(D.team)} · ${D.me.name ? `${esc(D.me.name)}님` : ''} 오늘 ${esc(todayKey())}</p></div>
+        <div><h1>${esc(D.year)}년 귀속 연말정산</h1></div>
+        <span class="head-meta">${D.me.name ? `${esc(D.me.name)}님 · ` : ''}${esc(todayKey())}</span>
       </div>
       ${can('notice') ? noticeBanners() : ''}
-      ${kpis}
+      ${can('review') || can('dash') ? kpis : ''}
       ${calendarHtml()}
-      <div class="grid-2">
+      <div class="grid-3">
         <section class="panel">
-          <div class="panel-head"><h2>담당자별 진행</h2><span>대상 · 미도착 · 1차중 · 미비 · 2차대기 · 완료율</span></div>
-          <div class="prog-row h"><span>담당자</span><span class="n">대상</span><span class="n">미도착</span><span class="n">1차중</span><span class="n">미비</span><span class="n">2차대기</span><span>완료율</span></div>
-          ${progRows || '<div class="empty">대상자가 없습니다. [대상자] 시트에 붙여넣으세요.</div>'}
+          <div class="panel-head"><h2>담당자별 진행</h2><span>미비 · 완료율</span></div>
+          ${owners.map(o => {
+            const list = P.filter(p => (p.owner || '(미배정)') === o);
+            const sup = list.filter(p => pStatus(p) === 'supp').length, d = list.filter(p => pStatus(p) === 'done').length;
+            const pc = list.length ? Math.round(d / list.length * 100) : 0;
+            return `<div class="prog2"><b>${esc(o)}</b><span class="n">${list.length}명</span><span class="n ${sup ? 'warn' : ''}">${sup ? `미비 ${sup}` : ''}</span><span class="meter" title="검토완료 ${d}명"><i style="width:${pc}%"></i></span><span class="n pc">${pc}%</span></div>`;
+          }).join('') || '<div class="empty">대상자가 없습니다.</div>'}
         </section>
-        <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
-          ${D.me.name && can('review') ? `<section class="panel"><div class="panel-head"><h2>내가 처리할 대상자</h2><span>${mine.length}명</span></div><div class="list">${todoRows}</div></section>` : ''}
-          ${can('notice') ? `<section class="panel"><div class="panel-head"><h2>최근 공지</h2><button class="linkish" onclick="go('notice')">전체 보기</button></div><div class="list">${recentNotices}</div></section>` : ''}
-        </div>
-      </div>
-      ${can('review') ? `<section class="panel"><div class="panel-head"><h2>최근 응대기록</h2><button class="linkish" onclick="reviewTab='logs';go('review')">전체 보기</button></div><div class="logs">${recentLogs}</div></section>` : ''}`;
+        ${D.me.name && can('review') ? `<section class="panel"><div class="panel-head"><h2>내 차례</h2><span>${mine.length}명</span></div><div class="list">${todoRows}</div></section>` : ''}
+        ${can('notice') ? `<section class="panel"><div class="panel-head"><h2>최근 공지</h2><button class="linkish" onclick="go('notice')">전체</button></div><div class="list">${recentNotices}</div></section>` : ''}
+      </div>`;
   };
 
   /* ---------- 일정 캘린더 (대시보드) ---------- */
@@ -1359,9 +1439,9 @@ window.MockApi = (function () {
       </section>`;
   }
   function agRow(e) {
-    return `<div class="ag"><span class="tm">${esc(evRange(e))}</span><div>
-      <button class="tt k-${esc(e.kind)}" onclick="openEvent('${esc(e.id)}')">${e.kind === '마감' ? '⏰ ' : ''}${esc(e.title)}</button>
-      <div class="ds"><span class="chip ${e.kind === '마감' ? 'no' : e.kind === '교육' ? 'pend' : e.kind === '일정' ? 'info' : 'plain'}">${esc(e.kind)}</span> ${esc(e.memo)}</div></div></div>`;
+    // 날짜·구분 한 줄 + 제목 한 줄 (메모는 눌러서 보기)
+    return `<div class="ag"><span class="tm">${esc(evRange(e))} · ${esc(e.kind)}</span>
+      <button class="tt k-${esc(e.kind)}" onclick="openEvent('${esc(e.id)}')" title="${esc(e.memo)}">${esc(e.title)}</button></div>`;
   }
   function calMove(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); calSel = null; render(); }
   function calPick(k) { calSel = calSel === k ? null : k; render(); }
@@ -1462,13 +1542,17 @@ window.MockApi = (function () {
     const tab = (k, label) => `<button role="tab" aria-selected="${reviewTab === k}" onclick="reviewTab='${k}';reviewStatus='all';render()">${label}</button>`;
     const head = `
       <div class="head">
-        <div><h1>서류 검토</h1><p>대상자를 눌러 진행 체크·특이사항·수정사항·미비서류를 입력하세요. [대상자] 시트에 바로 저장됩니다.</p></div>
+        <div><h1>서류 검토</h1></div>
         <div class="head-actions">
-          ${isLead() ? '<button class="btn" onclick="openTemplate()">양식 다운로드</button><button class="btn" onclick="openImport()">대상자 업로드</button><button class="btn" onclick="openAddPerson()">+ 대상자</button>' : ''}
-          <a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
+          <a class="btn small" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
+          ${isLead() ? `<details class="menu"><summary class="btn small primary">명단 관리 ▾</summary><div class="menu-pop">
+            <button onclick="this.closest('details').open=false;openImport()">대상자 업로드</button>
+            <button onclick="this.closest('details').open=false;openTemplate()">양식 다운로드</button>
+            <button onclick="this.closest('details').open=false;openAddPerson()">대상자 한 명 추가</button>
+          </div></details>` : ''}
         </div>
       </div>
-      <div class="subtabs" role="tablist">${tab('mine', `내 담당 ${D.people.filter(isMine).length}`)}${tab('all', `전체 ${D.people.length}`)}${tab('logs', `응대기록 ${D.logs.length}`)}</div>`;
+      <div class="subtabs" role="tablist">${tab('mine', `내 담당 <span class="tab-n">${D.people.filter(isMine).length}</span>`)}${tab('all', `전체 <span class="tab-n">${D.people.length}</span>`)}${tab('logs', `응대기록 <span class="tab-n">${D.logs.length}</span>`)}</div>`;
 
     if (reviewTab === 'logs') {
       return head + `<section class="panel">
@@ -1490,7 +1574,7 @@ window.MockApi = (function () {
           <input class="search" id="reviewSearch" type="search" placeholder="사원번호·이름·부서·미비서류·특이사항 검색" value="${esc(reviewQuery)}" aria-label="대상자 검색">
           ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
         </div>
-        <div class="filters" style="margin-bottom:12px">${chips}</div>
+        <div class="filters" style="margin-bottom:10px">${chips}</div>
         <div id="reviewList">${reviewListHtml()}</div>
       </section>`;
   };
@@ -1914,7 +1998,7 @@ window.MockApi = (function () {
     }).join('') || `<div class="empty">${noticeFilter === 'unread' ? '안 읽은 글이 없습니다.' : '글이 없습니다.'}</div>`;
     return `
       <div class="head">
-        <div><h1>공지사항</h1><p>공지·응대지침은 총괄이 올리고, 자료·질문은 누구나 올릴 수 있습니다. 긴급·고정 공지는 대시보드 맨 위에 보입니다.</p></div>
+        <div><h1>공지사항</h1></div>
         <div class="head-actions"><button class="btn primary" onclick="openNoticeForm()">글쓰기</button></div>
       </div>
       <section class="panel">
@@ -2062,7 +2146,7 @@ window.MockApi = (function () {
     const cnt = c => c === 'all' ? D.rules.length : D.rules.filter(r => r.category === c).length;
     return `
       <div class="head">
-        <div><h1>연말정산 기준</h1><p>공제 요건·제출서류·응대 기준을 한곳에서 확인하세요. 총괄이 고치면 개정 이력이 남습니다.</p></div>
+        <div><h1>연말정산 기준</h1></div>
         <div class="head-actions">${isLead() ? '<button class="btn primary" onclick="openRuleForm()">기준 등록</button>' : ''}</div>
       </div>
       <div class="rules-layout">
@@ -2166,7 +2250,7 @@ window.MockApi = (function () {
     const cnt = a => a === 'all' ? D.files.length : D.files.filter(f => f.area === a).length;
     return `
       <div class="head">
-        <div><h1>첨부파일</h1><p>대상자 증빙, 공지·기준 첨부, 일반 자료를 한곳에서 찾아보세요. 파일은 구글 드라이브에서 열립니다.</p></div>
+        <div><h1>첨부파일</h1></div>
         <div class="head-actions">${D.me.name || D.me.isAdmin ? '<button class="btn primary" onclick="openEtcUpload()">자료 올리기</button>' : ''}</div>
       </div>
       <section class="panel">
@@ -2268,7 +2352,7 @@ window.MockApi = (function () {
     }).join('');
     return `
       <div class="head">
-        <div><h1>담당자·권한</h1><p>담당자를 등록하고 "권한 한 번에 적용"을 누르면 시트·첨부 폴더 공유와 시트 보호를 자동으로 합니다.</p></div>
+        <div><h1>담당자·권한</h1><p>시트·첨부 폴더 공유와 시트 보호는 「권한 한 번에 적용」으로 처리됩니다.</p></div>
         <div class="head-actions">
           <button class="btn" onclick="refreshAdmin()">상태 새로고침</button>
           <button class="btn primary" onclick="applyAll()">권한 한 번에 적용</button>
@@ -2288,13 +2372,13 @@ window.MockApi = (function () {
           </table>
         </div>
         <button class="btn small add" onclick="aAdd()">+ 담당자 추가</button>
-        <p style="color:var(--muted);font-size:12.5px;margin:12px 0 0;line-height:1.7">
+        <details class="help"><summary>도움말</summary><div>
           · <b>응대담당</b>: [대상자] 시트 담당자 칸에 이름이 있는 사람의 1차 검토 입력<br>
           · <b>2차검토</b>: 2차검토 담당자 칸에 이름이 있는 사람의 2차 검토 입력<br>
           · <b>총괄</b>: 모든 대상자 입력·담당 배정, 공지·응대지침·기준 등록<br>
           · <b>관리자</b>: 이 권한 관리 메뉴 사용 (스프레드시트 소유자는 항상 관리자)<br>
           · 이름은 [대상자] 시트의 담당자 칸과 똑같이 적어야 내 담당으로 연결됩니다.
-        </p>
+        </div></details>
       </section>
       <div class="save-bar" id="aBar" ${aDirty ? '' : 'hidden'}><div class="left">변경사항이 있습니다. 저장해야 반영됩니다.</div>
         <div style="display:flex;gap:8px"><button class="btn" onclick="setAdmin(A)">되돌리기</button><button class="btn primary" id="aSave" onclick="saveMembers()">변경사항 저장</button></div></div>`;
@@ -2379,19 +2463,19 @@ window.MockApi = (function () {
         <td class="num"><b>${scopeCount(m)}명</b></td></tr>`;
     }).join('');
     return `
-      <div class="head"><div><h1>열람 범위</h1><p>담당자마다 어느 담당자의 대상자까지 볼 수 있는지 정합니다. 체크하지 않은 대상자는 화면에 나오지 않고, 서버에서도 보내지 않습니다.</p></div></div>
+      <div class="head"><div><h1>열람 범위</h1><p>체크하지 않은 담당자의 대상자는 보이지 않습니다. 설정하지 않으면 전체입니다.</p></div></div>
       <section class="panel">
         <div class="table-wrap"><table class="t">
           <thead><tr><th>볼 사람 ＼ 담당자</th><th style="text-align:center">전체</th>${head}<th class="num">보이는 인원</th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
-        <p style="color:var(--muted);font-size:12.5px;margin:12px 0 0;line-height:1.7">
+        <details class="help"><summary>도움말</summary><div>
           · 본인이 1차 담당이거나 2차검토 담당인 대상자는 항상 보입니다.<br>
           · 아무 설정도 하지 않으면(전체) 모든 대상자가 보입니다.<br>
           · 담당자가 정해지지 않은 대상자(${A.owners[UNASSIGNED] || 0}명)는 누구에게나 보이고, 「내가 담당하기」로 맡을 수 있습니다.<br>
           · 응대기록과 대상자 증빙 첨부도 보이는 대상자 것만 나옵니다.<br>
           · 바꾼 뒤 아래 「변경사항 저장」을 누르세요. 담당자는 새로고침하면 반영됩니다.
-        </p>
+        </div></details>
       </section>
       <div class="save-bar" id="aBar" ${aDirty ? '' : 'hidden'}><div class="left">변경사항이 있습니다. 저장해야 반영됩니다.</div>
         <div style="display:flex;gap:8px"><button class="btn" onclick="setAdmin(A)">되돌리기</button><button class="btn primary" id="aSave" onclick="saveMembers()">변경사항 저장</button></div></div>`;
@@ -2412,13 +2496,13 @@ window.MockApi = (function () {
       ${A.roles.map(r => `<td style="text-align:center"><input type="checkbox" class="check" ${menuDraft[r][m.key] !== false ? 'checked' : ''} onchange="menuDraft['${r}']['${m.key}']=this.checked;$('#mSave').disabled=false" aria-label="${r} ${esc(m.label)}"></td>`).join('')}
       <td style="text-align:center"><input type="checkbox" class="check" checked disabled aria-label="관리자 ${esc(m.label)}"></td></tr>`).join('');
     return `
-      <div class="head"><div><h1>메뉴 권한</h1><p>역할마다 볼 수 있는 메뉴를 정합니다. 끈 메뉴는 화면에서 숨겨지고, 서버에서도 해당 기능과 데이터가 막힙니다.</p></div></div>
+      <div class="head"><div><h1>메뉴 권한</h1><p>끈 메뉴는 화면과 서버에서 모두 막힙니다.</p></div></div>
       <section class="panel">
         <div class="table-wrap"><table class="t" style="max-width:620px">
           <thead><tr><th>메뉴</th>${A.roles.map(r => `<th style="text-align:center">${r}</th>`).join('')}<th style="text-align:center">관리자</th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
-        <p style="color:var(--muted);font-size:13px;margin:12px 0">· 관리자는 항상 모든 메뉴와 [권한 관리] 메뉴를 봅니다.<br>· 서류 검토를 끄면 그 역할에게는 대상자 증빙 첨부도 보이지 않습니다.</p>
+        <details class="help"><summary>도움말</summary><div>· 관리자는 항상 모든 메뉴와 [권한 관리] 메뉴를 봅니다.<br>· 서류 검토를 끄면 그 역할에게는 대상자 증빙 첨부도 보이지 않습니다.</div></details>
         <button class="btn primary" id="mSave" disabled onclick="saveMenus()">저장</button>
       </section>`;
   }
@@ -2432,7 +2516,7 @@ window.MockApi = (function () {
     const st = A.settings, res = A.status.resources;
     const status = x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ 연결됨: ${esc(x.name)}` : esc(x.error)}</div>`;
     return `
-      <div class="head"><div><h1>설정</h1><p>[설정] 시트를 직접 고치지 않아도 여기서 바꿀 수 있습니다.</p></div></div>
+      <div class="head"><div><h1>설정</h1></div></div>
       <section class="panel" style="max-width:640px">
         <form class="form" id="sForm" novalidate>
           <div class="two">
@@ -2483,7 +2567,7 @@ window.MockApi = (function () {
     const url = A.webAppUrl || '(아직 웹앱으로 배포되지 않았습니다)';
     const msg = `[${D.team} 안내]\n아래 주소로 접속해 주세요. (회사 구글 계정으로 로그인)\n${url}\n\n· 처음 접속하면 "권한 검토" 화면이 한 번 나옵니다. "허용"을 눌러주세요.\n· "Google에서 확인하지 않은 앱" 경고가 나오면 "고급 → 이동"을 누르면 됩니다.\n· 서류 검토 > 내 담당에서 맡은 대상자를 확인하고, 응대한 내용은 응대기록에 남겨주세요.`;
     return `
-      <div class="head"><div><h1>접속 안내</h1><p>담당자에게 보낼 주소와 안내 문구입니다.</p></div></div>
+      <div class="head"><div><h1>접속 안내</h1></div></div>
       <section class="panel" style="max-width:720px;display:flex;flex-direction:column;gap:12px">
         <div class="fld"><label for="gUrl">웹앱 주소</label><div style="display:flex;gap:6px"><input class="field-in" id="gUrl" value="${esc(url)}" readonly><button class="btn" onclick="copyText('gUrl')">복사</button></div></div>
         <div class="fld"><label for="gMsg">안내 문구 (메신저·메일에 붙여넣기)</label><textarea class="field-in" id="gMsg" style="min-height:190px">${esc(msg)}</textarea></div>
@@ -2598,6 +2682,7 @@ window.MockApi = (function () {
   /* ================= 기타 동작 ================= */
   function go(p) { page = p; closeModal(); render(); window.scrollTo(0, 0); }
 
+  document.addEventListener('click', e => { document.querySelectorAll('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }); });
   $('#nav').addEventListener('click', e => {
     const b = e.target.closest('button');
     if (b) go(b.dataset.page);
