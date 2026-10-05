@@ -36,7 +36,7 @@ function setupRuleSheets_(ss) {
     sh.getRange('D2:D').setWrap(true);
     [50, 100, 220, 480, 90, 80, 200, 130, 80, 70, 200].forEach((w, i) => sh.setColumnWidth(i + 1, w));
     sh.setFrozenRows(1);
-    const year = String(getConfig()[CFG.YEAR] || defaultYear_());
+    const year = baseYear_();
     const now = new Date();
     const rows = SAMPLE_RULES.map((r, i) => [i + 1, r[0], r[1], r[2], year, '', '', now, '설치 예시', '', '']);
     sh.getRange(2, 1, rows.length, header.length).setValues(rows);
@@ -53,12 +53,10 @@ function setupRuleSheets_(ss) {
 
 function readRules_(ss) {
   const sh = ss.getSheetByName(RULES.SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
 
   const history = {};
-  const hsh = ss.getSheetByName(RULES.HISTORY);
-  if (hsh && hsh.getLastRow() >= 2) {
-    hsh.getRange(2, 1, hsh.getLastRow() - 1, 4).getValues().forEach(r => {
+  {
+    dataRows_(ss.getSheetByName(RULES.HISTORY), 4).forEach(r => {
       const id = String(r[0]);
       if (!id) return;
       (history[id] = history[id] || []).push({
@@ -69,7 +67,7 @@ function readRules_(ss) {
     });
   }
 
-  return sh.getRange(2, 1, sh.getLastRow() - 1, RCOL.FILES).getValues()
+  return dataRows_(sh, RCOL.FILES)
     .filter(r => String(r[0]) && String(r[RCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .map(r => ({
       id: String(r[0]),

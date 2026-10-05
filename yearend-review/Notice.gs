@@ -45,12 +45,10 @@ function setupNoticeSheets_(ss) {
 /** 고정 → 중요도 → 최신순 */
 function readNotices_(ss) {
   const sh = ss.getSheetByName(NOTICE.SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
 
   const comments = {};
-  const csh = ss.getSheetByName(NOTICE.COMMENTS);
-  if (csh && csh.getLastRow() >= 2) {
-    csh.getRange(2, 1, csh.getLastRow() - 1, 4).getValues().forEach(r => {
+  {
+    dataRows_(ss.getSheetByName(NOTICE.COMMENTS), 4).forEach(r => {
       const id = String(r[0]);
       if (!id) return;
       (comments[id] = comments[id] || []).push({
@@ -64,7 +62,7 @@ function readNotices_(ss) {
   const dt = v => v instanceof Date ? fmt(v, 'yyyy-MM-dd HH:mm') : String(v || '');
   // 보고 있는 연도의 글 + 연도가 비어 있는 글(예전 글·공통)
   const year = viewYear_();
-  return sh.getRange(2, 1, sh.getLastRow() - 1, NCOL.YEAR).getValues()
+  return dataRows_(sh, NCOL.YEAR)
     .filter(r => String(r[0]) && String(r[NCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .filter(r => !cellText_(r[NCOL.YEAR - 1]) || cellText_(r[NCOL.YEAR - 1]) === year)
     .map(r => ({

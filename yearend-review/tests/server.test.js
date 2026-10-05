@@ -4,9 +4,22 @@ let pass = 0;
 const ok = (name, fn) => { try { fn(); pass++; console.log('✓', name); } catch (e) { console.log('✗', name, '\n   ', e.message); process.exitCode = 1; } };
 const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } assert(err, 'expected error'); assert(re.test(err.message), 'wrong error: ' + err.message); };
 
+
+// 서버는 빈 칸·체크 안 된 칸을 빼고 보낸다 (packPerson_). 화면(unpackPeople)처럼 기본값을 채워 비교한다
+function withDefaults(api) {
+  const blank = {};
+  api.COLS.forEach(c => { blank[c.k] = c.t === 'bool' ? false : ''; });
+  ['apiBootstrap', 'apiImportPeople', 'apiAddPerson', 'apiDeletePerson', 'apiSetYear'].forEach(name => {
+    const fn = api[name];
+    api[name] = (...args) => { const r = fn(...args); if (r && r.people) r.people = r.people.map(p => Object.assign({ updated: '', editor: '' }, blank, p)); return r; };
+  });
+  return api;
+}
+
 /* ---------- 1. 새 스프레드시트 ---------- */
 {
   const { api, ss, state, books } = makeEnv();
+  withDefaults(api);
   const as = email => { state.user = email; };
   let Y = '';
   ok('initialize creates sheets', () => {
@@ -290,6 +303,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
 /* ---------- 2. 기존 시트를 그대로 쓰는 경우 (열 순서 다름, 체크박스, 24년도 열 이름) ---------- */
 {
   const { api, ss, state } = makeEnv();
+  withDefaults(api);
   const sh = ss.insertSheet('대상자');
   const hdr = ['No.', '부서', '사원번호', '성명', '사원하위그룹명', '급여영역', '직급', '전화번호', '이메일주소', '휴직여부', '담당자', '2차검토 담당자', '2차 서류검토 여부', 'E-HR 등록', '서류 도착여부', '수기서류 제출', '서류확인 및 검증', '종전근무지', '종전근무지 개수', '주택임차차입금\n(신청여부)', '주택임차차입금', '장기주택\n저당차입금\n(신청여부)', '장기주택저당차입금', '장기주택\n국세청자료 여부', '24년도 장기주택 공제여부\n(차입일)', '주택마련저축\n(신청여부)', '주택마련저축', '주택마련저축\n국세청자료 여부', '월세액\n(신청여부)', '월세액', '특이사항', '수정사항', '특이사항(2차)', '수정사항(2차)', '미비서류'];
   sh.getRange(1, 1, 1, hdr.length).setValues([hdr]);

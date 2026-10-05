@@ -92,11 +92,10 @@ function registerFiles_(area, ref, refLabel, files, me, memo) {
 
 function readFiles_(ss) {
   const sh = ss.getSheetByName(FILES.SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
   const areaKey = {};
   Object.keys(FILES.AREAS).forEach(k => { areaKey[FILES.AREAS[k]] = k; });
   const year = viewYear_();
-  return sh.getRange(2, 1, sh.getLastRow() - 1, FCOL.YEAR).getValues()
+  return dataRows_(sh, FCOL.YEAR)
     .filter(r => String(r[0]) && String(r[FCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .filter(r => !cellText_(r[FCOL.YEAR - 1]) || cellText_(r[FCOL.YEAR - 1]) === year)
     .map(r => ({

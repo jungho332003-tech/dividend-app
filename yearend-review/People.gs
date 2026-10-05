@@ -48,9 +48,13 @@ function setupPeopleSheets_(ss, year) {
 /** 1행 제목 → { 키: 열번호(1부터) } */
 function colMap_(sh) {
   const last = sh.getLastColumn();
+  return last ? colMapFrom_(sh.getRange(1, 1, 1, last).getValues()[0]) : {};
+}
+
+/** 이미 읽은 제목 행으로 열 위치 찾기 */
+function colMapFrom_(headerRow) {
   const map = {};
-  if (!last) return map;
-  const header = sh.getRange(1, 1, 1, last).getValues()[0].map(normHeader_);
+  const header = headerRow.map(normHeader_);
   COLS.concat(META_COLS).forEach(c => {
     const want = normHeader_(c.l);
     const re = c.re ? new RegExp(c.re) : null;
@@ -75,17 +79,17 @@ function rowToPerson_(r, map, row) {
 
 function readPeople_(ss) {
   const sh = yearSheet_(ss, SHEET.PEOPLE);
-  if (!sh || sh.getLastRow() < 2) return [];
-  const map = colMap_(sh);
-  return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues()
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues(); // 제목과 내용을 한 번에
+  if (v.length < 2) return [];
+  const map = colMapFrom_(v[0]);
+  return v.slice(1)
     .map((r, i) => rowToPerson_(r, map, i + 2))
     .filter(p => p.name || p.empNo);
 }
 
 function readLogs_(ss) {
-  const sh = yearSheet_(ss, SHEET.LOGS);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
+  return dataRows_(yearSheet_(ss, SHEET.LOGS), 6)
     .filter(r => String(r[5]).trim())
     .map(r => ({
       date: r[0] instanceof Date ? fmt(r[0], 'yyyy-MM-dd HH:mm') : String(r[0]),
@@ -347,7 +351,7 @@ function apiTemplateLink(withPeople) {
 
   let count = 0;
   if (withPeople) {
-    const people = forMe_('people', cached_(CK.people, () => readPeople_(ctx.ss)), me);
+    const people = cached_(CK.people, () => readPeople_(ctx.ss)).filter(p => canSee_(me, p));
     const rows = people.map(p => COLS.map(c => c.t === 'bool' ? (p[c.k] ? 'O' : '') : p[c.k]));
     if (rows.length) sh.getRange(2, 1, rows.length, header.length).setValues(rows);
     count = rows.length;

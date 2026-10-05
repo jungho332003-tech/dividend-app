@@ -94,7 +94,7 @@ function dropCache_(key) {
 function clearCaches_() {
   try {
     const keys = [CK.ctx, 'menus', 'access'];
-    const years = yearsWith_(findYears_(), String(getConfig()[CFG.YEAR] || defaultYear_()));
+    const years = yearsWith_(findYears_(), baseYear_());
     years.forEach(y => ['people', 'logs', 'notices', 'rules', 'files', 'events'].forEach(k => keys.push(`${k}:${y}`)));
     CacheService.getDocumentCache().removeAll(keys);
   } catch (e) { /* 캐시 없음 */ }
@@ -117,7 +117,7 @@ function refreshPart_(part) {
  *  - 첨부: 메뉴 권한이 있는 구분만
  */
 function forMe_(part, value, me) {
-  if (part === 'people') return value.filter(p => canSee_(me, p));
+  if (part === 'people') return value.filter(p => canSee_(me, p)).map(packPerson_);
   if (part === 'logs' || part === 'files') {
     const list = part === 'files' ? visibleFiles_(value, me) : value;
     const seen = visibleEmpNos_(me);
@@ -126,6 +126,15 @@ function forMe_(part, value, me) {
     return list.filter(f => f.area !== 'person' || seen.has(String(f.ref)));
   }
   return value;
+}
+
+/**
+ * 보낼 때 빈 칸·체크 안 된 칸은 뺀다 (화면에서 기본값으로 채움). 대상자가 많을 때 응답 크기가 절반 이하로 준다.
+ */
+function packPerson_(p) {
+  const out = {};
+  Object.keys(p).forEach(k => { const v = p[k]; if (v !== '' && v !== false && v != null) out[k] = v; });
+  return out;
 }
 
 /** 열람범위로 볼 수 있는 대상자인가 */

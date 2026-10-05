@@ -115,11 +115,33 @@ function parseDate_(v) {
 
 /* ---------- 시트 데이터 ---------- */
 
+/**
+ * 시트 전체를 한 번에 읽는다 (getDataRange 1번 = 행 수·열 수 조회 없이 읽기 1번).
+ * 1행(제목)을 뺀 행들을 width 열 길이로 맞춰 돌려준다. 시트가 없거나 비었으면 [].
+ */
+function dataRows_(sh, width) {
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues();
+  if (v.length < 2) return [];
+  return v.slice(1).map(r => {
+    if (!width) return r;
+    const x = r.length > width ? r.slice(0, width) : r.slice();
+    while (x.length < width) x.push('');
+    return x;
+  });
+}
+
+/** 기본 연도: 캐시된 설정이 있으면 그 값을 쓰고, 없을 때만 [설정] 시트를 읽는다 */
+function baseYear_() {
+  const base = peekCache_(CK.ctx);
+  return String((base && base.cfg[CFG.YEAR]) || getConfig()[CFG.YEAR] || defaultYear_());
+}
+
 function getConfig() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.CONFIG);
   const map = {};
   if (!sh) return map;
-  sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 2).getValues().forEach(([k, v]) => {
+  dataRows_(sh, 2).forEach(([k, v]) => {
     if (k) map[String(k).trim()] = v;
   });
   return map;
@@ -144,8 +166,7 @@ function setConfigValue(key, value) {
  */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
+  return dataRows_(sh, 6)
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -217,7 +238,7 @@ function viewYear_() {
   const email = Session.getActiveUser().getEmail();
   if (VIEW_MEMO_ && VIEW_MEMO_.email === email) return VIEW_MEMO_.year;
   const base = peekCache_(CK.ctx);
-  const baseYear = String((base && base.cfg[CFG.YEAR]) || getConfig()[CFG.YEAR] || defaultYear_());
+  const baseYear = baseYear_();
   const years = yearsWith_(base ? base.years : findYears_(), baseYear);
   let y = String(PropertiesService.getUserProperties().getProperty('VIEW_YEAR') || baseYear);
   if (years.indexOf(y) < 0) y = baseYear;
@@ -233,8 +254,7 @@ function yearSheet_(ss, base, year) {
   const sh = ss.getSheetByName(`${base}_${y}`);
   if (sh) return sh;
   const legacy = ss.getSheetByName(base);
-  const baseYear = String(getConfig()[CFG.YEAR] || defaultYear_());
-  if (legacy && y === baseYear) {
+  if (legacy && y === baseYear_()) {
     try { legacy.setName(`${base}_${y}`); } catch (e) { /* 이름을 못 바꾸면 그대로 쓴다 */ }
     return legacy;
   }

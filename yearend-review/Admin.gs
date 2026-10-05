@@ -41,8 +41,9 @@ function getMenuAccess_() {
     const access = {};
     ROLES.forEach(r => { access[r] = {}; MENUS.forEach(m => { access[r][m.key] = true; }); });
     const sh = SpreadsheetApp.getActive().getSheetByName(MENU_SHEET);
-    if (!sh || sh.getLastRow() < 2) return access;
-    const v = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+    if (!sh) return access;
+    const v = sh.getDataRange().getValues();
+    if (v.length < 2) return access;
     const header = v[0].map(String);
     v.slice(1).forEach(row => {
       const key = String(row[1]);

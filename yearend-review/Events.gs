@@ -32,9 +32,7 @@ function setupEventSheet_(ss, year) {
 }
 
 function readEvents_(ss) {
-  const sh = yearSheet_(ss, SHEET.EVENTS);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, ECOL.DELETED).getValues()
+  return dataRows_(yearSheet_(ss, SHEET.EVENTS), ECOL.DELETED)
     .filter(r => String(r[0]) && cellText_(r[1]) && String(r[ECOL.DELETED - 1]).toUpperCase() !== 'Y')
     .map(r => {
       const start = cellText_(r[1]);

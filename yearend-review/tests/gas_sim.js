@@ -13,12 +13,14 @@ function a1ToRC(a1) {
   return [r1, c1, r2 - r1 + 1, c2 - c1 + 1];
 }
 
+// 시트 호출 횟수 (최적화 측정용)
+const OPS = { read: 0, write: 0, meta: 0 };
 class Sheet {
   constructor(name, id) { this.name = name; this.id = id; this.d = []; this.prot = []; }
   getName() { return this.name; }
   getSheetId() { return this.id; }
-  getLastRow() { for (let r = this.d.length; r > 0; r--) if ((this.d[r - 1] || []).some(v => v !== '' && v != null)) return r; return 0; }
-  getLastColumn() { let m = 0; this.d.forEach(row => { for (let c = row.length; c > 0; c--) if (row[c - 1] !== '' && row[c - 1] != null) { m = Math.max(m, c); break; } }); return m; }
+  getLastRow() { OPS.meta++; for (let r = this.d.length; r > 0; r--) if ((this.d[r - 1] || []).some(v => v !== '' && v != null)) return r; return 0; }
+  getLastColumn() { OPS.meta++; let m = 0; this.d.forEach(row => { for (let c = row.length; c > 0; c--) if (row[c - 1] !== '' && row[c - 1] != null) { m = Math.max(m, c); break; } }); return m; }
   getMaxRows() { return Math.max(1000, this.d.length); }
   get(r, c) { return (this.d[r - 1] || [])[c - 1] ?? ''; }
   set(r, c, v) { while (this.d.length < r) this.d.push([]); const row = this.d[r - 1]; while (row.length < c) row.push(''); row[c - 1] = v; }
@@ -26,7 +28,7 @@ class Sheet {
     if (typeof a === 'string') [a, b, nr, nc] = a1ToRC(a);
     return new Range(this, a, b, nr || 1, nc || 1);
   }
-  appendRow(vals) { const r = this.getLastRow() + 1; vals.forEach((v, i) => this.set(r, i + 1, v)); }
+  appendRow(vals) { OPS.write++; const r = this.getLastRow() + 1; vals.forEach((v, i) => this.set(r, i + 1, v)); }
   deleteRow(r) { this.d.splice(r - 1, 1); }
   getProtections() { return this.prot; }
   protect() { const p = { warn: false, eds: [], setDescription() { return p; }, setWarningOnly(w) { p.warn = w; return p; }, isWarningOnly() { return p.warn; }, remove: () => { this.prot = this.prot.filter(x => x !== p); }, addEditor(e) { p.eds.push(e); }, addEditors(l) { p.eds.push(...l); }, removeEditors() { p.eds = []; }, getEditors() { return p.eds.map(e => ({ getEmail: () => e })); }, canDomainEdit() { return false; }, setDomainEdit() {}, setUnprotectedRanges() {} }; this.prot.push(p); return p; }
@@ -34,14 +36,15 @@ class Sheet {
 ['setColumnWidth', 'setFrozenRows', 'setFrozenColumns', 'setRowHeight', 'hideColumns', 'hideSheet'].forEach(k => { Sheet.prototype[k] = function () { return this; }; });
 Sheet.prototype.clear = function () { this.d = []; return this; };
 Sheet.prototype.setName = function (n) { this.name = n; return this; };
-Sheet.prototype.getDataRange = function () { return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1)); };
+// getDataRange는 실제 시트에서 크기 조회 없이 한 번에 읽으므로 크기 조회로 세지 않는다
+Sheet.prototype.getDataRange = function () { const m = OPS.meta; const r = this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1)); OPS.meta = m; return r; };
 
 class Range {
   constructor(sh, r, c, nr, nc) { Object.assign(this, { sh, r, c, nr, nc }); }
-  getValues() { return Array.from({ length: this.nr }, (_, i) => Array.from({ length: this.nc }, (_, j) => this.sh.get(this.r + i, this.c + j))); }
-  getValue() { return this.sh.get(this.r, this.c); }
-  setValues(v) { assert.strictEqual(v.length, this.nr, 'rows mismatch'); v.forEach((row, i) => { assert.strictEqual(row.length, this.nc, 'cols mismatch'); row.forEach((x, j) => this.sh.set(this.r + i, this.c + j, x)); }); return this; }
-  setValue(v) { this.sh.set(this.r, this.c, v); return this; }
+  getValues() { OPS.read++; return Array.from({ length: this.nr }, (_, i) => Array.from({ length: this.nc }, (_, j) => this.sh.get(this.r + i, this.c + j))); }
+  getValue() { OPS.read++; return this.sh.get(this.r, this.c); }
+  setValues(v) { OPS.write++; assert.strictEqual(v.length, this.nr, 'rows mismatch'); v.forEach((row, i) => { assert.strictEqual(row.length, this.nc, 'cols mismatch'); row.forEach((x, j) => this.sh.set(this.r + i, this.c + j, x)); }); return this; }
+  setValue(v) { OPS.write++; this.sh.set(this.r, this.c, v); return this; }
   clearContent() { for (let i = 0; i < this.nr; i++) for (let j = 0; j < this.nc; j++) this.sh.set(this.r + i, this.c + j, ''); return this; }
   getRow() { return this.r; }
   getColumn() { return this.c; }
@@ -116,4 +119,4 @@ function makeEnv() {
   return { api: g.__api, ss, state, cacheStore, books };
 }
 
-module.exports = { makeEnv, assert };
+module.exports = { makeEnv, assert, OPS };

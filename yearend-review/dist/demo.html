@@ -241,16 +241,9 @@
 
   /* 지표 */
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
-  .kpi .label { color: var(--muted); font-size: 12px; letter-spacing: .02em; }
-  .kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
-  .kpi .value small { font-size: 15px; font-weight: 500; color: var(--muted); }
-  .kpi .sub { color: var(--ink-2); font-size: 13px; }
-  .kpi.alert .value { color: var(--warn-ink); }
   .meter { height: 6px; border-radius: 99px; background: var(--panel-2); overflow: hidden; margin-top: 4px; }
   .meter i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
 
-  .grid-2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 
   /* 목록 */
   .list { display: flex; flex-direction: column; }
@@ -264,10 +257,6 @@
   .chip.pend { background: var(--pend-bg); color: var(--pend-ink); }
   .chip.plain { background: var(--panel-2); color: var(--muted); }
 
-  .due-row { display: grid; grid-template-columns: 76px 64px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: baseline; }
-  .due-row:first-child { border-top: 0; }
-  .due-row .d { font-weight: 600; }
-  .due-row .n { color: var(--muted); }
   .empty { color: var(--muted); padding: 12px 0; }
 
   /* 표 */
@@ -279,25 +268,9 @@
   .t td.nowrap { white-space: nowrap; }
   .t td.strong { font-weight: 700; }
 
-  table.report { border-collapse: collapse; min-width: 980px; }
-  .report th, .report td { border: 1px solid var(--line); padding: 7px 9px; vertical-align: middle; }
-  .report th { background: var(--panel-2); text-align: center; font-weight: 600; white-space: nowrap; }
-  .report td.c { text-align: center; white-space: nowrap; }
-  .report tr.top td { border-top: 2px solid var(--line-strong); }
-  .report td.nm { text-align: center; font-weight: 600; white-space: nowrap; }
-  .report td.nm.pending { background: var(--warn-bg); color: var(--warn-ink); }
-  .report td.cm { background: var(--comment-bg); min-width: 220px; white-space: pre-wrap; }
-  .report td.cm.editable { cursor: pointer; }
-  .report td.cm.editable:hover { outline: 1px dashed var(--line-strong); outline-offset: -3px; }
-  .report td.cm textarea { width: 100%; min-height: 70px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px; background: var(--panel); }
-  .report-title { font-weight: 700; margin: 0 0 4px; }
-  .report-note { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
-  .cm-actions { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
 
   /* 내 주간업무 */
-  .edit-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .items { display: flex; flex-direction: column; gap: 8px; }
-  .item { display: grid; grid-template-columns: minmax(0, 1fr) 138px auto auto; gap: 6px; align-items: center; }
   .field-in { width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 7px 9px; }
   .field-in:disabled { background: var(--panel-2); color: var(--muted); }
   .toggle { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 6px 9px; cursor: pointer; font-size: 13px; white-space: nowrap; }
@@ -312,7 +285,6 @@
   }
   .save-bar .left { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; flex: 1 1 360px; }
   .save-bar label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
-  .save-bar .note-in { flex: 1 1 220px; }
   .check { width: 18px; height: 18px; accent-color: var(--accent); }
   .notice { background: var(--pend-bg); color: var(--pend-ink); border-radius: 8px; padding: 10px 12px; }
 
@@ -345,7 +317,6 @@
 
   @media (max-width: 1080px) {
     .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-    .grid-2 { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 860px) {
     .app { grid-template-columns: minmax(0, 1fr); }
@@ -353,15 +324,11 @@
     .nav { flex-direction: row; overflow-x: auto; }
     .nav button { white-space: nowrap; }
     .me { display: none; }
-    .edit-cols { grid-template-columns: minmax(0, 1fr); }
     .rules-layout { grid-template-columns: minmax(0, 1fr); }
     .cats { flex-direction: row; overflow-x: auto; }
     .cats button { white-space: nowrap; }
   }
   @media (max-width: 520px) {
-    .kpi .value { font-size: 24px; }
-    .item { grid-template-columns: minmax(0, 1fr) auto auto; }
-    .item .date-in { grid-column: 1 / 2; }
     .form .two { grid-template-columns: 1fr; }
     .list-row { grid-template-columns: 60px auto; }
     .list-row .meta { grid-column: 1 / -1; }
@@ -370,21 +337,7 @@
     .post-meta { grid-column: 2; }
   }
   /* ===== 휴대폰 ===== */
-  .mtop, .mcards, .short { display: none; }
-  .ph { color: var(--muted); }
-  .mcard { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-  .mcard-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .mcard-head b { font-size: 16px; }
-  .mnote { margin: 0; font-size: 13px; color: var(--ink-2); background: var(--panel-2); border-radius: 6px; padding: 6px 8px; }
-  .msec h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
-  .msec ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-  .msec li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
-  .msec li:first-child { border-top: 0; }
-  .msec li em { font-style: normal; color: var(--muted); font-size: 12.5px; white-space: nowrap; padding-top: 1px; }
-  .msec .none { margin: 0; color: var(--muted); font-size: 13px; }
-  .mcm { background: var(--comment-bg); border-radius: 8px; padding: 9px 11px; font-size: 14px; white-space: pre-wrap; min-height: 38px; }
-  .mcm textarea { width: 100%; min-height: 80px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 8px; background: var(--panel); }
-  .unit { display: none; }
+  .mtop, .short { display: none; }
 
   @media (max-width: 760px) {
     body { padding-block: 0 calc(76px + env(safe-area-inset-bottom, 0px)); padding-inline: 12px; font-size: 15px; }
@@ -443,20 +396,15 @@
     table.cards tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
     table.cards td { border: 0; padding: 0; text-align: left !important; white-space: normal !important; }
     table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
-    table.cards td.c-wide, table.cards td.c-full { grid-column: 1 / -1; }
-    .unit { display: inline; font-weight: 400; font-size: 13px; margin-left: 2px; }
+    table.cards td.c-wide { grid-column: 1 / -1; }
     .admin-cards td.c-x { position: absolute; right: 6px; top: 6px; width: auto; }
     .admin-cards tr { position: relative; }
     .admin-cards td input.field-in { width: 100%; min-width: 0 !important; }
     .admin-cards td label { justify-content: flex-start !important; }
 
     /* 팀 주간보고: 카드로 */
-    .mcards { display: flex; flex-direction: column; gap: 10px; }
-    .desk { display: none; }
 
     /* 내 주간업무 */
-    .item { grid-template-columns: minmax(0, 1fr) auto auto; }
-    .item > input[data-f="task"] { grid-column: 1 / -1; }
     .save-bar { position: static; box-shadow: none; padding: 12px; gap: 10px; }
     .desk-only { display: none; }
     .save-bar .left { flex: 1 1 100%; }
@@ -483,7 +431,7 @@
   .cal-nav b { font-size: 17px; min-width: 120px; text-align: center; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
   .cal-grid .dow { text-align: center; font-size: 12px; color: var(--muted); padding: 6px 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel-2); }
-  .cal-grid .dow.sun, .cal-day.sun .dn, .cal-day.holi .dn { color: var(--warn-ink); }
+  .cal-grid .dow.sun, .cal-day.sun .dn { color: var(--warn-ink); }
   .cal-day {
     min-height: 96px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px; display: flex; flex-direction: column; gap: 2px;
     background: var(--panel); cursor: pointer; text-align: left; font: inherit; color: inherit; border-top: 0; border-left: 0;
@@ -494,17 +442,12 @@
   .cal-day .dn { font-size: 12px; font-weight: 600; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
   .cal-day.today .dn { background: var(--accent); color: var(--accent-ink); }
   .ev { font-size: 11.5px; line-height: 1.35; padding: 1px 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--accent-soft); color: var(--accent-2); }
-  .ev.holiday { background: var(--warn-bg); color: var(--warn-ink); }
-  .ev.deadline { background: var(--pend-bg); color: var(--pend-ink); font-weight: 600; }
   .more { font-size: 11px; color: var(--muted); padding-left: 4px; }
   .agenda { display: flex; flex-direction: column; }
   .ag { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
   .ag:first-child { border-top: 0; }
   .ag .tm { color: var(--muted); font-size: 12px; white-space: nowrap; padding-top: 1px; }
   .ag .tt { font-weight: 600; overflow-wrap: anywhere; }
-  .ag .tt.holiday { color: var(--warn-ink); }
-  .ag .tt.deadline { color: var(--pend-ink); }
-  .ag .ds { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
   .ag-day { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 0 2px; letter-spacing: .02em; }
   .ag-day:first-child { padding-top: 0; }
   .ev.k-마감 { background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; }
@@ -532,30 +475,17 @@
   .chip.cat-응대지침 { background: var(--pend-bg); color: var(--pend-ink); }
   .chip.cat-질문 { background: var(--panel-2); color: var(--muted); }
   .unread { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 2px; }
-  .banner { display: flex; gap: 12px; align-items: flex-start; border-radius: var(--radius); padding: 12px 14px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; }
-  .banner.lv-긴급 { background: var(--warn-bg); border-color: transparent; }
-  .banner.lv-중요 { background: var(--pend-bg); border-color: transparent; }
-  .banner b { display: block; }
-  .banner span.txt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
-  .banners { display: flex; flex-direction: column; gap: 8px; }
-  .kpi.click { cursor: pointer; }
-  .kpi.click:hover { border-color: var(--line-strong); }
   .mini { display: inline-flex; gap: 3px; flex-wrap: wrap; }
   .mini span { font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
   .mini span.on { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
   .t tbody tr.click { cursor: pointer; }
   .t tbody tr.click:hover { background: var(--panel-2); }
-  .people-cards td { white-space: nowrap; }
   .sheet-grid { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13px; }
   .sheet-grid th, .sheet-grid td { border: 1px solid var(--line); padding: 7px 10px; text-align: center; white-space: nowrap; }
   .sheet-grid th { background: var(--panel-2); font-weight: 700; color: var(--ink); height: 44px; }
   .sheet-grid td.nm { font-weight: 600; }
   .sheet-grid tbody tr { cursor: pointer; }
   .sheet-grid tbody tr:hover td { background: var(--accent-soft); }
-  .people-cards th, .people-cards td { padding: 8px 8px; font-size: 13px; }
-  .people-cards .edit-hint { color: var(--accent-2); font-size: 12.5px; font-weight: 600; opacity: .55; }
-  .people-cards tr.click:hover .edit-hint { opacity: 1; }
-  .miss { color: var(--warn-ink); font-size: 12.5px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .modal.wide { max-width: 820px; }
   .form .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   .bools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -563,7 +493,6 @@
   .bools label.off { cursor: default; color: var(--muted); background: var(--panel-2); }
   .sec { font-size: 12.5px; font-weight: 700; color: var(--accent-2); padding-bottom: 4px; border-bottom: 1px solid var(--line); margin-top: 6px; display: flex; justify-content: space-between; gap: 8px; }
   .sec span { font-weight: 400; color: var(--muted); }
-  details.basic summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--accent-2); padding: 6px 0; }
   .logs { display: flex; flex-direction: column; }
   .log { display: grid; grid-template-columns: 112px 64px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; align-items: baseline; }
   .log:first-child { border-top: 0; }
@@ -575,11 +504,6 @@
   .search-row .search { margin: 0; flex: 1 1 220px; width: auto; }
   .search-row select { width: auto; }
   .take { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
-  .prog-row { display: grid; grid-template-columns: 76px repeat(5, 46px) minmax(80px, 1fr); gap: 6px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
-  .prog-row:first-child { border-top: 0; }
-  .prog-row.h { color: var(--muted); font-size: 11.5px; }
-  .prog-row .n { text-align: right; font-variant-numeric: tabular-nums; }
-  .prog-row .n.warn { color: var(--warn-ink); font-weight: 700; }
   .linkish { background: none; border: 0; padding: 0; color: var(--accent-2); cursor: pointer; font: inherit; text-align: left; }
   .linkish:hover { text-decoration: underline; }
   .tpl-opt { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; flex-wrap: wrap; }
@@ -591,13 +515,7 @@
     .log { grid-template-columns: 1fr auto; }
     .log p { grid-column: 1 / -1; }
     .log-form { grid-template-columns: 1fr; }
-    .prog-row { grid-template-columns: 64px repeat(5, 1fr); }
-    .prog-row .meter { grid-column: 1 / -1; }
     .modal.wide { max-width: none; }
-    .people-cards td.c-name { grid-column: 1 / -1; font-size: 16px; font-weight: 700; order: -1; }
-    .people-cards td.m-hide { display: none; }
-    .people-cards td { white-space: normal; }
-    .people-cards td.c-hide { display: none; }
   }
 
   /* ===== 화면 정리 (간격·크기 통일) ===== */
@@ -650,6 +568,7 @@
   .prog2 .n.warn { color: var(--warn-ink); font-weight: 700; }
   .prog2 .pc { color: var(--ink-2); }
   .more-link { font-size: 12.5px; padding-top: 8px; }
+  .more-rows { margin-top: 10px; }
   .t td .file { border: 0; padding: 0; background: none; max-width: 360px; }
   .t td .file:hover .fn { text-decoration: underline; }
   .t td { vertical-align: middle; }
@@ -1164,6 +1083,7 @@ window.MockApi = (function () {
         if (i >= 0) n.comments[i] = data.commentAdded.comment; else n.comments.push(data.commentAdded.comment);
       }
     }
+    if (data.people) data.people = unpackPeople(data.people);
     ['people', 'logs', 'notices', 'reads', 'rules', 'files', 'events', 'me'].forEach(k => { if (data[k]) D[k] = data[k]; });
   }
 
@@ -1196,7 +1116,7 @@ window.MockApi = (function () {
     if (pending) { toast('저장 중인 내용이 있습니다. 잠시 후 다시 바꿔 주세요.'); render(); return; }
     $('#main').innerHTML = `<div class="loading">${esc(y)}년 자료를 불러오는 중…</div>`;
     call('apiSetYear', y).then(data => {
-      D = data;
+      setData(data);
       openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; calMonth = null; calSel = null;
       reviewTab = D.people.some(isMine) ? 'mine' : 'all';
       render();
@@ -1205,10 +1125,21 @@ window.MockApi = (function () {
   }
   document.addEventListener('change', e => { if (e.target.id === 'yearSel' || e.target.id === 'yearSelM') switchYear(e.target.value); });
 
+  /** 서버는 빈 칸·체크 안 된 칸을 빼고 보내므로 기본값으로 채운다 */
+  function unpackPeople(list) {
+    const blank = {};
+    D.cols.forEach(c => { blank[c.k] = c.t === 'bool' ? false : ''; });
+    return (list || []).map(p => Object.assign({ updated: '', editor: '' }, blank, p));
+  }
+  function setData(data) {
+    D = data;
+    D.people = unpackPeople(D.people);
+  }
+
   function load() {
     return call('apiBootstrap').then(data => {
       const first = !D;
-      D = data;
+      setData(data);
       // 담당으로 지정된 대상자가 없으면 서류 검토를 전체 목록으로 연다
       if (first && !D.people.some(isMine)) reviewTab = 'all';
       render();
@@ -1518,19 +1449,23 @@ window.MockApi = (function () {
 
   function reviewListHtml() {
     const list = reviewFiltered();
-    const logCount = {};
-    D.logs.forEach(l => { logCount[l.empNo] = (logCount[l.empNo] || 0) + 1; });
     // 명단: 시트와 같은 기본 정보 10개 열을 한 줄씩 보여주고, 줄을 누르면 수정 화면이 뜬다
+    // 대상자가 많으면 처음에는 앞 200명만 그리고 「더 보기」로 늘린다 (검색·필터는 전체 대상)
     const BASIC = ['no', 'dept', 'empNo', 'name', 'subgroup', 'payArea', 'rank', 'phone', 'email', 'leave'];
-    const rows = list.map(p => `
+    const shown = list.slice(0, reviewLimit);
+    const rows = shown.map(p => `
       <tr onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
         ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? (p.leave ? 'O' : '') : esc(p[k])}</td>`).join('')}
       </tr>`).join('');
     return rows
       ? `<div class="table-wrap"><table class="sheet-grid"><thead><tr>${BASIC.map(k => `<th>${esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
-        <p class="hint" style="margin-top:8px">${list.length}명 · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
+        ${list.length > shown.length ? `<button class="btn small more-rows" onclick="reviewLimit+=${PAGE_ROWS};$('#reviewList').innerHTML=reviewListHtml()">${PAGE_ROWS}명 더 보기 (남은 ${list.length - shown.length}명)</button>` : ''}
+        <p class="hint" style="margin-top:8px">${list.length > shown.length ? `${list.length}명 중 ${shown.length}명 표시` : `${list.length}명`} · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
       : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
   }
+
+  const PAGE_ROWS = 200;
+  let reviewLimit = PAGE_ROWS;
 
   function logsListHtml() {
     const q = logQuery.trim().toLowerCase();
@@ -1539,7 +1474,7 @@ window.MockApi = (function () {
   }
 
   VIEWS.review = function () {
-    const tab = (k, label) => `<button role="tab" aria-selected="${reviewTab === k}" onclick="reviewTab='${k}';reviewStatus='all';render()">${label}</button>`;
+    const tab = (k, label) => `<button role="tab" aria-selected="${reviewTab === k}" onclick="reviewTab='${k}';reviewStatus='all';reviewLimit=PAGE_ROWS;render()">${label}</button>`;
     const head = `
       <div class="head">
         <div><h1>서류 검토</h1></div>
@@ -1566,24 +1501,33 @@ window.MockApi = (function () {
       ? `<p class="hint" style="margin:0 0 10px">열람 범위: ${D.me.scope.split(',').filter(x => x !== '본인' && x !== '(미배정)').length ? `내 담당 + ${esc(D.me.scope.split(',').filter(x => x !== '본인').filter(x => x !== '(미배정)').map(x => `${x} 담당`).join(', '))}` : '내 담당만'} + 담당자 없는 대상자 (관리자가 정합니다)</p>` : '';
     const owners = [...new Set(D.people.flatMap(p => [p.owner, p.owner2]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
     const chips = [['all', '전체']].concat(Object.keys(STATUS).map(k => [k, STATUS[k][0]]))
-      .map(([k, l]) => `<button aria-pressed="${reviewStatus === k}" onclick="reviewStatus='${k}';render()">${l} ${k === 'all' ? base.length : base.filter(p => pStatus(p) === k).length}</button>`).join('');
+      .map(([k, l]) => `<button aria-pressed="${reviewStatus === k}" onclick="reviewStatus='${k}';reviewLimit=PAGE_ROWS;render()">${l} ${k === 'all' ? base.length : base.filter(p => pStatus(p) === k).length}</button>`).join('');
     return head + `
       <section class="panel">
         ${scopeNote}
         <div class="search-row">
           <input class="search" id="reviewSearch" type="search" placeholder="사원번호·이름·부서·미비서류·특이사항 검색" value="${esc(reviewQuery)}" aria-label="대상자 검색">
-          ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
+          ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;reviewLimit=PAGE_ROWS;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
         </div>
         <div class="filters" style="margin-bottom:10px">${chips}</div>
         <div id="reviewList">${reviewListHtml()}</div>
       </section>`;
   };
 
+  // 검색: 입력이 잠깐(0.15초) 멈추면 목록만 다시 그린다 (한 글자마다 그리지 않음)
+  let searchTimer = null;
+  const SEARCHES = {
+    reviewSearch: v => { reviewQuery = v; reviewLimit = PAGE_ROWS; $('#reviewList').innerHTML = reviewListHtml(); },
+    logSearch: v => { logQuery = v; $('#logList').innerHTML = logsListHtml(); },
+    ruleSearch: v => { ruleQuery = v; $('#ruleList').innerHTML = ruleListHtml(); },
+    fileSearch: v => { fileQuery = v; $('#fileList').innerHTML = fileListHtml(); },
+  };
   document.addEventListener('input', e => {
-    if (e.target.id === 'reviewSearch') { reviewQuery = e.target.value; $('#reviewList').innerHTML = reviewListHtml(); }
-    if (e.target.id === 'logSearch') { logQuery = e.target.value; $('#logList').innerHTML = logsListHtml(); }
-    if (e.target.id === 'ruleSearch') { ruleQuery = e.target.value; $('#ruleList').innerHTML = ruleListHtml(); }
-    if (e.target.id === 'fileSearch') { fileQuery = e.target.value; $('#fileList').innerHTML = fileListHtml(); }
+    const fn = SEARCHES[e.target.id];
+    if (!fn) return;
+    const v = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => fn(v), 150);
   });
 
   /* ---------- 대상자 상세 (입력) ---------- */

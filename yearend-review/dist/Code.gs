@@ -124,11 +124,33 @@ function parseDate_(v) {
 
 /* ---------- 시트 데이터 ---------- */
 
+/**
+ * 시트 전체를 한 번에 읽는다 (getDataRange 1번 = 행 수·열 수 조회 없이 읽기 1번).
+ * 1행(제목)을 뺀 행들을 width 열 길이로 맞춰 돌려준다. 시트가 없거나 비었으면 [].
+ */
+function dataRows_(sh, width) {
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues();
+  if (v.length < 2) return [];
+  return v.slice(1).map(r => {
+    if (!width) return r;
+    const x = r.length > width ? r.slice(0, width) : r.slice();
+    while (x.length < width) x.push('');
+    return x;
+  });
+}
+
+/** 기본 연도: 캐시된 설정이 있으면 그 값을 쓰고, 없을 때만 [설정] 시트를 읽는다 */
+function baseYear_() {
+  const base = peekCache_(CK.ctx);
+  return String((base && base.cfg[CFG.YEAR]) || getConfig()[CFG.YEAR] || defaultYear_());
+}
+
 function getConfig() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.CONFIG);
   const map = {};
   if (!sh) return map;
-  sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 2).getValues().forEach(([k, v]) => {
+  dataRows_(sh, 2).forEach(([k, v]) => {
     if (k) map[String(k).trim()] = v;
   });
   return map;
@@ -153,8 +175,7 @@ function setConfigValue(key, value) {
  */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
+  return dataRows_(sh, 6)
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -226,7 +247,7 @@ function viewYear_() {
   const email = Session.getActiveUser().getEmail();
   if (VIEW_MEMO_ && VIEW_MEMO_.email === email) return VIEW_MEMO_.year;
   const base = peekCache_(CK.ctx);
-  const baseYear = String((base && base.cfg[CFG.YEAR]) || getConfig()[CFG.YEAR] || defaultYear_());
+  const baseYear = baseYear_();
   const years = yearsWith_(base ? base.years : findYears_(), baseYear);
   let y = String(PropertiesService.getUserProperties().getProperty('VIEW_YEAR') || baseYear);
   if (years.indexOf(y) < 0) y = baseYear;
@@ -242,8 +263,7 @@ function yearSheet_(ss, base, year) {
   const sh = ss.getSheetByName(`${base}_${y}`);
   if (sh) return sh;
   const legacy = ss.getSheetByName(base);
-  const baseYear = String(getConfig()[CFG.YEAR] || defaultYear_());
-  if (legacy && y === baseYear) {
+  if (legacy && y === baseYear_()) {
     try { legacy.setName(`${base}_${y}`); } catch (e) { /* 이름을 못 바꾸면 그대로 쓴다 */ }
     return legacy;
   }
@@ -505,9 +525,13 @@ function setupPeopleSheets_(ss, year) {
 /** 1행 제목 → { 키: 열번호(1부터) } */
 function colMap_(sh) {
   const last = sh.getLastColumn();
+  return last ? colMapFrom_(sh.getRange(1, 1, 1, last).getValues()[0]) : {};
+}
+
+/** 이미 읽은 제목 행으로 열 위치 찾기 */
+function colMapFrom_(headerRow) {
   const map = {};
-  if (!last) return map;
-  const header = sh.getRange(1, 1, 1, last).getValues()[0].map(normHeader_);
+  const header = headerRow.map(normHeader_);
   COLS.concat(META_COLS).forEach(c => {
     const want = normHeader_(c.l);
     const re = c.re ? new RegExp(c.re) : null;
@@ -532,17 +556,17 @@ function rowToPerson_(r, map, row) {
 
 function readPeople_(ss) {
   const sh = yearSheet_(ss, SHEET.PEOPLE);
-  if (!sh || sh.getLastRow() < 2) return [];
-  const map = colMap_(sh);
-  return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues()
+  if (!sh) return [];
+  const v = sh.getDataRange().getValues(); // 제목과 내용을 한 번에
+  if (v.length < 2) return [];
+  const map = colMapFrom_(v[0]);
+  return v.slice(1)
     .map((r, i) => rowToPerson_(r, map, i + 2))
     .filter(p => p.name || p.empNo);
 }
 
 function readLogs_(ss) {
-  const sh = yearSheet_(ss, SHEET.LOGS);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
+  return dataRows_(yearSheet_(ss, SHEET.LOGS), 6)
     .filter(r => String(r[5]).trim())
     .map(r => ({
       date: r[0] instanceof Date ? fmt(r[0], 'yyyy-MM-dd HH:mm') : String(r[0]),
@@ -804,7 +828,7 @@ function apiTemplateLink(withPeople) {
 
   let count = 0;
   if (withPeople) {
-    const people = forMe_('people', cached_(CK.people, () => readPeople_(ctx.ss)), me);
+    const people = cached_(CK.people, () => readPeople_(ctx.ss)).filter(p => canSee_(me, p));
     const rows = people.map(p => COLS.map(c => c.t === 'bool' ? (p[c.k] ? 'O' : '') : p[c.k]));
     if (rows.length) sh.getRange(2, 1, rows.length, header.length).setValues(rows);
     count = rows.length;
@@ -889,9 +913,7 @@ function setupEventSheet_(ss, year) {
 }
 
 function readEvents_(ss) {
-  const sh = yearSheet_(ss, SHEET.EVENTS);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, ECOL.DELETED).getValues()
+  return dataRows_(yearSheet_(ss, SHEET.EVENTS), ECOL.DELETED)
     .filter(r => String(r[0]) && cellText_(r[1]) && String(r[ECOL.DELETED - 1]).toUpperCase() !== 'Y')
     .map(r => {
       const start = cellText_(r[1]);
@@ -1010,12 +1032,10 @@ function setupNoticeSheets_(ss) {
 /** 고정 → 중요도 → 최신순 */
 function readNotices_(ss) {
   const sh = ss.getSheetByName(NOTICE.SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
 
   const comments = {};
-  const csh = ss.getSheetByName(NOTICE.COMMENTS);
-  if (csh && csh.getLastRow() >= 2) {
-    csh.getRange(2, 1, csh.getLastRow() - 1, 4).getValues().forEach(r => {
+  {
+    dataRows_(ss.getSheetByName(NOTICE.COMMENTS), 4).forEach(r => {
       const id = String(r[0]);
       if (!id) return;
       (comments[id] = comments[id] || []).push({
@@ -1029,7 +1049,7 @@ function readNotices_(ss) {
   const dt = v => v instanceof Date ? fmt(v, 'yyyy-MM-dd HH:mm') : String(v || '');
   // 보고 있는 연도의 글 + 연도가 비어 있는 글(예전 글·공통)
   const year = viewYear_();
-  return sh.getRange(2, 1, sh.getLastRow() - 1, NCOL.YEAR).getValues()
+  return dataRows_(sh, NCOL.YEAR)
     .filter(r => String(r[0]) && String(r[NCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .filter(r => !cellText_(r[NCOL.YEAR - 1]) || cellText_(r[NCOL.YEAR - 1]) === year)
     .map(r => ({
@@ -1191,7 +1211,7 @@ function setupRuleSheets_(ss) {
     sh.getRange('D2:D').setWrap(true);
     [50, 100, 220, 480, 90, 80, 200, 130, 80, 70, 200].forEach((w, i) => sh.setColumnWidth(i + 1, w));
     sh.setFrozenRows(1);
-    const year = String(getConfig()[CFG.YEAR] || defaultYear_());
+    const year = baseYear_();
     const now = new Date();
     const rows = SAMPLE_RULES.map((r, i) => [i + 1, r[0], r[1], r[2], year, '', '', now, '설치 예시', '', '']);
     sh.getRange(2, 1, rows.length, header.length).setValues(rows);
@@ -1208,12 +1228,10 @@ function setupRuleSheets_(ss) {
 
 function readRules_(ss) {
   const sh = ss.getSheetByName(RULES.SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
 
   const history = {};
-  const hsh = ss.getSheetByName(RULES.HISTORY);
-  if (hsh && hsh.getLastRow() >= 2) {
-    hsh.getRange(2, 1, hsh.getLastRow() - 1, 4).getValues().forEach(r => {
+  {
+    dataRows_(ss.getSheetByName(RULES.HISTORY), 4).forEach(r => {
       const id = String(r[0]);
       if (!id) return;
       (history[id] = history[id] || []).push({
@@ -1224,7 +1242,7 @@ function readRules_(ss) {
     });
   }
 
-  return sh.getRange(2, 1, sh.getLastRow() - 1, RCOL.FILES).getValues()
+  return dataRows_(sh, RCOL.FILES)
     .filter(r => String(r[0]) && String(r[RCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .map(r => ({
       id: String(r[0]),
@@ -1397,11 +1415,10 @@ function registerFiles_(area, ref, refLabel, files, me, memo) {
 
 function readFiles_(ss) {
   const sh = ss.getSheetByName(FILES.SHEET);
-  if (!sh || sh.getLastRow() < 2) return [];
   const areaKey = {};
   Object.keys(FILES.AREAS).forEach(k => { areaKey[FILES.AREAS[k]] = k; });
   const year = viewYear_();
-  return sh.getRange(2, 1, sh.getLastRow() - 1, FCOL.YEAR).getValues()
+  return dataRows_(sh, FCOL.YEAR)
     .filter(r => String(r[0]) && String(r[FCOL.DELETED - 1]).toUpperCase() !== 'Y')
     .filter(r => !cellText_(r[FCOL.YEAR - 1]) || cellText_(r[FCOL.YEAR - 1]) === year)
     .map(r => ({
@@ -1501,8 +1518,9 @@ function getMenuAccess_() {
     const access = {};
     ROLES.forEach(r => { access[r] = {}; MENUS.forEach(m => { access[r][m.key] = true; }); });
     const sh = SpreadsheetApp.getActive().getSheetByName(MENU_SHEET);
-    if (!sh || sh.getLastRow() < 2) return access;
-    const v = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+    if (!sh) return access;
+    const v = sh.getDataRange().getValues();
+    if (v.length < 2) return access;
     const header = v[0].map(String);
     v.slice(1).forEach(row => {
       const key = String(row[1]);
@@ -1944,7 +1962,7 @@ function dropCache_(key) {
 function clearCaches_() {
   try {
     const keys = [CK.ctx, 'menus', 'access'];
-    const years = yearsWith_(findYears_(), String(getConfig()[CFG.YEAR] || defaultYear_()));
+    const years = yearsWith_(findYears_(), baseYear_());
     years.forEach(y => ['people', 'logs', 'notices', 'rules', 'files', 'events'].forEach(k => keys.push(`${k}:${y}`)));
     CacheService.getDocumentCache().removeAll(keys);
   } catch (e) { /* 캐시 없음 */ }
@@ -1967,7 +1985,7 @@ function refreshPart_(part) {
  *  - 첨부: 메뉴 권한이 있는 구분만
  */
 function forMe_(part, value, me) {
-  if (part === 'people') return value.filter(p => canSee_(me, p));
+  if (part === 'people') return value.filter(p => canSee_(me, p)).map(packPerson_);
   if (part === 'logs' || part === 'files') {
     const list = part === 'files' ? visibleFiles_(value, me) : value;
     const seen = visibleEmpNos_(me);
@@ -1976,6 +1994,15 @@ function forMe_(part, value, me) {
     return list.filter(f => f.area !== 'person' || seen.has(String(f.ref)));
   }
   return value;
+}
+
+/**
+ * 보낼 때 빈 칸·체크 안 된 칸은 뺀다 (화면에서 기본값으로 채움). 대상자가 많을 때 응답 크기가 절반 이하로 준다.
+ */
+function packPerson_(p) {
+  const out = {};
+  Object.keys(p).forEach(k => { const v = p[k]; if (v !== '' && v !== false && v != null) out[k] = v; });
+  return out;
 }
 
 /** 열람범위로 볼 수 있는 대상자인가 */
