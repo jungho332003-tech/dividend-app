@@ -143,10 +143,12 @@ function setConfigValue(key, value) {
   for (let i = 0; i < keys.length; i++) {
     if (String(keys[i][0]).trim() === key) {
       sh.getRange(i + 1, 2).setValue(value);
+      clearContextCache_();
       return;
     }
   }
   sh.appendRow([key, value]);
+  clearContextCache_();
 }
 
 /** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) */
@@ -183,8 +185,9 @@ function getHolidaySet() {
 /** 이번 주 실행에 필요한 값 묶음 */
 function getContext() {
   const ss = SpreadsheetApp.getActive();
-  const cfg = getConfig();
-  const holidays = getHolidaySet();
+  const base = sheetBase_();
+  const cfg = base.cfg;
+  const holidays = new Set(base.holidays);
   const monday = mondayOf(cfg[CFG.MONDAY] instanceof Date ? cfg[CFG.MONDAY] : new Date());
   const hour = Number(cfg[CFG.DEADLINE_HOUR]) || 14;
   return {
@@ -196,8 +199,29 @@ function getContext() {
     nextWeek: getWeekInfo(addDays(monday, 7), holidays),
     afterWeek: getWeekInfo(addDays(monday, 14), holidays),
     deadline: cfg[CFG.DEADLINE] instanceof Date ? cfg[CFG.DEADLINE] : defaultDeadline(monday, holidays, hour),
-    members: getMembers(),
+    members: base.members,
   };
+}
+
+/**
+ * 설정·공휴일·팀원 시트는 거의 바뀌지 않으므로 60초간 캐시한다 (요청마다 시트 3개를 읽지 않도록).
+ * 웹앱·메뉴에서 바꾸면 바로 지우고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
+ */
+const CTX_KEY = 'ctx';
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+function sheetBase_() {
+  try {
+    const hit = CacheService.getDocumentCache().get(CTX_KEY);
+    if (hit) return JSON.parse(hit, (k, v) => (typeof v === 'string' && ISO_DATE.test(v) ? new Date(v) : v));
+  } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
+  const base = { cfg: getConfig(), holidays: Array.from(getHolidaySet()), members: getMembers() };
+  putCache_(CTX_KEY, base);
+  return base;
+}
+
+function clearContextCache_() {
+  try { CacheService.getDocumentCache().remove(CTX_KEY); } catch (e) { /* 캐시 없음 */ }
 }
 
 /** 팀원 입력시트 읽기 */
@@ -206,7 +230,7 @@ function readInput(ss, name) {
   if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [], pre: emptyPre_() };
   // 작성완료·특이사항·업무 목록·미리 쓰기를 한 번에 읽는다 (시트 요청 1회)
   const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 1).getValues();
-  const at = a1 => { const r = sh.getRange(a1); return v[r.getRow() - 1][r.getColumn() - 1]; };
+  const at = a1 => v[Number(a1.slice(1)) - 1][a1.charCodeAt(0) - 65];
   const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
     exists: true,

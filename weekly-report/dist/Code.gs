@@ -152,10 +152,12 @@ function setConfigValue(key, value) {
   for (let i = 0; i < keys.length; i++) {
     if (String(keys[i][0]).trim() === key) {
       sh.getRange(i + 1, 2).setValue(value);
+      clearContextCache_();
       return;
     }
   }
   sh.appendRow([key, value]);
+  clearContextCache_();
 }
 
 /** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) */
@@ -192,8 +194,9 @@ function getHolidaySet() {
 /** 이번 주 실행에 필요한 값 묶음 */
 function getContext() {
   const ss = SpreadsheetApp.getActive();
-  const cfg = getConfig();
-  const holidays = getHolidaySet();
+  const base = sheetBase_();
+  const cfg = base.cfg;
+  const holidays = new Set(base.holidays);
   const monday = mondayOf(cfg[CFG.MONDAY] instanceof Date ? cfg[CFG.MONDAY] : new Date());
   const hour = Number(cfg[CFG.DEADLINE_HOUR]) || 14;
   return {
@@ -205,8 +208,29 @@ function getContext() {
     nextWeek: getWeekInfo(addDays(monday, 7), holidays),
     afterWeek: getWeekInfo(addDays(monday, 14), holidays),
     deadline: cfg[CFG.DEADLINE] instanceof Date ? cfg[CFG.DEADLINE] : defaultDeadline(monday, holidays, hour),
-    members: getMembers(),
+    members: base.members,
   };
+}
+
+/**
+ * 설정·공휴일·팀원 시트는 거의 바뀌지 않으므로 60초간 캐시한다 (요청마다 시트 3개를 읽지 않도록).
+ * 웹앱·메뉴에서 바꾸면 바로 지우고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
+ */
+const CTX_KEY = 'ctx';
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+function sheetBase_() {
+  try {
+    const hit = CacheService.getDocumentCache().get(CTX_KEY);
+    if (hit) return JSON.parse(hit, (k, v) => (typeof v === 'string' && ISO_DATE.test(v) ? new Date(v) : v));
+  } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
+  const base = { cfg: getConfig(), holidays: Array.from(getHolidaySet()), members: getMembers() };
+  putCache_(CTX_KEY, base);
+  return base;
+}
+
+function clearContextCache_() {
+  try { CacheService.getDocumentCache().remove(CTX_KEY); } catch (e) { /* 캐시 없음 */ }
 }
 
 /** 팀원 입력시트 읽기 */
@@ -215,7 +239,7 @@ function readInput(ss, name) {
   if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [], pre: emptyPre_() };
   // 작성완료·특이사항·업무 목록·미리 쓰기를 한 번에 읽는다 (시트 요청 1회)
   const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 1).getValues();
-  const at = a1 => { const r = sh.getRange(a1); return v[r.getRow() - 1][r.getColumn() - 1]; };
+  const at = a1 => v[Number(a1.slice(1)) - 1][a1.charCodeAt(0) - 65];
   const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
     exists: true,
@@ -1723,7 +1747,7 @@ function apiSaveSettings(s) {
 
 function clearCaches_(ctx) {
   try {
-    CacheService.getDocumentCache().removeAll([CK.members(ctx), CK.budget, CK.board, CK.rules, 'menus']);
+    CacheService.getDocumentCache().removeAll([CK.members(ctx), CK.budget, CK.board, CK.rules, 'menus', CTX_KEY]);
   } catch (e) { /* 캐시 없음 */ }
 }
 
@@ -1864,7 +1888,14 @@ function apiRevokeAccess(email) {
  */
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('App')
+  // 첫 화면 데이터를 페이지에 같이 실어 보낸다 (화면이 뜬 뒤 서버를 한 번 더 부르지 않도록)
+  let boot = 'null';
+  try {
+    boot = JSON.stringify(apiBootstrap())
+      .replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  } catch (e) { /* 실패하면 화면이 열린 뒤 다시 불러온다 */ }
+  const html = HtmlService.createHtmlOutputFromFile('App').getContent().replace('/*BOOT*/null', () => boot);
+  return HtmlService.createHtmlOutput(html)
     .setTitle('인사팀 업무관리')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     // 휴대폰 홈 화면에 추가했을 때 앱처럼 보이게
@@ -2064,10 +2095,9 @@ function apiSaveMyWeek(payload) {
   const thisRows = toRows(payload.thisWeek);
   const nextRows = toRows(payload.nextWeek);
 
-  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).clearContent();
-  if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 2).setValues(thisRows);
-  if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
+  // 지우기+쓰기를 한 번에: 빈 줄까지 채워서 통째로 덮어쓴다
+  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).setValues(padRows_(thisRows));
+  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).setValues(padRows_(nextRows));
   sh.getRange(INPUT.NOTE_CELL).setValue(String(payload.note || '').trim());
   sh.getRange(INPUT.DONE_CELL).setValue(!!payload.done);
   return memberPatch_(ctx, me.name);
@@ -2111,19 +2141,23 @@ function apiSavePreWeek(payload) {
   const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name) || createMyInputSheet_(ctx, me);
   ensurePreArea_(sh, ctx);
 
-  clearPre_(sh);
-  if (!payload.clear) {
-    const toRows = list => (list || [])
-      .filter(x => String(x.task || '').trim())
-      .slice(0, INPUT.ROWS)
-      .map(x => [String(x.task).trim(), parseDue_(x.due)]);
-    const thisRows = toRows(payload.thisWeek), nextRows = toRows(payload.nextWeek);
-    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, thisRows.length, 2).setValues(thisRows);
-    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, nextRows.length, 2).setValues(nextRows);
-    sh.getRange(INPUT.PRE_NOTE).setValue(String(payload.note || '').trim());
-    sh.getRange(INPUT.PRE_FLAG).setValue('Y');
-  }
+  const toRows = list => payload.clear ? [] : (list || [])
+    .filter(x => String(x.task || '').trim())
+    .slice(0, INPUT.ROWS)
+    .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+  // 지우기도 같은 경로: 빈 줄로 통째로 덮어쓴다
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.thisWeek)));
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.nextWeek)));
+  sh.getRange(INPUT.PRE_NOTE).setValue(payload.clear ? '' : String(payload.note || '').trim());
+  sh.getRange(INPUT.PRE_FLAG).setValue(payload.clear ? '' : 'Y');
   return memberPatch_(ctx, me.name);
+}
+
+/** 입력 칸 수(INPUT.ROWS)만큼 빈 줄을 채운다 */
+function padRows_(rows) {
+  const out = rows.slice(0, INPUT.ROWS);
+  while (out.length < INPUT.ROWS) out.push(['', '']);
+  return out;
 }
 
 function parseDue_(v) {

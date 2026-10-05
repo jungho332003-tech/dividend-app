@@ -629,6 +629,7 @@
 <div class="toast" id="toast" hidden></div>
 <div class="tip" id="tip" hidden></div>
 
+<script>window.__BOOT__ = /*BOOT*/null;</script>
 <!-- MOCK -->
 
 <script>
@@ -731,6 +732,8 @@
   const fmtDue = iso => { const d = new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${DAY[d.getDay()]})`; };
 
   function load() {
+    // 웹앱은 첫 화면 데이터를 페이지에 실어 보낸다 → 바로 그린다
+    if (window.__BOOT__) { D = window.__BOOT__; window.__BOOT__ = null; render(); return Promise.resolve(); }
     return call('apiBootstrap').then(data => { D = data; render(); }).catch(fail);
   }
 

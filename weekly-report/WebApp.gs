@@ -8,7 +8,14 @@
  */
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('App')
+  // 첫 화면 데이터를 페이지에 같이 실어 보낸다 (화면이 뜬 뒤 서버를 한 번 더 부르지 않도록)
+  let boot = 'null';
+  try {
+    boot = JSON.stringify(apiBootstrap())
+      .replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+  } catch (e) { /* 실패하면 화면이 열린 뒤 다시 불러온다 */ }
+  const html = HtmlService.createHtmlOutputFromFile('App').getContent().replace('/*BOOT*/null', () => boot);
+  return HtmlService.createHtmlOutput(html)
     .setTitle('인사팀 업무관리')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     // 휴대폰 홈 화면에 추가했을 때 앱처럼 보이게
@@ -208,10 +215,9 @@ function apiSaveMyWeek(payload) {
   const thisRows = toRows(payload.thisWeek);
   const nextRows = toRows(payload.nextWeek);
 
-  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).clearContent();
-  if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 2).setValues(thisRows);
-  if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
+  // 지우기+쓰기를 한 번에: 빈 줄까지 채워서 통째로 덮어쓴다
+  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).setValues(padRows_(thisRows));
+  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).setValues(padRows_(nextRows));
   sh.getRange(INPUT.NOTE_CELL).setValue(String(payload.note || '').trim());
   sh.getRange(INPUT.DONE_CELL).setValue(!!payload.done);
   return memberPatch_(ctx, me.name);
@@ -255,19 +261,23 @@ function apiSavePreWeek(payload) {
   const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + me.name) || createMyInputSheet_(ctx, me);
   ensurePreArea_(sh, ctx);
 
-  clearPre_(sh);
-  if (!payload.clear) {
-    const toRows = list => (list || [])
-      .filter(x => String(x.task || '').trim())
-      .slice(0, INPUT.ROWS)
-      .map(x => [String(x.task).trim(), parseDue_(x.due)]);
-    const thisRows = toRows(payload.thisWeek), nextRows = toRows(payload.nextWeek);
-    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, thisRows.length, 2).setValues(thisRows);
-    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, nextRows.length, 2).setValues(nextRows);
-    sh.getRange(INPUT.PRE_NOTE).setValue(String(payload.note || '').trim());
-    sh.getRange(INPUT.PRE_FLAG).setValue('Y');
-  }
+  const toRows = list => payload.clear ? [] : (list || [])
+    .filter(x => String(x.task || '').trim())
+    .slice(0, INPUT.ROWS)
+    .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+  // 지우기도 같은 경로: 빈 줄로 통째로 덮어쓴다
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.thisWeek)));
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.nextWeek)));
+  sh.getRange(INPUT.PRE_NOTE).setValue(payload.clear ? '' : String(payload.note || '').trim());
+  sh.getRange(INPUT.PRE_FLAG).setValue(payload.clear ? '' : 'Y');
   return memberPatch_(ctx, me.name);
+}
+
+/** 입력 칸 수(INPUT.ROWS)만큼 빈 줄을 채운다 */
+function padRows_(rows) {
+  const out = rows.slice(0, INPUT.ROWS);
+  while (out.length < INPUT.ROWS) out.push(['', '']);
+  return out;
 }
 
 function parseDue_(v) {

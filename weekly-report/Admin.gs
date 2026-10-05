@@ -257,7 +257,7 @@ function apiSaveSettings(s) {
 
 function clearCaches_(ctx) {
   try {
-    CacheService.getDocumentCache().removeAll([CK.members(ctx), CK.budget, CK.board, CK.rules, 'menus']);
+    CacheService.getDocumentCache().removeAll([CK.members(ctx), CK.budget, CK.board, CK.rules, 'menus', CTX_KEY]);
   } catch (e) { /* 캐시 없음 */ }
 }
 
