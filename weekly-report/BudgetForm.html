@@ -21,8 +21,16 @@
 </head>
 <body>
   <form id="f" onsubmit="submitForm(event)">
-    <label>신청자</label>
-    <select name="requester" id="requester" required></select>
+    <div class="row">
+      <div>
+        <label>신청자</label>
+        <select name="requester" id="requester" required></select>
+      </div>
+      <div>
+        <label>적용월</label>
+        <select name="month" id="month" required></select>
+      </div>
+    </div>
 
     <div class="row">
       <div>
@@ -66,6 +74,8 @@
       req.appendChild(option('', '선택'));
       data.members.forEach(n => req.appendChild(option(n, n)));
       if (data.me) req.value = data.me;
+      const mon = document.getElementById('month');
+      (data.months || []).forEach(m => { mon.appendChild(option(m.value, m.label)); if (m.current) mon.value = m.value; });
 
       ['from', 'to'].forEach(id => {
         const sel = document.getElementById(id);

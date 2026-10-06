@@ -16,6 +16,8 @@
     --accent-2: #0b5e49;
     --accent-ink: #ffffff;
     --accent-soft: #e3f2ec;
+    --next: #2d63c8;
+    --next-soft: #e9f0fc;
     --warn-bg: #fdecea;
     --warn-ink: #b42318;
     --pend-bg: #fff4dc;
@@ -40,7 +42,7 @@
       --bg: #0c110f; --panel: #141b18; --panel-2: #1a2320; --ink: #e6ece9; --ink-2: #c2ccc7; --muted: #8e9b95;
       --line: #25302b; --line-strong: #3a4641; --field-line: #33403a;
       --accent: #3fbf95; --accent-2: #74d9b7; --accent-ink: #04140e; --accent-soft: #15322a;
-      --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
+      --next: #7ea6f2; --next-soft: #18233a; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
       --comment-bg: #352f1a; --side-bg: #080c0a;
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3); --shadow: 0 18px 48px rgba(0, 0, 0, .55);
     }
@@ -50,7 +52,7 @@
     --bg: #0c110f; --panel: #141b18; --panel-2: #1a2320; --ink: #e6ece9; --ink-2: #c2ccc7; --muted: #8e9b95;
     --line: #25302b; --line-strong: #3a4641; --field-line: #33403a;
     --accent: #3fbf95; --accent-2: #74d9b7; --accent-ink: #04140e; --accent-soft: #15322a;
-    --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
+    --next: #7ea6f2; --next-soft: #18233a; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
     --comment-bg: #352f1a; --side-bg: #080c0a;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3); --shadow: 0 18px 48px rgba(0, 0, 0, .55);
   }
@@ -285,6 +287,13 @@
   .report td.cm.editable:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
   .report td.cm textarea { width: 100%; min-height: 70px; border: 1px solid var(--field-line); border-radius: 6px; padding: 6px; background: var(--panel); }
   .report-title { font-weight: 700; margin: 0 0 4px; }
+  /* 금주·차주 구분 */
+  .wk { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11.5px; font-weight: 700; margin-right: 6px; vertical-align: 1px; letter-spacing: 0; }
+  .wk.this { background: var(--accent); color: var(--accent-ink); }
+  .wk.next { background: var(--next); color: #fff; }
+  .report th.th-this { background: var(--accent-soft); }
+  .report th.th-next { background: var(--next-soft); }
+  .report th.split, .report td.split { border-left: 2px solid var(--line-strong); }
   .report td.cat { text-align: center; font-weight: 700; white-space: nowrap; background: var(--panel-2); }
   .report td.hr-in.editable { cursor: pointer; }
   .report td.hr-in.editable:hover { background: var(--accent-soft); }
@@ -313,6 +322,12 @@
   .save-bar .note-in { flex: 1 1 220px; }
 
   /* ===== 필터 (세그먼트) ===== */
+  .budget-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  .month-bar { display: flex; align-items: center; gap: 4px; }
+  .month-sel { width: auto; min-width: 210px; font-weight: 600; }
+  .month-sum { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+  .month-sum b { color: var(--ink); }
+  .chip.month { background: var(--accent-soft); color: var(--accent); }
   .filters { display: inline-flex; flex-wrap: wrap; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
   .filters button { border: 0; background: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 500; }
   .filters button:hover { color: var(--ink); }
@@ -498,6 +513,12 @@
   .mcard-head b { font-size: 16px; }
   .mnote { margin: 0; font-size: 13px; color: var(--ink-2); background: var(--panel-2); border-radius: 8px; padding: 7px 10px; display: flex; gap: 6px; align-items: center; }
   .msec h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+  .msec.wk-this, .msec.wk-next { border-radius: 8px; padding: 10px 12px 6px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+  .msec.wk-next { border-left-color: var(--next); background: var(--next-soft); }
+  .msec.wk-this h4, .msec.wk-next h4 { display: flex; align-items: center; color: var(--ink-2); margin-bottom: 6px; }
+  .msec.wk-this li, .msec.wk-next li { border-top-color: rgba(127, 127, 127, .18); }
+  .mnote b { font-weight: 700; margin-right: 4px; }
+  .mcard .mnote { background: var(--pend-bg); color: var(--pend-ink); }
   .msec ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
   .msec li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .msec li:first-child { border-top: 0; }
@@ -662,6 +683,7 @@
   let D = null;
   let page = 'dash';
   let budgetFilter = 'all';
+  let budgetMonth = null; // null = 이번 달, 'all' = 전체 기간
   let weeklyTab = 'mine';
   let budgetTab = 'list';
   let boardFilter = 'all';
@@ -748,11 +770,33 @@
   }
 
   /* ================= 공통 계산 ================= */
+  const reqMonth = r => r.month || String(r.date).slice(0, 7);
+  const ymNow = () => `${now().getFullYear()}-${String(now().getMonth() + 1).padStart(2, '0')}`;
+  const monthName = (ym, withYear) => `${withYear ? `${+ym.slice(0, 4)}년 ` : ''}${+ym.slice(5, 7)}월`;
+  /** 신청할 수 있는 달 (서버가 준 목록, 없으면 올해 1월~6개월 뒤) */
+  function budgetMonths() {
+    if (D.budget.months && D.budget.months.length) return D.budget.months;
+    const out = [], n = now(), cur = ymNow();
+    for (let d = new Date(n.getFullYear(), 0, 1); d <= new Date(n.getFullYear(), n.getMonth() + 6, 1); d.setMonth(d.getMonth() + 1)) {
+      const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      out.push({ value: v, label: monthName(v, true), current: v === cur });
+    }
+    return out;
+  }
+  function curBudgetMonth() { return budgetMonth || ymNow(); }
+  function moveBudgetMonth(n) {
+    const ym = curBudgetMonth() === 'all' ? ymNow() : curBudgetMonth();
+    const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1);
+    budgetMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    render();
+  }
+  function setBudgetMonth(v) { budgetMonth = v; render(); }
+
   function stats() {
     const members = D.members;
     const done = members.filter(m => m.done).length;
     const ym = `${now().getFullYear()}-${String(now().getMonth() + 1).padStart(2, '0')}`;
-    const monthReq = D.budget.requests.filter(r => r.date.slice(0, 7) === ym);
+    const monthReq = D.budget.requests.filter(r => reqMonth(r) === ym);
     const off = members.filter(m => m.note);
     const deadline = new Date(D.week.deadlineIso);
     const ms = deadline - now();
@@ -826,9 +870,9 @@
         <div class="mcard-head">
           <b>${esc(m.name)}</b>${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
         </div>
-        ${m.note ? `<p class="mnote">${ic('leave', 'sm')}${esc(m.note)}</p>` : ''}
-        <div class="msec"><h4>금주 · ${esc(D.week.thisLabel)}</h4>${list(m.thisWeek)}</div>
-        <div class="msec"><h4>차주 · ${esc(D.week.nextLabel)}</h4>${list(m.nextWeek)}</div>
+        <div class="msec wk-this"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek)}</div>
+        <div class="msec wk-next"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek)}</div>
+        ${m.note ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(m.note)}</span></p>` : ''}
         ${m.comment || D.me.isLeader ? `<div class="cm mcm ${D.me.isLeader ? 'editable' : ''}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" role="button"' : ''}>${m.comment ? esc(m.comment) : '<span class="ph">팀장 코멘트 남기기</span>'}</div>` : ''}
       </article>`).join('');
   }
@@ -1000,12 +1044,12 @@
         </div>
         <div class="edit-cols">
           <section class="panel">
-            <div class="panel-head"><h2>금주 주요업무</h2><span>${esc(D.week.thisLabel)}</span></div>
+            <div class="panel-head"><h2><span class="wk this">금주</span>주요업무</h2><span>${esc(D.week.thisLabel)}</span></div>
             <div class="items" id="list-thisWeek">${itemsHtml('thisWeek')}</div>
             <button class="btn small add" data-add="thisWeek">${ic('plus', 'sm')}업무 추가</button>
           </section>
           <section class="panel">
-            <div class="panel-head"><h2>차주 주요업무</h2><span>${esc(D.week.nextLabel)}</span></div>
+            <div class="panel-head"><h2><span class="wk next">차주</span>주요업무</h2><span>${esc(D.week.nextLabel)}</span></div>
             <div class="items" id="list-nextWeek">${itemsHtml('nextWeek')}</div>
             <button class="btn small add" data-add="nextWeek">${ic('plus', 'sm')}업무 추가</button>
           </section>
@@ -1039,12 +1083,12 @@
         ${p.exists ? '' : '<div class="notice">아직 미리 쓴 내용이 없습니다. 이번 주에 적은 "차주 주요업무"를 불러왔으니 고쳐서 저장하세요.</div>'}
         <div class="edit-cols">
           <section class="panel">
-            <div class="panel-head"><h2>금주 주요업무</h2><span>${esc(D.week.nextLabel)}</span></div>
+            <div class="panel-head"><h2><span class="wk this">금주</span>주요업무</h2><span>${esc(D.week.nextLabel)}</span></div>
             <div class="items" id="list-thisWeek">${itemsHtml('thisWeek')}</div>
             <button class="btn small add" data-add="thisWeek">${ic('plus', 'sm')}업무 추가</button>
           </section>
           <section class="panel">
-            <div class="panel-head"><h2>차주 주요업무</h2><span>${esc(D.week.afterLabel || '')}</span></div>
+            <div class="panel-head"><h2><span class="wk next">차주</span>주요업무</h2><span>${esc(D.week.afterLabel || '')}</span></div>
             <div class="items" id="list-nextWeek">${itemsHtml('nextWeek')}</div>
             <button class="btn small add" data-add="nextWeek">${ic('plus', 'sm')}업무 추가</button>
           </section>
@@ -1070,9 +1114,9 @@
           const b = m.nextWeek[i] || {};
           rows += `<tr class="${i === 0 ? 'top' : ''}">`;
           if (i === 0) rows += `<td class="nm ${m.done ? '' : 'pending'}" rowspan="${n}">${esc(m.name)}</td>`;
-          rows += `<td>${esc(a.task)}</td><td class="c">${esc(a.due)}</td><td>${esc(b.task)}</td><td class="c">${esc(b.due)}</td>`;
+          rows += `<td>${esc(a.task)}</td><td class="c">${esc(a.due)}</td><td class="split">${esc(b.task)}</td><td class="c">${esc(b.due)}</td>`;
           if (i === 0) {
-            rows += `<td rowspan="${n}">${esc(m.note)}</td>`;
+            rows += `<td rowspan="${n}" class="split">${esc(m.note)}</td>`;
             rows += `<td class="cm ${D.me.isLeader ? 'editable' : ''}" rowspan="${n}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" title="눌러서 코멘트 작성"' : ''}>${esc(m.comment)}</td>`;
           }
           rows += '</tr>';
@@ -1093,8 +1137,8 @@
           <div class="table-wrap desk">
             <table class="report">
               <thead>
-                <tr><th rowspan="2">이 름</th><th colspan="2">${esc(D.week.thisLabel)}</th><th colspan="2">${esc(D.week.nextLabel)}</th><th rowspan="2">휴무계획/특이사항</th><th rowspan="2">팀장 코멘트</th></tr>
-                <tr><th>금주 주요업무</th><th>기한</th><th>차주 주요업무</th><th>기한</th></tr>
+                <tr><th rowspan="2">이 름</th><th colspan="2" class="th-this"><span class="wk this">금주</span>${esc(D.week.thisLabel)}</th><th colspan="2" class="th-next split"><span class="wk next">차주</span>${esc(D.week.nextLabel)}</th><th rowspan="2" class="split">휴무계획/특이사항</th><th rowspan="2">팀장 코멘트</th></tr>
+                <tr><th class="th-this">금주 주요업무</th><th class="th-this">기한</th><th class="th-next split">차주 주요업무</th><th class="th-next">기한</th></tr>
               </thead>
               <tbody id="reportBody">${rows}</tbody>
             </table>
@@ -1123,29 +1167,50 @@
 
     budgetList() {
       const mineOnly = budgetFilter === 'mine';
-      const list = D.budget.requests.filter(r => !mineOnly || r.req === D.me.name);
+      const bm = curBudgetMonth();
+      const inMonth = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm);
+      const list = inMonth.filter(r => !mineOnly || r.req === D.me.name);
+      const total = list.reduce((a, r) => a + r.amount, 0);
+      // 고를 수 있는 달 = 신청 가능한 달 + 신청 내역이 있는 달
+      const monthSet = budgetMonths().map(m => m.value);
+      D.budget.requests.forEach(r => { if (monthSet.indexOf(reqMonth(r)) < 0) monthSet.push(reqMonth(r)); });
+      if (bm !== 'all' && monthSet.indexOf(bm) < 0) monthSet.push(bm);
+      monthSet.sort().reverse();
+      const cnt = ym => D.budget.requests.filter(r => reqMonth(r) === ym).length;
+      const monthBar = `<div class="month-bar">
+          <button class="icon-btn" onclick="moveBudgetMonth(-1)" aria-label="이전 달">${ic('chevL')}</button>
+          <select class="field-in month-sel" onchange="setBudgetMonth(this.value)" aria-label="적용월">
+            <option value="all" ${bm === 'all' ? 'selected' : ''}>전체 기간 (${D.budget.requests.length}건)</option>
+            ${monthSet.map(v => `<option value="${v}" ${v === bm ? 'selected' : ''}>${monthName(v, true)}${v === ymNow() ? ' (이번 달)' : ''} · ${cnt(v)}건</option>`).join('')}
+          </select>
+          <button class="icon-btn" onclick="moveBudgetMonth(1)" aria-label="다음 달">${ic('chev')}</button>
+        </div>`;
       const f = (key, label, n) => `<button aria-pressed="${budgetFilter === key}" onclick="setFilter('${key}')">${label} ${n}</button>`;
       const rows = list.map(r => {
         const canCancel = r.req === D.me.name || D.me.isLeader || D.me.isAdmin;
         return `<tr>
-          <td class="nowrap c-id">${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">${esc(r.date)}</span></td>
+          <td class="nowrap c-id"><span class="chip month">${monthName(reqMonth(r))}분</span> ${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">신청 ${esc(r.date)}</span></td>
           <td class="nowrap strong c-who">${esc(r.req)}</td>
           <td class="nowrap c-move">${esc(r.from)} → ${esc(r.to)}</td>
           <td class="num strong c-amt">${won(r.amount)}<span class="unit">원</span></td>
           <td class="c-full">${esc(r.reason)}${filesView(r.files, true)}</td>
           <td class="nowrap c-act">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
         </tr>`;
-      }).join('') || '<tr><td colspan="6" class="empty">신청 내역이 없습니다.</td></tr>';
+      }).join('') || `<tr><td colspan="6" class="empty">${bm === 'all' ? '' : monthName(bm, true) + ' '}신청 내역이 없습니다.</td></tr>`;
       return `
         <div class="head">
-          <div><h1>예산전용</h1><p>신청하면 바로 예산에 반영되고 팀장님께 알림 메일이 갑니다. 잘못 신청한 건은 취소하세요.</p></div>
+          <div><h1>예산전용</h1><p>적용월을 골라 월별로 신청합니다. 신청하면 바로 예산에 반영되고 팀장님께 알림 메일이 갑니다. 잘못 신청한 건은 취소하세요.</p></div>
           <div class="head-actions"><button class="btn primary" onclick="openBudgetForm()">${ic('plus', 'sm')}예산전용 신청</button></div>
         </div>
         <section class="panel">
-          <div class="panel-head"><div class="filters">${f('all', '전체', D.budget.requests.length)}${D.me.name ? f('mine', '내 신청', D.budget.requests.filter(r => r.req === D.me.name).length) : ''}</div></div>
+          <div class="panel-head budget-head">
+            ${monthBar}
+            <div class="filters">${f('all', '전체', inMonth.length)}${D.me.name ? f('mine', '내 신청', inMonth.filter(r => r.req === D.me.name).length) : ''}</div>
+          </div>
+          <div class="month-sum">${bm === 'all' ? '전체 기간' : monthName(bm, true)} 합계 <b>${list.length}건 · ${won(total)}원</b></div>
           <div class="table-wrap">
             <table class="t cards budget-cards">
-              <thead><tr><th>신청번호</th><th>신청자</th><th>전출 → 전입</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
+              <thead><tr><th>적용월 · 신청번호</th><th>신청자</th><th>전출 → 전입</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -2120,11 +2185,14 @@
     const reqField = D.me.name
       ? `<div class="fld"><label>신청자</label><input class="field-in" value="${esc(D.me.name)}" disabled></div>`
       : `<div class="fld"><label for="bReq">신청자</label><select class="field-in" id="bReq"><option value="">선택</option>${D.members.map(m => `<option>${esc(m.name)}</option>`).join('')}</select></div>`;
+    const pick = budgetMonth && budgetMonth !== 'all' ? budgetMonth : ymNow();
+    const months = budgetMonths();
+    const monField = `<div class="fld"><label for="bMonth">적용월</label><select class="field-in" id="bMonth">${months.map(m => `<option value="${m.value}" ${m.value === pick ? 'selected' : ''}>${esc(m.label)}${m.current ? ' (이번 달)' : ''}</option>`).join('')}</select></div>`;
     openModal(`
       <h3>예산전용 신청</h3>
       <p class="sub">전출과목의 예산을 줄여 전입과목으로 옮깁니다. 신청하면 바로 반영됩니다.</p>
       <form class="form" id="bForm" novalidate>
-        ${reqField}
+        <div class="two">${reqField}${monField}</div>
         <div class="two">
           <div class="fld"><label for="bFrom">전출과목 (감액)</label><select class="field-in" id="bFrom"><option value="">선택</option>${opts}</select><div class="hint" id="bHint"></div></div>
           <div class="fld"><label for="bTo">전입과목 (증액)</label><select class="field-in" id="bTo"><option value="">선택</option>${opts}</select></div>
@@ -2145,6 +2213,7 @@
       e.preventDefault();
       const form = {
         requester: D.me.name || ($('#bReq') && $('#bReq').value) || '',
+        month: $('#bMonth').value,
         from: $('#bFrom').value, to: $('#bTo').value,
         amount: $('#bAmt').value.replace(/,/g, ''), reason: $('#bReason').value.trim(),
         files: uploadedFiles('budget'),
@@ -2159,7 +2228,7 @@
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)
-        .then(data => { applyData(data); closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; render(); toast(`${data.newId || D.budget.requests[0].id} 신청 완료. 예산에 반영했습니다.`); })
+        .then(data => { applyData(data); closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; budgetMonth = form.month; render(); toast(`${monthName(form.month)}분 ${data.newId || D.budget.requests[0].id} 신청 완료. 예산에 반영했습니다.`); })
         .catch(e2 => { $('#bSubmit').disabled = false; err.textContent = e2.message || String(e2); err.hidden = false; });
     };
   }

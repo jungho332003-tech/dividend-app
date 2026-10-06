@@ -2,7 +2,9 @@
  * 예산전용 신청 (결재 없이 신청 내역만 기록)
  *
  * [예산과목]  과목명 | 편성액 | 전입 | 전출 | 현재예산
- * [예산전용]  신청번호 | 신청일시 | 신청자 | 전출과목 | 전입과목 | 금액 | 사유 | 취소(Y)
+ * [예산전용]  신청번호 | 신청일시 | 신청자 | 전출과목 | 전입과목 | 금액 | 사유 | 취소(Y) | 증빙 첨부 | 적용월
+ *
+ * 적용월(yyyy-MM): 어느 달 예산을 전용하는지. 신청할 때 고르고, 내역은 월별로 볼 수 있다.
  *
  * 신청하면 바로 예산에 반영된다. 잘못 신청한 건은 신청자 본인이나 팀장·관리자가 취소한다.
  */
@@ -13,7 +15,7 @@ const BUDGET = {
   ACCOUNT_ROWS: 50,
 };
 
-const BCOL = { ID: 1, DATE: 2, REQUESTER: 3, FROM: 4, TO: 5, AMOUNT: 6, REASON: 7, CANCELED: 8, FILES: 9 };
+const BCOL = { ID: 1, DATE: 2, REQUESTER: 3, FROM: 4, TO: 5, AMOUNT: 6, REASON: 7, CANCELED: 8, FILES: 9, MONTH: 10 };
 
 function setupBudgetSheets_(ss) {
   if (!ss.getSheetByName(BUDGET.SHEET)) {
@@ -33,6 +35,7 @@ function setupBudgetSheets_(ss) {
   }
 
   ensureHeader_(ss.getSheetByName(BUDGET.SHEET), BCOL.FILES, '증빙 첨부');
+  ensureHeader_(ss.getSheetByName(BUDGET.SHEET), BCOL.MONTH, '적용월');
 
   if (!ss.getSheetByName(BUDGET.ACCOUNTS)) {
     const sh = ss.insertSheet(BUDGET.ACCOUNTS);
@@ -79,7 +82,42 @@ function getBudgetFormData() {
     members: members.map(m => m.name),
     me: me ? me.name : '',
     accounts: getAccounts_(),
+    months: budgetMonths_(new Date()),
   };
+}
+
+/** 신청할 수 있는 달: 올해 1월 ~ 6개월 뒤. [{value:'2026-10', label:'2026년 10월'}], 이번 달은 current:true */
+function budgetMonths_(now) {
+  const out = [];
+  const cur = fmt(now, 'yyyy-MM');
+  const d = new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+  while (d <= end) {
+    const v = fmt(d, 'yyyy-MM');
+    out.push({ value: v, label: `${d.getFullYear()}년 ${d.getMonth() + 1}월`, current: v === cur });
+    d.setMonth(d.getMonth() + 1);
+  }
+  return out;
+}
+
+/** 'yyyy-MM' 검사. 비어 있으면 이번 달 */
+function budgetMonth_(v) {
+  const s = String(v || '').trim();
+  if (!s) return fmt(new Date(), 'yyyy-MM');
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(s)) throw new Error('적용월을 올바르게 골라 주세요.');
+  return s;
+}
+
+/** 시트의 적용월 칸 → 'yyyy-MM' (예전 건은 신청일시 기준) */
+function monthOfRow_(r) {
+  const m = r[BCOL.MONTH - 1];
+  if (m instanceof Date) return fmt(m, 'yyyy-MM');
+  if (/^\d{4}-\d{2}$/.test(String(m).trim())) return String(m).trim();
+  return r[BCOL.DATE - 1] instanceof Date ? fmt(r[BCOL.DATE - 1], 'yyyy-MM') : String(r[BCOL.DATE - 1]).slice(0, 7);
+}
+
+function monthLabel_(ym) {
+  return `${Number(ym.slice(0, 4))}년 ${Number(ym.slice(5, 7))}월`;
 }
 
 function getAccounts_() {
@@ -103,6 +141,7 @@ function submitBudgetTransfer(form) {
   const to = String(form.to || '').trim();
   const reason = String(form.reason || '').trim();
   const amount = Math.round(Number(String(form.amount || '').replace(/,/g, '')));
+  const month = budgetMonth_(form.month);
 
   if (!requester || !from || !to || !reason) throw new Error('모든 항목을 입력해 주세요.');
   if (from === to) throw new Error('전출과목과 전입과목이 같습니다.');
@@ -121,7 +160,10 @@ function submitBudgetTransfer(form) {
     const sh = ss.getSheetByName(BUDGET.SHEET);
     const now = new Date();
     const id = nextBudgetId_(sh, now);
-    sh.getRange(sh.getLastRow() + 1, 1, 1, BCOL.FILES).setValues([[id, now, requester, from, to, amount, reason, '', filesToCell_(form.files)]]);
+    ensureHeader_(sh, BCOL.MONTH, '적용월'); // 예전 버전에서 업데이트한 경우
+    const row = sh.getLastRow() + 1;
+    sh.getRange(row, BCOL.MONTH).setNumberFormat('@'); // '2026-10'이 날짜로 바뀌지 않게
+    sh.getRange(row, 1, 1, BCOL.MONTH).setValues([[id, now, requester, from, to, amount, reason, '', filesToCell_(form.files), month]]);
     SpreadsheetApp.flush();
     try { CacheService.getDocumentCache().remove(CK.budget); } catch (e) { /* 캐시 없음 */ }
 
@@ -129,10 +171,10 @@ function submitBudgetTransfer(form) {
     if (leaders.length) {
       MailApp.sendEmail({
         to: leaders.map(m => m.email).join(','),
-        subject: `[예산전용 신청] ${id} ${requester} - ${from} → ${to} ${amount.toLocaleString()}원`,
+        subject: `[예산전용 신청] ${monthLabel_(month)}분 ${id} ${requester} - ${from} → ${to} ${amount.toLocaleString()}원`,
         htmlBody:
           `<b>${requester}</b>님이 예산전용을 신청했습니다.<br><br>` +
-          `신청번호: ${id}<br>전출과목: ${from}<br>전입과목: ${to}<br>` +
+          `신청번호: ${id}<br>적용월: ${monthLabel_(month)}<br>전출과목: ${from}<br>전입과목: ${to}<br>` +
           `금액: <b>${amount.toLocaleString()}원</b><br>사유: ${escapeHtml_(reason)}<br>` +
           filesFromCell_(filesToCell_(form.files)).map(f => `첨부: <a href="${f.url}">${escapeHtml_(f.name)}</a><br>`).join('') + '<br>' +
           `<a href="${sheetUrl(ss, sh)}">예산전용 시트 열기</a>`,
