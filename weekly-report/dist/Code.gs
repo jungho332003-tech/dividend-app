@@ -1662,9 +1662,9 @@ function writeHrTable_(sh, ctx, top) {
 
 const LEAVE = {
   SHEET: '휴가',
-  TYPES: ['연차', '오전반차', '오후반차', '정기휴가', '경조휴가', '병가', '대체휴무', '출장', '교육', '기타'],
+  TYPES: ['연차', '오전반차', '오후반차', '오전반반차', '오후반반차', '정기휴가', '경조휴가', '대체휴무', '출장', '교육', '기타'],
   // 캘린더 일정 제목에서 휴가로 볼 단어 (긴 것부터)
-  WORDS: /(오전반차|오후반차|반차|정기휴가|경조휴가|하계휴가|여름휴가|대체휴무|병가|연차|휴가|휴무)/,
+  WORDS: /(오전반반차|오후반반차|반반차|오전반차|오후반차|반차|정기휴가|경조휴가|하계휴가|여름휴가|대체휴무|연차|휴가|휴무)/,
 };
 
 const LCOL = { ID: 1, DATE: 2, NAME: 3, TYPE: 4, START: 5, END: 6, MEMO: 7, EVENT: 8, SOURCE: 9, DELETED: 10 };
@@ -1902,7 +1902,8 @@ function isLeaveTitle_(title, names) {
 }
 
 function leaveType_(word, title) {
-  // "오후 반차"처럼 띄어 쓴 것도 오전/오후반차로
+  // "오후 반차", "오전 반반차"처럼 띄어 쓴 것도 오전/오후로
+  if (word === '반반차') return /오전/.test(title) ? '오전반반차' : /오후/.test(title) ? '오후반반차' : '반반차';
   if (word === '반차') return /오전/.test(title) ? '오전반차' : /오후/.test(title) ? '오후반차' : '반차';
   if (word === '하계휴가' || word === '여름휴가') return '정기휴가';
   return word;
