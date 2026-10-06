@@ -111,6 +111,9 @@ function readMember_(ctx, name, comment) {
     thisWeek: input.thisWeek.map(toClientItem_),
     nextWeek: input.nextWeek.map(toClientItem_),
     comment: String(comment || ''),
+    // 캘린더·휴가 등록에서 자동으로 붙는 휴무 (이번 주~다음 주 / 미리 쓰기는 다음 주~다다음 주)
+    leaves: memberLeaves_(ctx, name, ctx.thisWeek.monday, 2),
+    preLeaves: memberLeaves_(ctx, name, ctx.nextWeek.monday, 2),
     pre: {
       exists: input.pre.exists,
       note: input.pre.note,

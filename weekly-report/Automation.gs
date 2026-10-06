@@ -149,6 +149,7 @@ function sendClosingMail_(ctx) {
 
 /**
  * 매시간 실행
+ *  - 팀 캘린더의 휴가 일정을 [휴가] 시트로 가져오기
  *  - 평일 업무시간엔 보고서 자동 새로고침
  *  - 마감 N시간 전 미작성자 알림 (주 1회)
  *  - 마감 후 팀장에게 취합 메일 (주 1회)
@@ -158,6 +159,9 @@ function hourlyCheck() {
   const ctx = getContext();
   const props = PropertiesService.getDocumentProperties();
   const key = ctx.thisWeek.key;
+
+  // 캘린더에 직접 넣은 휴가 일정 → [휴가] (보고서 새로고침 전에)
+  syncLeavesFromCalendar_(ctx);
 
   const day = now.getDay();
   if (day >= 1 && day <= 5 && now.getHours() >= 8 && now.getHours() <= 20) generateReport();

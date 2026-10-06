@@ -320,6 +320,7 @@
   .save-bar .left { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; flex: 1 1 360px; }
   .save-bar label { display: flex; gap: 6px; align-items: center; white-space: nowrap; font-weight: 500; }
   .save-bar .note-in { flex: 1 1 220px; }
+  kbd { font: inherit; font-size: 11.5px; font-weight: 600; padding: 1px 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--panel); color: var(--ink-2); }
 
   /* ===== 필터 (세그먼트) ===== */
   .budget-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
@@ -354,6 +355,16 @@
   .ev { font-size: 11.5px; line-height: 1.4; padding: 1px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--accent-soft); color: var(--accent-2); }
   .ev.holiday { background: var(--warn-bg); color: var(--warn-ink); }
   .ev.deadline { background: var(--pend-bg); color: var(--pend-ink); font-weight: 600; }
+  .ev.leave { background: var(--next-soft); color: var(--next); font-weight: 600; }
+  .tt.leave { color: var(--next); font-weight: 600; }
+  .leave-strip { padding: 14px 18px; }
+  .leave-strip .panel-head { margin-bottom: 8px; }
+  .leave-strip .panel-head h2 span { color: var(--muted); font-weight: 500; font-size: 12.5px; margin-left: 6px; }
+  .leave-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .leave-chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 10px; border-radius: 8px; background: var(--next-soft); color: var(--next); font-weight: 600; font-size: 13.5px; }
+  .leave-chip small { color: var(--muted); font-weight: 500; font-size: 11.5px; }
+  .leave-chip .icon-btn { width: 24px; height: 24px; color: inherit; }
+  .leave-empty { color: var(--muted); font-size: 13px; margin: 0; }
   .more { font-size: 11px; color: var(--muted); padding-left: 4px; }
   .agenda { display: flex; flex-direction: column; }
   .ag { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -797,7 +808,7 @@
     const done = members.filter(m => m.done).length;
     const ym = `${now().getFullYear()}-${String(now().getMonth() + 1).padStart(2, '0')}`;
     const monthReq = D.budget.requests.filter(r => reqMonth(r) === ym);
-    const off = members.filter(m => m.note);
+    const off = members.filter(m => noteOf(m));
     const deadline = new Date(D.week.deadlineIso);
     const ms = deadline - now();
     let left;
@@ -808,6 +819,11 @@
   }
 
   function mineMember() { return D.members.find(m => m.name === D.me.name); }
+  /** 휴무계획/특이사항 = 캘린더·휴가 등록에서 온 휴무 + 직접 쓴 내용 */
+  function noteOf(m) {
+    const n = String(m.note || '').trim();
+    return (m.leaves || []).map(l => l.text).filter(t => n.indexOf(t) < 0).concat(n ? [n] : []).join(', ');
+  }
 
   /* ================= 렌더링 ================= */
   function render() {
@@ -834,7 +850,7 @@
 
     renderTopbar(initials, role);
     $('#main').innerHTML = PAGES[page]();
-    if (page === 'weekly' && (weeklyTab === 'mine' || weeklyTab === 'pre')) bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = null;
+    if (page === 'weekly' && (weeklyTab === 'mine' || weeklyTab === 'pre')) bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = $('#main').onkeydown = null;
     if (page === 'dash' && !upcoming && can('calendar')) loadUpcoming();
     if (page === 'admin' && !A) loadAdmin(false);
     if (page === 'calendar') loadMonth();
@@ -872,7 +888,7 @@
         </div>
         <div class="msec wk-this"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek)}</div>
         <div class="msec wk-next"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek)}</div>
-        ${m.note ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(m.note)}</span></p>` : ''}
+        ${noteOf(m) ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(noteOf(m))}</span></p>` : ''}
         ${m.comment || D.me.isLeader ? `<div class="cm mcm ${D.me.isLeader ? 'editable' : ''}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" role="button"' : ''}>${m.comment ? esc(m.comment) : '<span class="ph">팀장 코멘트 남기기</span>'}</div>` : ''}
       </article>`).join('');
   }
@@ -895,7 +911,7 @@
         <div class="list-row">
           <span class="who">${esc(m.name)}</span>
           ${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
-          <span class="meta">금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건${m.note ? ` · ${esc(m.note)}` : ''}${m.pre && m.pre.exists ? ' · 다음 주 미리 작성' : ''}</span>
+          <span class="meta">금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건${noteOf(m) ? ` · ${esc(noteOf(m))}` : ''}${m.pre && m.pre.exists ? ' · 다음 주 미리 작성' : ''}</span>
         </div>`).join('');
 
       const dues = [];
@@ -1040,7 +1056,7 @@
       draft = draftMine;
       return `
         <div class="head">
-          <div><h1>내 주간업무</h1><p>월요일에 지난주 차주 계획이 금주로 자동 이월됩니다. "지속" 업무는 차주에도 남습니다.</p></div>
+          <div><h1>내 주간업무</h1><p>월요일에 지난주 차주 계획이 금주로 자동 이월됩니다. "지속" 업무는 차주에도 남습니다. 업무 칸에서 <kbd>Alt</kbd>+<kbd>Enter</kbd>를 누르면 아래에 새 줄이 생깁니다.</p></div>
         </div>
         <div class="edit-cols">
           <section class="panel">
@@ -1054,9 +1070,10 @@
             <button class="btn small add" data-add="nextWeek">${ic('plus', 'sm')}업무 추가</button>
           </section>
         </div>
+        ${leaveStrip(m.leaves, '이번 주·다음 주')}
         <div class="save-bar">
           <div class="left">
-            <input class="field-in note-in" id="noteIn" placeholder="휴무계획/특이사항 (예: 10/2(금) 연차)" value="${esc(draft.note)}">
+            <input class="field-in note-in" id="noteIn" placeholder="${(m.leaves || []).length ? '그 밖의 특이사항 (휴가는 위에서 자동으로 들어갑니다)' : '휴무계획/특이사항 (예: 10/2(금) 연차)'}" value="${esc(draft.note)}">
             <label><input type="checkbox" class="check" id="doneIn" ${draft.done ? 'checked' : ''}> 작성완료</label>
           </div>
           <button class="btn primary" id="saveMine">저장</button>
@@ -1093,6 +1110,7 @@
             <button class="btn small add" data-add="nextWeek">${ic('plus', 'sm')}업무 추가</button>
           </section>
         </div>
+        ${leaveStrip(m.preLeaves, '다음 주·다다음 주')}
         <div class="save-bar">
           <div class="left">
             <input class="field-in note-in" id="noteIn" placeholder="다음 주 휴무계획/특이사항 (예: 10/8(목)~10/9(금) 연차)" value="${esc(draft.note)}">
@@ -1116,7 +1134,7 @@
           if (i === 0) rows += `<td class="nm ${m.done ? '' : 'pending'}" rowspan="${n}">${esc(m.name)}</td>`;
           rows += `<td>${esc(a.task)}</td><td class="c">${esc(a.due)}</td><td class="split">${esc(b.task)}</td><td class="c">${esc(b.due)}</td>`;
           if (i === 0) {
-            rows += `<td rowspan="${n}" class="split">${esc(m.note)}</td>`;
+            rows += `<td rowspan="${n}" class="split">${esc(noteOf(m))}</td>`;
             rows += `<td class="cm ${D.me.isLeader ? 'editable' : ''}" rowspan="${n}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" title="눌러서 코멘트 작성"' : ''}>${esc(m.comment)}</td>`;
           }
           rows += '</tr>';
@@ -1343,6 +1361,7 @@
         <div><h1>일정</h1><p>${data && data.calendarName ? `구글 캘린더 · ${esc(data.calendarName)}` : '구글 캘린더 연동'} · 공휴일과 주간보고 마감이 함께 표시됩니다</p></div>
         <div class="head-actions">
           <button class="btn" onclick="loadMonth(true)">${ic('refresh', 'sm')}새로고침</button>
+          ${canLeave() ? `<button class="btn" onclick="openLeaveForm()">${ic('leave', 'sm')}휴가 등록</button>` : ''}
           <button class="btn primary" onclick="openEventForm()">${ic('plus', 'sm')}일정 추가</button>
         </div>
       </div>
@@ -1945,6 +1964,21 @@
       if (t.id === 'noteIn') draft.note = t.value;
     };
     main.onchange = e => { if (e.target.id === 'doneIn') draft.done = e.target.checked; };
+    // Alt+Enter: 지금 줄 바로 아래에 새 줄을 만들고 커서를 옮긴다 (엑셀처럼)
+    main.onkeydown = e => {
+      const t = e.target;
+      if (e.key !== 'Enter' || !e.altKey || !t.dataset.k) return;
+      e.preventDefault();
+      const k = t.dataset.k, i = Number(t.dataset.i);
+      // 한글 입력 중이면 글자가 확정된 뒤에 처리한다
+      setTimeout(() => {
+        if (t.dataset.f === 'task') draft[k][i].task = t.value;
+        draft[k].splice(i + 1, 0, blank());
+        $(`#list-${k}`).innerHTML = itemsHtml(k);
+        const next = document.querySelector(`#list-${k} input[data-f="task"][data-i="${i + 1}"]`);
+        if (next) next.focus();
+      }, 0);
+    };
     main.onclick = e => {
       const t = e.target.closest('button');
       if (!t) return;
@@ -2147,6 +2181,64 @@
       call('apiDeleteHr', x.id)
         .then(data => { applyData(data); closeModal(); render(); toast('삭제했습니다.'); })
         .catch(e2 => { $('#hDel').disabled = false; err(e2.message || String(e2)); });
+    };
+  }
+
+  /* ================= 휴가 (캘린더 → 주간보고 휴무 자동 반영) ================= */
+  const LEAVE_TYPES = ['연차', '오전반차', '오후반차', '정기휴가', '경조휴가', '병가', '대체휴무', '출장', '교육', '기타'];
+  function canLeave() { return !!D.me.name && can('weekly'); }
+
+  function leaveStrip(list, range) {
+    list = list || [];
+    const chips = list.map(l => `<span class="leave-chip">${esc(l.text)}${l.source === '캘린더' ? ' <small>캘린더</small>' : ''}
+      <button class="icon-btn" onclick="deleteLeave('${esc(l.id)}')" aria-label="${esc(l.text)} 지우기" title="지우기">${ic('x', 'sm')}</button></span>`).join('');
+    return `<section class="panel leave-strip">
+      <div class="panel-head"><h2>휴무 일정<span>${range} · 휴무계획/특이사항에 자동으로 들어갑니다</span></h2>
+        <button class="btn small" onclick="openLeaveForm()">${ic('plus', 'sm')}휴가 등록</button></div>
+      ${chips ? `<div class="leave-chips">${chips}</div>` : `<p class="leave-empty">등록된 휴가가 없습니다. 여기서 등록하거나 팀 캘린더에 "${esc(D.me.name)} 연차"처럼 넣으면 자동으로 들어옵니다.</p>`}
+    </section>`;
+  }
+
+  function openLeaveForm(dateKey) {
+    const d = dateKey || (page === 'calendar' && calSel) || dkey(now());
+    openModal(`
+      <h3>휴가 등록</h3>
+      <p class="sub">팀 캘린더에 "[연차] ${esc(D.me.name)}"처럼 일정이 만들어지고, 그 주의 주간보고 휴무계획/특이사항에 자동으로 들어갑니다.</p>
+      <form class="form" id="lForm" novalidate>
+        <div class="fld"><label for="lType">종류</label><select class="field-in" id="lType">${LEAVE_TYPES.map(t => `<option>${t}</option>`).join('')}</select></div>
+        <div class="two">
+          <div class="fld"><label for="lStart">시작일</label><input class="field-in" type="date" id="lStart" value="${esc(d)}"></div>
+          <div class="fld"><label for="lEnd">종료일 (하루면 비워두기)</label><input class="field-in" type="date" id="lEnd"></div>
+        </div>
+        <div class="fld"><label for="lMemo">메모 (선택)</label><input class="field-in" id="lMemo" placeholder="예) 가족 행사"></div>
+        <div class="msg err" id="lErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="lOk">등록</button></div>
+      </form>`);
+    const err = m => { $('#lErr').textContent = m; $('#lErr').hidden = false; };
+    $('#lForm').onsubmit = e => {
+      e.preventDefault();
+      const leave = { type: $('#lType').value, start: $('#lStart').value, end: $('#lEnd').value, memo: $('#lMemo').value.trim() };
+      if (!leave.start) return err('시작일을 골라 주세요.');
+      if (leave.end && leave.end < leave.start) return err('종료일이 시작일보다 빠릅니다.');
+      $('#lOk').disabled = true;
+      call('apiAddLeave', leave)
+        .then(data => {
+          applyData(data); closeModal(); calCache = {}; upcoming = null; render();
+          toast(data && data.warning ? data.warning : `${leave.type} 등록 완료. 주간보고 휴무계획에 자동으로 들어갑니다.`);
+        })
+        .catch(e2 => { $('#lOk').disabled = false; err(e2.message || String(e2)); });
+    };
+  }
+
+  function deleteLeave(id) {
+    const m = mineMember();
+    const l = m && (m.leaves || []).concat(m.preLeaves || []).find(x => x.id === id);
+    openModal(`<h3>휴가를 지울까요?</h3><p class="sub">${l ? esc(l.text) + ' · ' : ''}팀 캘린더의 일정도 함께 지워집니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="lDel">지우기</button></div>`);
+    $('#lDel').onclick = () => {
+      $('#lDel').disabled = true;
+      call('apiDeleteLeave', id).then(data => { applyData(data); closeModal(); calCache = {}; upcoming = null; render(); toast('지웠습니다.'); })
+        .catch(e => { closeModal(); fail(e); });
     };
   }
 

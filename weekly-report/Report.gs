@@ -56,7 +56,7 @@ function buildReport_(ctx) {
         i === 0 ? m.name : '',
         a ? a.task : '', a ? formatDue(a.due) : '',
         b ? b.task : '', b ? formatDue(b.due) : '',
-        i === 0 ? input.note : '',
+        i === 0 ? combineNote_(memberLeaves_(ctx, m.name, ctx.thisWeek.monday, 2), input.note) : '',
         i === 0 ? (comments[m.name] || '') : '',
       ]);
     }

@@ -7,7 +7,7 @@
  */
 
 function getTeamCalendar_() {
-  const id = String(getConfig()[CFG.CALENDAR] || '').trim();
+  const id = String(sheetBase_().cfg[CFG.CALENDAR] || '').trim();
   const cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
   if (!cal) throw new Error('팀 캘린더에 접근할 수 없습니다. 캘린더가 공유되어 있는지 관리자에게 확인하세요.');
   return cal;
@@ -19,8 +19,16 @@ function apiCalendar(startIso, endIso) {
   const start = new Date(startIso);
   const end = new Date(endIso);
   const cal = getTeamCalendar_();
+  const ctx = getContext();
+  const raw = cal.getEvents(start, end);
 
-  const events = cal.getEvents(start, end).map(e => ({
+  // 캘린더에 직접 넣은 휴가 일정을 주간보고에 반영 (팀 캘린더가 설정된 경우)
+  if (teamCalendarSet_(ctx)) {
+    try { syncLeaveEvents_(ctx, raw, start, end); } catch (e) { /* 시트 권한 등 — 매시간 자동 실행 때 다시 맞춘다 */ }
+  }
+  const names = ctx.members.map(m => m.name);
+
+  const events = raw.map(e => ({
     id: e.getId(),
     title: e.getTitle(),
     start: e.getStartTime().toISOString(),
@@ -28,7 +36,7 @@ function apiCalendar(startIso, endIso) {
     allDay: e.isAllDayEvent(),
     location: e.getLocation() || '',
     desc: e.getDescription() || '',
-    kind: 'event',
+    kind: isLeaveTitle_(e.getTitle(), names) ? 'leave' : 'event',
   }));
 
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.HOLIDAYS);
@@ -40,7 +48,6 @@ function apiCalendar(startIso, endIso) {
     });
   }
 
-  const ctx = getContext();
   if (ctx.deadline >= start && ctx.deadline < end) {
     events.push({ id: 'deadline', title: '주간보고 마감', start: ctx.deadline.toISOString(), end: ctx.deadline.toISOString(), allDay: false, location: '', desc: '', kind: 'deadline' });
   }
