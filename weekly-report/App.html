@@ -285,6 +285,16 @@
   .report td.cm.editable:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
   .report td.cm textarea { width: 100%; min-height: 70px; border: 1px solid var(--field-line); border-radius: 6px; padding: 6px; background: var(--panel); }
   .report-title { font-weight: 700; margin: 0 0 4px; }
+  .report td.cat { text-align: center; font-weight: 700; white-space: nowrap; background: var(--panel-2); }
+  .report td.hr-in.editable { cursor: pointer; }
+  .report td.hr-in.editable:hover { background: var(--accent-soft); }
+  .report td.hr-in small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  table.hr { min-width: 860px; width: 100%; }
+  table.hr td { height: 40px; }
+  .hr-sec { margin-top: 22px; }
+  .hr-sec .panel-head { margin-bottom: 10px; }
+  .mcard li.hr-li { cursor: pointer; }
+  .mcard li.hr-li small { display: block; color: var(--muted); font-size: 12px; }
   .report-note { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
   .cm-actions { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
 
@@ -726,7 +736,7 @@
       const i = D.members.findIndex(m => m.name === data.memberPatch.name);
       if (i >= 0) D.members[i] = data.memberPatch; else D.members.push(data.memberPatch);
     }
-    ['members', 'budget', 'board', 'rules', 'me', 'week'].forEach(k => { if (data[k]) D[k] = data[k]; });
+    ['members', 'hr', 'budget', 'board', 'rules', 'me', 'week'].forEach(k => { if (data[k]) D[k] = data[k]; });
   }
 
   const fmtDue = iso => { const d = new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${DAY[d.getDay()]})`; };
@@ -789,7 +799,7 @@
 
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
-    weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고' })[weeklyTab],
+    weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
     budget: () => ({ list: '신청 내역', status: '예산현황' })[budgetTab],
     admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', settings: '설정', guide: '접속 안내' })[adminTab],
   };
@@ -953,8 +963,9 @@
         <button role="tab" aria-selected="${weeklyTab === 'mine'}" onclick="setTab('weekly','mine')">내 주간업무 ${mine ? (mine.done ? '<span class="chip ok">완료</span>' : '<span class="chip no">작성 전</span>') : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'pre'}" onclick="setTab('weekly','pre')">다음 주 미리 쓰기 ${mine && mine.pre && mine.pre.exists ? '<span class="chip ok">✓</span>' : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'team'}" onclick="setTab('weekly','team')">팀 주간보고 <span class="chip plain">${s.done}/${s.total}</span></button>
+        <button role="tab" aria-selected="${weeklyTab === 'hr'}" onclick="setTab('weekly','hr')">인사현황 ${hrCount() ? `<span class="chip plain">${hrCount()}</span>` : ''}</button>
       </div>`;
-      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : VIEWS.report());
+      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : weeklyTab === 'hr' ? VIEWS.hr() : VIEWS.report());
     },
 
     budget() {
@@ -1088,6 +1099,25 @@
               <tbody id="reportBody">${rows}</tbody>
             </table>
           </div>
+          <div class="hr-sec">
+            <div class="panel-head"><h2>■ 인사 현황</h2><button class="btn small ghost" onclick="setTab('weekly','hr')">등록·수정${ic('chev', 'sm')}</button></div>
+            <div class="mcards">${hrCards(false)}</div>
+            <div class="table-wrap desk">${hrTableHtml(false)}</div>
+          </div>
+        </section>`;
+    },
+
+    hr() {
+      const canEdit = !!D.me.name;
+      return `
+        <div class="head">
+          <div><h1>인사현황</h1><p>입사·휴직·복직·퇴사·인터뷰 등을 등록하면 주간보고 아래 표로 정리됩니다. 다음 주가 되면 차주 항목은 금주 칸으로 자동으로 옮겨집니다.</p></div>
+          <div class="head-actions">${canEdit ? `<button class="btn primary" onclick="openHrForm()">${ic('plus', 'sm')}인사현황 등록</button>` : ''}</div>
+        </div>
+        <section class="panel">
+          <p class="report-note">${canEdit ? '항목을 누르면 고치거나 지울 수 있습니다. (본인이 등록한 항목 · 팀장/관리자는 전체)' : '[팀원] 시트에 등록된 사람만 등록할 수 있습니다.'}</p>
+          <div class="mcards">${hrCards(true)}</div>
+          <div class="table-wrap desk">${hrTableHtml(true)}</div>
         </section>`;
     },
 
@@ -1934,6 +1964,127 @@
     }
     if (e.key === 'Escape' && !$('#scrim').hidden) closeModal();
   });
+  /* ================= 인사현황 ================= */
+  function hrData() { return D.hr || { thisWeek: [], nextWeek: [] }; }
+  function hrCount() { const h = hrData(); return h.thisWeek.length + h.nextWeek.length; }
+  function hrCats() { return D.hrCategories || ['입사', '휴직', '복직', '퇴사', '인터뷰', '기타']; }
+  function hrCanEdit(x) { return !!D.me.name && (x.author === D.me.name || D.me.isLeader || D.me.isAdmin); }
+  function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek).find(x => x.id === id); }
+
+  /** 시트와 같은 모양: 구분별로 금주·차주를 나란히 (구분마다 최소 3줄) */
+  function hrTableHtml(editable) {
+    const h = hrData();
+    const cell = (x, cls) => {
+      if (!x) return `<td class="${cls}"></td>`;
+      const ed = editable && hrCanEdit(x);
+      return `<td class="${cls} hr-in ${ed ? 'editable' : ''}" ${ed ? `onclick="openHrForm('${esc(x.id)}')" tabindex="0" title="눌러서 수정"` : ''}>${esc(x.target)}${editable ? `<small>${esc(x.author)}</small>` : ''}</td>`;
+    };
+    let body = '';
+    hrCats().forEach(cat => {
+      const a = h.thisWeek.filter(x => x.category === cat);
+      const b = h.nextWeek.filter(x => x.category === cat);
+      const n = Math.max(3, a.length, b.length);
+      for (let i = 0; i < n; i++) {
+        const x = a[i], y = b[i];
+        body += `<tr class="${i === 0 ? 'top' : ''}">`;
+        if (i === 0) body += `<td class="cat" rowspan="${n}">${esc(cat)}</td>`;
+        body += cell(x, '') + `<td class="c">${x ? esc(x.when) : ''}</td>` + cell(y, '') + `<td class="c">${y ? esc(y.when) : ''}</td>`;
+        body += `<td>${esc([x && x.memo, y && y.memo].filter(Boolean).join(' / '))}</td></tr>`;
+      }
+    });
+    return `<table class="report hr">
+      <thead>
+        <tr><th rowspan="2">구 분</th><th colspan="2">${esc(D.week.thisLabel)}</th><th colspan="2">${esc(D.week.nextLabel)}</th><th rowspan="2">비고</th></tr>
+        <tr><th>대상 및 내용</th><th>일자/기간</th><th>대상 및 내용</th><th>발령일</th></tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>`;
+  }
+
+  /** 휴대폰: 항목이 있는 구분만 카드로 */
+  function hrCards(editable) {
+    const h = hrData();
+    const li = x => {
+      const ed = editable && hrCanEdit(x);
+      return `<li class="${ed ? 'hr-li' : ''}" ${ed ? `onclick="openHrForm('${esc(x.id)}')"` : ''}><span>${esc(x.target)}${x.memo ? `<small>${esc(x.memo)}</small>` : ''}</span><em>${esc(x.when)}</em></li>`;
+    };
+    const cards = hrCats().map(cat => {
+      const a = h.thisWeek.filter(x => x.category === cat);
+      const b = h.nextWeek.filter(x => x.category === cat);
+      if (!a.length && !b.length) return '';
+      return `<article class="mcard">
+        <div class="mcard-head"><b>${esc(cat)}</b><span class="chip plain">${a.length + b.length}</span></div>
+        ${a.length ? `<div class="msec"><h4>금주 · ${esc(D.week.thisLabel)}</h4><ul>${a.map(li).join('')}</ul></div>` : ''}
+        ${b.length ? `<div class="msec"><h4>차주 · ${esc(D.week.nextLabel)}</h4><ul>${b.map(li).join('')}</ul></div>` : ''}
+      </article>`;
+    }).join('');
+    return cards || '<div class="notice">이번 주·다음 주에 등록된 인사현황이 없습니다.</div>';
+  }
+
+  function hrNextMonday() { const d = parseD(D.week.key); d.setDate(d.getDate() + 7); return d; }
+
+  function openHrForm(id) {
+    const x = id ? hrFind(id) : null;
+    if (id && !x) return;
+    const h = hrData();
+    const week = x ? (h.nextWeek.indexOf(x) >= 0 ? 'next' : 'this') : 'this';
+    const cat = x ? x.category : hrCats()[0];
+    openModal(`
+      <h3>인사현황 ${x ? '수정' : '등록'}</h3>
+      <form class="form" id="hForm" novalidate>
+        <div class="two">
+          <div class="fld"><label for="hCat">구분</label><select class="field-in" id="hCat">${hrCats().map(c => `<option ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+          <div class="fld"><label>주차</label>
+            <div class="filters" id="hWeek">
+              <button type="button" data-w="this" aria-pressed="${week === 'this'}">금주</button>
+              <button type="button" data-w="next" aria-pressed="${week === 'next'}">차주</button>
+            </div>
+          </div>
+        </div>
+        <div class="fld"><label for="hTarget">대상 및 내용</label><input class="field-in" id="hTarget" value="${x ? esc(x.target) : ''}" placeholder="예) 홍길동(인사팀) 신규 입사"></div>
+        <div class="two">
+          <div class="fld"><label for="hStart" id="hStartLabel">${week === 'next' ? '발령일' : '일자'}</label><input class="field-in" type="date" id="hStart" value="${x ? esc(x.start) : ''}"></div>
+          <div class="fld"><label for="hEnd">종료일 (기간일 때)</label><input class="field-in" type="date" id="hEnd" value="${x ? esc(x.end) : ''}"></div>
+        </div>
+        <div class="fld"><label for="hMemo">비고 (선택)</label><input class="field-in" id="hMemo" value="${x ? esc(x.memo) : ''}" placeholder="예) 10/7(수) 입사자 간략 OJT 진행"></div>
+        <p class="sub" id="hWeekHint"></p>
+        <div class="msg err" id="hErr" hidden></div>
+        <div class="modal-actions">
+          ${x ? '<button type="button" class="btn danger" id="hDel" style="margin-right:auto">삭제</button>' : ''}
+          <button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="hOk">${x ? '저장' : '등록'}</button>
+        </div>
+      </form>`);
+    let w = week;
+    const setW = v => {
+      w = v;
+      document.querySelectorAll('#hWeek button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.w === w)));
+      $('#hStartLabel').textContent = w === 'next' ? '발령일' : '일자';
+      $('#hWeekHint').textContent = `${w === 'next' ? '차주' : '금주'} · ${w === 'next' ? D.week.nextLabel : D.week.thisLabel} 칸에 들어갑니다.`;
+    };
+    setW(w);
+    $('#hWeek').onclick = e => { const b = e.target.closest('button'); if (b) setW(b.dataset.w); };
+    // 날짜를 고르면 금주/차주를 자동으로 맞춘다
+    $('#hStart').onchange = () => { const v = $('#hStart').value; if (v) setW(parseD(v) >= hrNextMonday() ? 'next' : 'this'); };
+    const err = m => { $('#hErr').textContent = m; $('#hErr').hidden = false; };
+    $('#hForm').onsubmit = e => {
+      e.preventDefault();
+      const entry = { id: x ? x.id : '', week: w, category: $('#hCat').value, target: $('#hTarget').value.trim(), start: $('#hStart').value, end: $('#hEnd').value, memo: $('#hMemo').value.trim() };
+      if (!entry.target) return err('대상 및 내용을 입력해 주세요.');
+      if (entry.end && !entry.start) return err('시작 일자를 먼저 골라 주세요.');
+      if (entry.end && entry.start && entry.end < entry.start) return err('종료일이 시작일보다 빠릅니다.');
+      $('#hOk').disabled = true;
+      call('apiSaveHr', entry)
+        .then(data => { applyData(data); closeModal(); render(); toast(x ? '수정했습니다.' : '등록했습니다.'); })
+        .catch(e2 => { $('#hOk').disabled = false; err(e2.message || String(e2)); });
+    };
+    if (x) $('#hDel').onclick = () => {
+      $('#hDel').disabled = true;
+      call('apiDeleteHr', x.id)
+        .then(data => { applyData(data); closeModal(); render(); toast('삭제했습니다.'); })
+        .catch(e2 => { $('#hDel').disabled = false; err(e2.message || String(e2)); });
+    };
+  }
+
   function openComment(cell) {
     const name = cell.dataset.name;
     const m = D.members.find(x => x.name === name);

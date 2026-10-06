@@ -2,6 +2,7 @@
  * 주간보고 시트 생성 (보고 양식 그대로 조립)
  *
  *  이 름 | 금주 주요업무 | 기한 | 차주 주요업무 | 기한 | 휴무계획/특이사항 | 팀장 코멘트
+ *  그 아래에 인사현황 표 (Personnel.gs)
  */
 
 function generateReport() {
@@ -79,6 +80,9 @@ function buildReport_(ctx) {
   table.setBorder(true, true, true, true, true, true, '#999999', SpreadsheetApp.BorderStyle.SOLID);
   blocks.forEach(b => sh.getRange(b.row, 1, b.n, REPORT.COLS)
     .setBorder(true, null, true, null, null, null, '#555555', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
+
+  // 인사현황 표 (입사·휴직·복직·퇴사·인터뷰·기타)
+  writeHrTable_(sh, ctx, h + 2 + rows.length + 2);
 
   [110, 330, 95, 330, 95, 170, 240].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.setFrozenRows(h + 1);

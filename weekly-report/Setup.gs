@@ -78,6 +78,7 @@ function initialize() {
   setupBudgetSheets_(ss);
   setupBoardSheets_(ss);
   setupRuleSheets_(ss);
+  setupHrSheet_(ss);
   setupMenuSheet_(ss);
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
@@ -139,8 +140,9 @@ function applyProtections_(ctx) {
     if (sh) protectSheet_(sh, leaders.concat(admins));
   });
 
-  // 게시판: 누구나 글/댓글 작성 (직접 수정 시 경고만)
-  [BOARD.SHEET, BOARD.COMMENTS].forEach(name => {
+  setupHrSheet_(ss); // 예전 버전에서 업데이트한 경우
+  // 게시판·인사현황: 누구나 등록 (직접 수정 시 경고만)
+  [BOARD.SHEET, BOARD.COMMENTS, HR.SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
     if (sh) warnOnlyProtect_(sh);
   });

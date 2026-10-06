@@ -31,6 +31,7 @@ function doGet() {
 const CACHE_TTL = 60;
 const CK = {
   members: ctx => 'members:' + ctx.thisWeek.key,
+  hr: ctx => 'hr:' + ctx.thisWeek.key,
   budget: 'budget',
   board: 'board',
   rules: 'rules',
@@ -65,6 +66,7 @@ function apiBootstrap() {
   // 권한 없는 메뉴의 데이터는 아예 보내지 않는다
   return Object.assign(base, {
     members: can('weekly') ? cached_(CK.members(ctx), () => readMembers_(ctx)) : [],
+    hr: can('weekly') ? cached_(CK.hr(ctx), () => readHr_(ctx)) : { thisWeek: [], nextWeek: [] },
     budget: can('budget') ? cached_(CK.budget, () => readBudget_(ss)) : { accounts: [], requests: [] },
     board: can('board') ? cached_(CK.board, () => readBoard_(ss)) : [],
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
@@ -89,6 +91,7 @@ function baseData_(ctx) {
       afterLabel: ctx.afterWeek.label,
     },
     ruleCategories: RULES.CATEGORIES,
+    hrCategories: HR.CATEGORIES,
   };
 }
 

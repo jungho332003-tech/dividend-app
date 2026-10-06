@@ -1,13 +1,13 @@
 """
 한 파일 설치본 만들기: python3 build.py
-  dist/Code.gs        스크립트 11개 + 예산전용 신청 화면(BudgetForm)을 하나로 합친 파일
+  dist/Code.gs        스크립트 12개 + 예산전용 신청 화면(BudgetForm)을 하나로 합친 파일
   dist/App.html       웹앱 화면 (그대로 복사)
   dist/appsscript.json
 """
 import json, os, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ORDER = ['Config', 'Setup', 'Report', 'Automation', 'Budget', 'Calendar', 'Board', 'Rules', 'Files', 'Admin', 'WebApp']
+ORDER = ['Config', 'Setup', 'Report', 'Automation', 'Budget', 'Calendar', 'Board', 'Rules', 'Personnel', 'Files', 'Admin', 'WebApp']
 
 def read(name):
     with open(os.path.join(HERE, name), encoding='utf-8') as f:
