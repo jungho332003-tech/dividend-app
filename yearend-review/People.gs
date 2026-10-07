@@ -145,7 +145,7 @@ function findPersonRow_(sh, map, id) {
 
 /** 이 사람이 이 대상자의 이 칸을 고칠 수 있나 */
 function canEdit_(me, cur, col, patch) {
-  if (col.who === 'admin') return !!me.isAdmin;
+  if (col.who === 'lead') return !!(me.isLeader || me.isAdmin);
   if (me.isLeader || me.isAdmin) return true;
   if (!me.name) return false;
   // 담당자가 비어 있으면 본인을 1차 담당자로 지정할 수 있다 (같은 저장에서 다른 칸도 함께 고칠 수 있다)
@@ -156,7 +156,7 @@ function canEdit_(me, cur, col, patch) {
 }
 
 function whoLabel_(col) {
-  return { admin: '관리자', second: '2차검토 담당자', assign: '총괄' }[col.who] || '담당자';
+  return { lead: '총괄·관리자', second: '2차검토 담당자', assign: '총괄' }[col.who] || '담당자';
 }
 
 /** 저장할 값. 체크박스 칸(지금 값이 true/false)이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다 */
@@ -265,7 +265,7 @@ function apiImportPeople(rows) {
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
-    COLS.forEach(c => { if (!map[c.k] && (c.who !== 'admin' || me.isAdmin) && (rows || []).some(src => c.k in src)) ensureCol_(sh, map, c); });
+    COLS.forEach(c => { if (!map[c.k] && (rows || []).some(src => c.k in src)) ensureCol_(sh, map, c); });
     const width = sh.getLastColumn();
     const last = sh.getLastRow();
     const data = last >= 2 ? sh.getRange(2, 1, last - 1, width).getValues() : [];
@@ -281,7 +281,6 @@ function apiImportPeople(rows) {
       else { r = new Array(width).fill(''); data.push(r); if (emp) byEmp[emp] = data.length - 1; added++; }
       COLS.forEach(c => {
         if (!(c.k in src) || !map[c.k]) return;
-        if (c.who === 'admin' && !me.isAdmin) return; // 휴직·퇴사는 관리자가 올릴 때만 반영
         const old = r[map[c.k] - 1];
         r[map[c.k] - 1] = c.t === 'bool' ? cellValue_(c, old, boolOf_(c, src[c.k])) : String(src[c.k] == null ? '' : src[c.k]).trim();
       });
