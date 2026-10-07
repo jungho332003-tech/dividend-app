@@ -1,0 +1,2282 @@
+<title>연말정산 검토 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #eef1ef;
+    --panel: #ffffff;
+    --panel-2: #f6f8f7;
+    --ink: #17201c;
+    --ink-2: #44504a;
+    --muted: #6b7771;
+    --line: #d8dfdb;
+    --line-strong: #6f7b75;
+    --accent: #146b58;
+    --accent-2: #0f5445;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcefe8;
+    --warn-bg: #fbe3df;
+    --warn-ink: #9a2b1f;
+    --pend-bg: #fdf0cf;
+    --pend-ink: #7a5300;
+    --ok-bg: #dff1e2;
+    --ok-ink: #1d6a2b;
+    --comment-bg: #fff7dc;
+    --shadow: 0 12px 32px rgba(18, 38, 30, .16);
+    --radius: 10px;
+    --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111513;
+      --panel: #1a201d;
+      --panel-2: #212824;
+      --ink: #e3ebe7;
+      --ink-2: #c1cbc6;
+      --muted: #93a19a;
+      --line: #313a36;
+      --line-strong: #83918a;
+      --accent: #52c3a4;
+      --accent-2: #6fd4b8;
+      --accent-ink: #0b1914;
+      --accent-soft: #1b3a31;
+      --warn-bg: #4b2420;
+      --warn-ink: #ffb3a8;
+      --pend-bg: #3d3217;
+      --pend-ink: #f1cd7a;
+      --ok-bg: #1d3a24;
+      --ok-ink: #a2dcab;
+      --comment-bg: #38321c;
+      --shadow: 0 12px 32px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111513;
+    --panel: #1a201d;
+    --panel-2: #212824;
+    --ink: #e3ebe7;
+    --ink-2: #c1cbc6;
+    --muted: #93a19a;
+    --line: #313a36;
+    --line-strong: #83918a;
+    --accent: #52c3a4;
+    --accent-2: #6fd4b8;
+    --accent-ink: #0b1914;
+    --accent-soft: #1b3a31;
+    --warn-bg: #4b2420;
+    --warn-ink: #ffb3a8;
+    --pend-bg: #3d3217;
+    --pend-ink: #f1cd7a;
+    --ok-bg: #1d3a24;
+    --ok-ink: #a2dcab;
+    --comment-bg: #38321c;
+    --shadow: 0 12px 32px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.5;
+    padding-block: 16px 40px;
+    padding-inline: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a { color: var(--accent); }
+
+  .demo-bar {
+    max-width: 1320px; margin: 0 auto 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    background: var(--pend-bg); color: var(--pend-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px;
+  }
+  .demo-bar select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+
+  .app { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 16px; align-items: start; }
+
+  /* 사이드바 */
+  .side {
+    position: sticky; top: calc(16px + env(safe-area-inset-top, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 10px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .brand { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+  .brand b { font-size: 16px; letter-spacing: -.01em; }
+  .brand span { color: var(--muted); font-size: 12px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav button {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    background: none; border: 0; border-radius: 7px; padding: 9px 10px; cursor: pointer; text-align: left; color: var(--ink-2);
+  }
+  .nav button:hover { background: var(--panel-2); }
+  .nav button[aria-current="page"] { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
+  .ni { display: inline-flex; align-items: center; gap: 9px; }
+  .ico { font-style: normal; width: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+  .nav button[aria-current="page"] .ico { color: var(--accent-2); }
+
+  /* 하위 탭 */
+  .subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .subtabs button {
+    background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 14px; cursor: pointer; color: var(--muted); white-space: nowrap; margin-bottom: -1px;
+  }
+  .subtabs button[aria-selected="true"] { color: var(--accent-2); border-bottom-color: var(--accent); font-weight: 600; }
+
+  /* 게시판 */
+  .posts { display: flex; flex-direction: column; }
+  .post { border-top: 1px solid var(--line); }
+  .post:first-child { border-top: 0; }
+  .post-head {
+    width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 11px 4px;
+    background: none; border: 0; cursor: pointer; text-align: left;
+  }
+  .post-head:hover { background: var(--panel-2); }
+  .post-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .post-title .pin { color: var(--accent); margin-right: 4px; }
+  .post-title .cc { color: var(--accent); font-weight: 600; margin-left: 6px; font-size: 13px; }
+  .post-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .chip.cat-공지 { background: var(--accent); color: var(--accent-ink); }
+  .chip.cat-자료 { background: var(--accent-soft); color: var(--accent-2); }
+  .chip.cat-일반 { background: var(--panel-2); color: var(--muted); }
+  .post-body { padding: 4px 4px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .post-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 72ch; }
+  .post-link { overflow-wrap: anywhere; }
+  .comments { background: var(--panel-2); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .cmt { display: flex; flex-direction: column; gap: 1px; }
+  .cmt b { font-size: 13px; }
+  .cmt b span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .cmt p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cmt-form { display: flex; gap: 6px; }
+  .cmt-form input { flex: 1; min-width: 0; }
+
+  /* 회사 기준 */
+  .rules-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .cats { display: flex; flex-direction: column; gap: 2px; }
+  .cats button { display: flex; justify-content: space-between; gap: 8px; background: none; border: 0; border-radius: 7px; padding: 8px 10px; cursor: pointer; text-align: left; color: var(--ink-2); }
+  .cats button:hover { background: var(--panel-2); }
+  .cats button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
+  .cats button span { color: var(--muted); font-size: 12px; }
+  .search { width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; }
+  .rule { border-top: 1px solid var(--line); }
+  .rule:first-child { border-top: 0; }
+  .rule-head { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 4px; background: none; border: 0; cursor: pointer; text-align: left; }
+  .rule-head:hover { background: var(--panel-2); }
+  .rule-title { font-weight: 600; font-size: 15px; }
+  .rule-sum { grid-column: 1 / -1; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rule-date { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .rule-body { padding: 0 4px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .rule-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); background: var(--panel-2); border-radius: 8px; padding: 8px 12px; }
+  .rule-meta b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .rule-text { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 76ch; line-height: 1.7; }
+  .hist { font-size: 13px; }
+  .hist summary { cursor: pointer; color: var(--muted); }
+  .hist ol { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .hist li span { color: var(--muted); margin-right: 8px; }
+  mark { background: var(--pend-bg); color: inherit; border-radius: 2px; }
+
+  /* 첨부 파일 */
+  .drop {
+    border: 1.5px dashed var(--line-strong); border-radius: 8px; padding: 14px 12px; text-align: center; color: var(--muted);
+    cursor: pointer; font-size: 13px; background: var(--panel-2);
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); color: var(--accent-2); background: var(--accent-soft); }
+  .drop u { color: var(--accent-2); }
+  .files { display: flex; flex-direction: column; gap: 6px; }
+  .files:empty { display: none; }
+  .files.inline { flex-direction: row; flex-wrap: wrap; margin-top: 6px; }
+  .file {
+    display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 10px; align-items: center; max-width: 520px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px 6px 6px; background: var(--panel); color: var(--ink); text-decoration: none;
+  }
+  a.file:hover { border-color: var(--accent); }
+  .files.inline .file { grid-template-columns: auto minmax(0, 1fr); padding: 3px 8px 3px 3px; gap: 6px; font-size: 12px; max-width: 260px; }
+  .ext { font-size: 10px; font-weight: 700; letter-spacing: .02em; text-align: center; border-radius: 5px; padding: 7px 0; background: var(--panel-2); color: var(--muted); }
+  .files.inline .ext { padding: 2px 5px; font-size: 9.5px; }
+  .ext.pdf { background: var(--warn-bg); color: var(--warn-ink); }
+  .ext.xls { background: var(--ok-bg); color: var(--ok-ink); }
+  .ext.doc { background: var(--accent-soft); color: var(--accent-2); }
+  .ext.img, .ext.ppt { background: var(--pend-bg); color: var(--pend-ink); }
+  .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .fs { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
+  .file.up { opacity: .75; }
+  .file.up .fs::after { content: " · 업로드 중…"; color: var(--accent-2); }
+  .file.err { border-color: var(--warn-ink); }
+  .file.err .fs { color: var(--warn-ink); }
+  .clip { color: var(--muted); font-size: 13px; margin-left: 4px; }
+  .sub-label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; margin-bottom: -6px; }
+
+  .count { font-size: 11px; font-weight: 700; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-ink); }
+  .count.soft { background: var(--panel-2); color: var(--muted); }
+  .me { border-top: 1px solid var(--line); padding: 12px 8px 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+  .me span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+  /* 본문 */
+  .main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; }
+  .head h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; text-wrap: balance; }
+  .head p { margin: 2px 0 0; color: var(--muted); }
+  .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel);
+    border-radius: 7px; padding: 7px 14px; cursor: pointer; text-decoration: none; color: var(--ink); white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--line-strong); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn.small { padding: 4px 10px; font-size: 13px; }
+  .btn.danger { color: var(--warn-ink); }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .panel-head h2 { margin: 0; font-size: 15px; }
+  .panel-head span { color: var(--muted); font-size: 12px; }
+
+  /* 지표 */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .meter { height: 6px; border-radius: 99px; background: var(--panel-2); overflow: hidden; margin-top: 4px; }
+  .meter i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+
+
+  /* 목록 */
+  .list { display: flex; flex-direction: column; }
+  .list-row { display: grid; grid-template-columns: 72px auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+  .list-row:first-child { border-top: 0; }
+  .list-row .who { font-weight: 600; }
+  .list-row .meta { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok-ink); }
+  .chip.no { background: var(--warn-bg); color: var(--warn-ink); }
+  .chip.pend { background: var(--pend-bg); color: var(--pend-ink); }
+  .chip.plain { background: var(--panel-2); color: var(--muted); }
+
+  .empty { color: var(--muted); padding: 12px 0; }
+
+  /* 표 */
+  .table-wrap { overflow-x: auto; }
+  table.t { border-collapse: collapse; width: 100%; }
+  .t th, .t td { border-bottom: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
+  .t th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; background: var(--panel-2); }
+  .t td.num, .t th.num { text-align: right; white-space: nowrap; }
+  .t td.nowrap { white-space: nowrap; }
+  .t td.strong { font-weight: 700; }
+
+
+  /* 내 주간업무 */
+  .items { display: flex; flex-direction: column; gap: 8px; }
+  .field-in { width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 7px 9px; }
+  .field-in:disabled { background: var(--panel-2); color: var(--muted); }
+  .toggle { border: 1px solid var(--line); background: var(--panel); border-radius: 7px; padding: 6px 9px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-2); border-color: var(--accent); font-weight: 600; }
+  .icon-btn { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 16px; line-height: 1; }
+  .icon-btn:hover { background: var(--panel-2); color: var(--warn-ink); }
+  .add { margin-top: 10px; }
+  .save-bar {
+    position: sticky; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 5;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 16px;
+  }
+  .save-bar .left { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; flex: 1 1 360px; }
+  .save-bar label { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .check { width: 18px; height: 18px; accent-color: var(--accent); }
+  .notice { background: var(--pend-bg); color: var(--pend-ink); border-radius: 8px; padding: 10px 12px; }
+
+  /* 필터 */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .filters button { border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 4px 12px; cursor: pointer; font-size: 13px; }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+
+  /* 모달 */
+  .scrim { position: fixed; inset: 0; background: rgba(8, 16, 13, .5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal { background: var(--panel); width: 100%; max-width: 480px; max-height: 100%; overflow-y: auto; border-radius: 12px; box-shadow: var(--shadow); padding: 20px; }
+  .modal h3 { margin: 0 0 4px; font-size: 17px; }
+  .modal p.sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .form { display: flex; flex-direction: column; gap: 12px; }
+  .form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fld { display: flex; flex-direction: column; gap: 4px; }
+  .fld label { font-weight: 600; font-size: 13px; }
+  .fld textarea { min-height: 80px; resize: vertical; }
+  .hint { color: var(--muted); font-size: 12px; min-height: 18px; }
+  .msg { border-radius: 7px; padding: 8px 10px; font-size: 13px; }
+  .msg.err { background: var(--warn-bg); color: var(--warn-ink); }
+  .msg.ok { background: var(--ok-bg); color: var(--ok-ink); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 70;
+    background: var(--ink); color: var(--panel); border-radius: 8px; padding: 10px 16px; box-shadow: var(--shadow); max-width: calc(100% - 32px);
+  }
+  .loading { color: var(--muted); padding: 40px 0; text-align: center; }
+
+  @media (max-width: 1080px) {
+    .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  }
+  @media (max-width: 860px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .side { position: static; padding: 10px; gap: 8px; }
+    .nav { flex-direction: row; overflow-x: auto; }
+    .nav button { white-space: nowrap; }
+    .me { display: none; }
+    .rules-layout { grid-template-columns: minmax(0, 1fr); }
+    .cats { flex-direction: row; overflow-x: auto; }
+    .cats button { white-space: nowrap; }
+  }
+  @media (max-width: 520px) {
+    .form .two { grid-template-columns: 1fr; }
+    .list-row { grid-template-columns: 60px auto; }
+    .list-row .meta { grid-column: 1 / -1; }
+    .more { display: none; }
+    .post-head { grid-template-columns: auto minmax(0, 1fr); }
+    .post-meta { grid-column: 2; }
+  }
+  /* ===== 휴대폰 ===== */
+  .mtop, .short { display: none; }
+
+  @media (max-width: 760px) {
+    body { padding-block: 0 calc(76px + env(safe-area-inset-bottom, 0px)); padding-inline: 12px; font-size: 15px; }
+    .demo-bar { margin: 10px 0 0; font-size: 12px; }
+
+    /* 위: 간단한 머리줄 */
+    .mtop {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; margin: 0 -12px 12px; padding: 10px 16px;
+      background: var(--bg); border-bottom: 1px solid var(--line);
+    }
+    .mtop div { display: flex; flex-direction: column; line-height: 1.3; }
+    .mtop b { font-size: 15px; }
+    .mtop span { color: var(--muted); font-size: 12px; }
+    .mtop .avatar {
+      width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-2);
+      display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none;
+    }
+
+    /* 아래: 탭 바 */
+    .app { display: block; }
+    .side {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 30; border-radius: 0; border: 0; border-top: 1px solid var(--line);
+      padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -4px 16px rgba(0, 0, 0, .06);
+    }
+    .brand, .me { display: none; }
+    .nav { flex-direction: row; gap: 0; overflow: visible; }
+    .nav button {
+      flex: 1 1 0; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 2px; border-radius: 8px;
+      position: relative; min-height: 52px;
+    }
+    .nav button .ni { flex-direction: column; gap: 2px; }
+    .nav button .ico { font-size: 18px; width: auto; }
+    .nav button .full { display: none; }
+    .nav button .short { display: inline; font-size: 11px; white-space: nowrap; }
+    .nav button[aria-current="page"] { background: none; }
+    .nav button[aria-current="page"] .short { font-weight: 700; }
+    .nav button > span:not(.ni) { position: absolute; top: 2px; left: 50%; margin-left: 6px; }
+    .nav .count { font-size: 10px; min-width: 16px; padding: 0 4px; }
+
+    .main { gap: 12px; }
+    .head h1 { font-size: 20px; }
+    .head p { font-size: 13px; }
+    .head-actions { width: 100%; }
+    .head-actions .btn { flex: 1 1 auto; justify-content: center; }
+    .panel { padding: 14px 12px; }
+    .btn { min-height: 40px; }
+    .btn.small { min-height: 34px; }
+
+    /* iPhone에서 입력할 때 화면이 확대되지 않도록 16px */
+    input, select, textarea, .field-in, .search { font-size: 16px !important; }
+
+    /* 표 → 카드 */
+    table.cards, table.cards tbody, table.cards tr, table.cards td { display: block; width: 100%; }
+    table.cards thead { display: none; }
+    table.cards tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    table.cards td { border: 0; padding: 0; text-align: left !important; white-space: normal !important; }
+    table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+    table.cards td.c-wide { grid-column: 1 / -1; }
+    .admin-cards td.c-x { position: absolute; right: 6px; top: 6px; width: auto; }
+    .admin-cards tr { position: relative; }
+    .admin-cards td input.field-in { width: 100%; min-width: 0 !important; }
+    .admin-cards td label { justify-content: flex-start !important; }
+
+    /* 팀 주간보고: 카드로 */
+
+    /* 내 주간업무 */
+    .save-bar { position: static; box-shadow: none; padding: 12px; gap: 10px; }
+    .desk-only { display: none; }
+    .save-bar .left { flex: 1 1 100%; }
+    .save-bar .btn.primary { flex: 1 1 auto; justify-content: center; }
+
+    /* 모달: 아래에서 올라오는 시트 */
+    .scrim { align-items: flex-end; padding: 0; }
+    .modal { max-width: none; border-radius: 16px 16px 0 0; max-height: 92vh; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+    .modal-actions .btn { flex: 1 1 0; justify-content: center; }
+
+    .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+    .subtabs { margin: 0 -12px; padding: 0 12px; }
+    .filters button { padding: 6px 14px; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .toast { animation: up .18s ease-out; }
+    @keyframes up { from { transform: translate(-50%, 8px); opacity: .5; } }
+  }
+
+  /* ===== 일정(캘린더) ===== */
+  .cal-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  .cal-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cal-nav b { font-size: 17px; min-width: 120px; text-align: center; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+  .cal-grid .dow { text-align: center; font-size: 12px; color: var(--muted); padding: 6px 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel-2); }
+  .cal-grid .dow.sun, .cal-day.sun .dn { color: var(--warn-ink); }
+  .cal-day {
+    min-height: 96px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px; display: flex; flex-direction: column; gap: 2px;
+    background: var(--panel); cursor: pointer; text-align: left; font: inherit; color: inherit; border-top: 0; border-left: 0;
+  }
+  .cal-day.out { background: var(--panel-2); }
+  .cal-day.out .dn { opacity: .45; }
+  .cal-day.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+  .cal-day .dn { font-size: 12px; font-weight: 600; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .cal-day.today .dn { background: var(--accent); color: var(--accent-ink); }
+  .ev { font-size: 11.5px; line-height: 1.35; padding: 1px 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--accent-soft); color: var(--accent-2); }
+  .more { font-size: 11px; color: var(--muted); padding-left: 4px; }
+  .agenda { display: flex; flex-direction: column; }
+  .ag { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .ag:first-child { border-top: 0; }
+  .ag .tm { color: var(--muted); font-size: 12px; white-space: nowrap; padding-top: 1px; }
+  .ag .tt { font-weight: 600; overflow-wrap: anywhere; }
+  .ag-day { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 0 2px; letter-spacing: .02em; }
+  .ag-day:first-child { padding-top: 0; }
+  .ev.k-마감 { background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; }
+  .ev.k-교육 { background: var(--pend-bg); color: var(--pend-ink); }
+  .ev.k-휴무, .ev.k-기타 { background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line); }
+  .ag .tt.k-마감 { color: var(--warn-ink); }
+  .cal-layout .ag { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .ag button.tt { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; text-align: left; cursor: pointer; color: inherit; }
+  .ag button.tt:hover { text-decoration: underline; }
+  .year-sel { margin-top: 6px; width: 100%; border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 5px 8px; font-weight: 600; }
+  .year-note { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; background: var(--pend-bg); color: var(--pend-ink); border-radius: 8px; padding: 9px 12px; font-size: 13px; }
+  @media (max-width: 1080px) { .cal-layout { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) {
+    .cal-day { min-height: 52px; padding: 3px 2px; }
+    .ev { font-size: 0; height: 6px; padding: 0; border-radius: 3px; }
+    .more { display: none; }
+    .mtop select { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 3px 6px; font-size: 13px !important; }
+  }
+
+  /* ===== 연말정산 검토 추가 ===== */
+  .saving { position: fixed; right: 16px; top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 65; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-size: 12px; box-shadow: var(--shadow); }
+  .chip.info { background: var(--accent-soft); color: var(--accent-2); }
+  .chip.lv-긴급 { background: var(--warn-bg); color: var(--warn-ink); }
+  .chip.lv-중요 { background: var(--pend-bg); color: var(--pend-ink); }
+  .chip.cat-응대지침 { background: var(--pend-bg); color: var(--pend-ink); }
+  .chip.cat-질문 { background: var(--panel-2); color: var(--muted); }
+  .unread { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 2px; }
+  .mini { display: inline-flex; gap: 3px; flex-wrap: wrap; }
+  .mini span { font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+  .mini span.on { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
+  .t tbody tr.click { cursor: pointer; }
+  .t tbody tr.click:hover { background: var(--panel-2); }
+  .sheet-grid { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13px; }
+  .sheet-grid th, .sheet-grid td { border: 1px solid var(--line); padding: 7px 10px; text-align: center; white-space: nowrap; }
+  .sheet-grid th { background: var(--panel-2); font-weight: 700; color: var(--ink); height: 44px; }
+  .sheet-grid td.nm { font-weight: 600; }
+  .sheet-grid tbody tr { cursor: pointer; }
+  .sheet-grid tr.gone td { color: var(--muted); background: var(--panel-2); }
+  .sheet-grid tr.gone td.nm { text-decoration: line-through; text-decoration-color: var(--line); }
+  .chip.emp-휴직 { background: var(--pend-bg); color: var(--pend-ink); }
+  .chip.emp-퇴사 { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+  .sheet-grid tbody tr:hover td { background: var(--accent-soft); }
+  .modal.wide { max-width: 820px; }
+  .form .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .bools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .bools label { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; font-weight: 400; cursor: pointer; }
+  .bools label.off { cursor: default; color: var(--muted); background: var(--panel-2); }
+  .sec { font-size: 12.5px; font-weight: 700; color: var(--accent-2); padding-bottom: 4px; border-bottom: 1px solid var(--line); margin-top: 6px; display: flex; justify-content: space-between; gap: 8px; }
+  .sec span { font-weight: 400; color: var(--muted); }
+  .logs { display: flex; flex-direction: column; }
+  .log { display: grid; grid-template-columns: 112px 64px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; align-items: baseline; }
+  .log:first-child { border-top: 0; }
+  .log .d { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .log p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .log .who { color: var(--muted); font-size: 12px; }
+  .log-form { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 6px; margin-top: 8px; }
+  .search-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .search-row .search { margin: 0; flex: 1 1 220px; width: auto; }
+  .search-row select { width: auto; }
+  .take { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+  .linkish { background: none; border: 0; padding: 0; color: var(--accent-2); cursor: pointer; font: inherit; text-align: left; }
+  .linkish:hover { text-decoration: underline; }
+  .tpl-opt { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; flex-wrap: wrap; }
+  .tpl-opt span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  @media (max-width: 760px) {
+    .form .three { grid-template-columns: 1fr 1fr; }
+    .bools { grid-template-columns: 1fr 1fr; }
+    .log { grid-template-columns: 1fr auto; }
+    .log p { grid-column: 1 / -1; }
+    .log-form { grid-template-columns: 1fr; }
+    .modal.wide { max-width: none; }
+  }
+
+  /* ===== 화면 정리 (간격·크기 통일) ===== */
+  .main { gap: 14px; }
+  .head { align-items: center; min-height: 36px; }
+  .head h1 { font-size: 20px; }
+  .head p { font-size: 13px; }
+  .head-meta { color: var(--muted); font-size: 13px; }
+  .panel { padding: 14px 16px; }
+  .panel-head { margin-bottom: 10px; }
+  .panel-head h2 { font-size: 14px; }
+  .demo-bar { padding: 6px 12px; font-size: 12px; }
+  .nav button { padding: 8px 10px; }
+  .subtabs button { padding: 8px 12px; }
+  .tab-n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 2px; border-radius: 99px; background: var(--panel-2); color: var(--muted); font-size: 11.5px; font-weight: 600; text-align: center; }
+  .subtabs button[aria-selected="true"] .tab-n { background: var(--accent-soft); color: var(--accent-2); }
+  .filters button { padding: 3px 11px; font-size: 12.5px; }
+  .sheet-grid th { font-size: 12px; font-weight: 600; color: var(--ink-2); height: 38px; }
+  .sheet-grid th, .sheet-grid td { padding: 6px 10px; }
+
+  /* 공지 알림 (한 줄) */
+  .alerts { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .alert-row { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 14px; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .alert-row:first-child { border-top: 0; }
+  .alert-row:hover { background: var(--panel-2); }
+  .alert-tag { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-2); }
+  .alert-row.lv-긴급 .alert-tag { background: var(--warn-bg); color: var(--warn-ink); }
+  .alert-row.lv-중요 .alert-tag { background: var(--pend-bg); color: var(--pend-ink); }
+  .alert-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .alert-date { color: var(--muted); font-size: 12px; }
+
+  /* 지표 막대 */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .stat { display: flex; flex-direction: column; gap: 1px; padding: 12px 16px; border: 0; border-left: 1px solid var(--line); background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .stat:first-child { border-left: 0; }
+  .stat:hover { background: var(--panel-2); }
+  .stat-l { font-size: 12px; color: var(--muted); }
+  .stat-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; }
+  .stat-v small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 1px; }
+  .stat-s { font-size: 12px; color: var(--muted); }
+  .stat.hot .stat-v { color: var(--accent-2); }
+  .stat.warn .stat-v { color: var(--warn-ink); }
+  .stat .meter { margin-top: 5px; }
+
+  /* 아래 세 칸 */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .prog2 { display: grid; grid-template-columns: 64px 40px 52px minmax(40px, 1fr) 38px; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .prog2:first-of-type { border-top: 0; }
+  .prog2 .n { color: var(--muted); font-size: 12px; text-align: right; }
+  .prog2 .n.warn { color: var(--warn-ink); font-weight: 700; }
+  .prog2 .pc { color: var(--ink-2); }
+  .more-link { font-size: 12.5px; padding-top: 8px; }
+  .more-rows { margin-top: 10px; }
+  .t td .file { border: 0; padding: 0; background: none; max-width: 360px; }
+  .t td .file:hover .fn { text-decoration: underline; }
+  .t td { vertical-align: middle; }
+  .list-row { padding: 7px 0; }
+
+  /* 캘린더 간격 */
+  .cal-day { min-height: 74px; }
+  .cal-layout { grid-template-columns: minmax(0, 1fr) 260px; }
+  .cal-layout .ag { padding: 7px 0; }
+  .cal-layout .ag .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 드롭다운 메뉴 · 도움말 */
+  details.menu { position: relative; }
+  details.menu > summary { list-style: none; cursor: pointer; }
+  details.menu > summary::-webkit-details-marker { display: none; }
+  .menu-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; display: flex; flex-direction: column; }
+  .menu-pop button { background: none; border: 0; text-align: left; padding: 8px 10px; border-radius: 6px; font: inherit; color: var(--ink); cursor: pointer; }
+  .menu-pop button:hover { background: var(--panel-2); }
+  details.help { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  details.help summary { cursor: pointer; width: fit-content; }
+  details.help > div { margin-top: 6px; line-height: 1.7; }
+
+  @media (max-width: 1080px) { .grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .cal-layout { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) {
+    .grid-3 { grid-template-columns: minmax(0, 1fr); }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stat { border-left: 0; border-top: 1px solid var(--line); }
+    .stat:nth-child(-n+2) { border-top: 0; }
+    .stat:nth-child(even) { border-left: 1px solid var(--line); }
+    .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .stat.done .meter { max-width: 100%; }
+    .cal-day { min-height: 46px; }
+    .head-actions { width: auto; }
+    .head-actions .btn { flex: 0 0 auto; }
+  }
+</style>
+
+<div class="demo-bar" id="demoBar" hidden></div>
+
+<header class="mtop" id="mtop"></header>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand"><b id="brandTeam">연말정산 검토</b><span id="brandYear"></span></div>
+    <nav class="nav" id="nav" aria-label="메뉴">
+      <button data-page="dash"><span class="ni"><i class="ico">◧</i><span class="full">대시보드</span><span class="short">홈</span></span></button>
+      <button data-page="review"><span class="ni"><i class="ico">☰</i><span class="full">서류 검토</span><span class="short">검토</span></span><span id="cReview"></span></button>
+      <button data-page="notice"><span class="ni"><i class="ico">✎</i><span class="full">공지사항</span><span class="short">공지</span></span><span id="cNotice"></span></button>
+      <button data-page="rules"><span class="ni"><i class="ico">§</i><span class="full">연말정산 기준</span><span class="short">기준</span></span></button>
+      <button data-page="files"><span class="ni"><i class="ico">⎙</i><span class="full">첨부파일</span><span class="short">첨부</span></span></button>
+      <button data-page="admin" hidden><span class="ni"><i class="ico">⚙</i><span class="full">권한 관리</span><span class="short">권한</span></span><span id="cAdmin"></span></button>
+    </nav>
+    <div class="me" id="meBox"></div>
+  </aside>
+
+  <main class="main" id="main"><div class="loading">불러오는 중…</div></main>
+</div>
+
+<div class="scrim" id="scrim" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<div class="saving" id="saving" hidden>저장 중…</div>
+
+<!-- MOCK -->
+
+<script>
+  /* ================= 서버 호출 ================= */
+  function call(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      if (window.google && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](...args);
+      } else if (window.MockApi) {
+        setTimeout(() => {
+          try { resolve(JSON.parse(JSON.stringify(window.MockApi[fn](...args)))); } catch (e) { reject(e); }
+        }, (MockApi.delay && MockApi.delay[fn]) || 120);
+      } else {
+        reject(new Error('서버에 연결할 수 없습니다.'));
+      }
+    });
+  }
+
+  /* ================= 상태 ================= */
+  let D = null;
+  let page = 'dash';
+  let reviewTab = 'mine';      // mine | all | logs
+  let reviewStatus = 'all';
+  let reviewOwner = '';
+  let reviewEmp = '';       // '' | 재직 | 휴직 | 퇴사
+  let reviewQuery = '';
+  let logQuery = '';
+  let noticeFilter = 'all';
+  let showOld = false;
+  let openNotice = null;
+  let ruleCat = 'all';
+  let ruleQuery = '';
+  let openRule = null;
+  let fileArea = 'all';
+  let fileQuery = '';
+
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const now = () => (window.MockApi && MockApi.now) ? MockApi.now() : new Date();
+  const pad2 = n => String(n).padStart(2, '0');
+  const todayKey = () => { const d = now(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+
+  function toast(text) {
+    const t = $('#toast');
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => { t.hidden = true; }, 3200);
+  }
+  function fail(e) { toast(e && e.message ? e.message : String(e)); }
+
+  /** 서버가 돌려준 조각(바뀐 부분만)을 화면 데이터에 합친다 */
+  function applyData(data) {
+    if (!data) return;
+    if (data.personPatch) {
+      const key = data.oldId || data.personPatch.id;
+      let i = D.people.findIndex(p => p.id === key);
+      if (i < 0) i = D.people.findIndex(p => p.id === data.personPatch.id); // 화면에서 사원번호를 먼저 바꾼 경우
+      if (i >= 0) D.people[i] = data.personPatch; else D.people.push(data.personPatch);
+    }
+    if (data.logAdded) {
+      // 화면에 먼저 넣어 둔 임시 기록을 서버 기록으로 바꾼다
+      const i = D.logs.findIndex(l => l._tmp && l.empNo === data.logAdded.empNo && l.body === data.logAdded.body);
+      if (i >= 0) D.logs[i] = data.logAdded; else D.logs.unshift(data.logAdded);
+    }
+    if (data.commentAdded) {
+      const n = D.notices.find(x => x.id === data.commentAdded.id);
+      if (n) {
+        const i = n.comments.findIndex(c => c._tmp && c.body === data.commentAdded.comment.body);
+        if (i >= 0) n.comments[i] = data.commentAdded.comment; else n.comments.push(data.commentAdded.comment);
+      }
+    }
+    if (data.people) data.people = unpackPeople(data.people);
+    ['people', 'logs', 'notices', 'reads', 'rules', 'files', 'events', 'me'].forEach(k => { if (data[k]) D[k] = data[k]; });
+  }
+
+  /**
+   * 빠른 저장: 화면에 먼저 반영하고(바로), 서버 저장은 뒤에서 한다.
+   * 실패하면 undo()로 화면을 되돌리고 retry()로 작성하던 화면을 다시 띄운다.
+   */
+  let pending = 0;
+  function saveInBackground(fn, args, opts) {
+    pending++;
+    showSaving();
+    return call(fn, ...args)
+      .then(data => { applyData(data); if (opts.done) opts.done(data); return data; })
+      .catch(err => {
+        if (opts.undo) opts.undo();
+        render();
+        if (opts.retry) opts.retry(err.message || String(err)); else fail(err);
+      })
+      .then(() => { pending--; showSaving(); if (!pending && opts.ok) toast(opts.ok); });
+  }
+  function showSaving() {
+    const el = $('#saving');
+    if (el) el.hidden = !pending;
+  }
+  window.addEventListener('beforeunload', e => { if (pending) { e.preventDefault(); e.returnValue = ''; } });
+
+  /** 보는 연도 바꾸기: 서버에 저장하고 그 연도 자료로 다시 그린다 */
+  function switchYear(y) {
+    if (!D || y === D.year) return;
+    if (pending) { toast('저장 중인 내용이 있습니다. 잠시 후 다시 바꿔 주세요.'); render(); return; }
+    $('#main').innerHTML = `<div class="loading">${esc(y)}년 자료를 불러오는 중…</div>`;
+    call('apiSetYear', y).then(data => {
+      setData(data);
+      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; reviewEmp = ''; calMonth = null; calSel = null;
+      reviewTab = D.people.some(isMine) ? 'mine' : 'all';
+      render();
+      toast(`${y}년 귀속 자료로 바꿨습니다.`);
+    }).catch(e => { fail(e); render(); });
+  }
+  document.addEventListener('change', e => { if (e.target.id === 'yearSel' || e.target.id === 'yearSelM') switchYear(e.target.value); });
+
+  /** 서버는 빈 칸·체크 안 된 칸을 빼고 보내므로 기본값으로 채운다 */
+  function unpackPeople(list) {
+    const blank = {};
+    D.cols.forEach(c => { blank[c.k] = c.t === 'bool' ? false : ''; });
+    return (list || []).map(p => Object.assign({ updated: '', editor: '' }, blank, p));
+  }
+  function setData(data) {
+    D = data;
+    D.people = unpackPeople(D.people);
+  }
+
+  function load() {
+    return call('apiBootstrap').then(data => {
+      const first = !D;
+      setData(data);
+      // 담당으로 지정된 대상자가 없으면 서류 검토를 전체 목록으로 연다
+      if (first && !D.people.some(isMine)) reviewTab = 'all';
+      render();
+    }).catch(fail);
+  }
+
+  /* ================= 공통 계산 ================= */
+  const STATUS = {
+    none: ['서류 미도착', 'plain'],
+    review: ['1차 검토중', 'info'],
+    supp: ['미비서류', 'no'],
+    wait2: ['2차 검토 대기', 'pend'],
+    done: ['검토완료', 'ok'],
+  };
+  /** 상태는 시트 체크 항목으로 자동 판정 (시트에 상태 열을 따로 두지 않는다) */
+  function pStatus(p) {
+    if (String(p.missing || '').trim()) return 'supp';
+    if (!(p.arrived || p.ehr)) return 'none';
+    if (!p.verified) return 'review';
+    if (!p.review2) return 'wait2';
+    return 'done';
+  }
+  const statusChip = p => { const [l, c] = STATUS[pStatus(p)]; return `<span class="chip ${c}">${l}</span>`; };
+  const isMine = p => !!D.me.name && (p.owner === D.me.name || p.owner2 === D.me.name);
+  /** 내가 지금 손대야 하는 대상자: 1차 담당인데 아직 검증 전/미비서류, 또는 2차 담당인데 2차 대기 */
+  const myTodo = p => (p.owner === D.me.name && ['none', 'review', 'supp'].includes(pStatus(p))) || (p.owner2 === D.me.name && pStatus(p) === 'wait2');
+  const col = k => D.cols.find(c => c.k === k);
+  const hasNote = p => ['note1', 'fix1', 'note2', 'fix2'].some(k => String(p[k] || '').trim());
+  const isLead = () => D.me.isLeader || D.me.isAdmin;
+
+  /** 서버의 canEdit_와 같은 규칙 (화면에서 막고, 서버에서도 다시 막는다) */
+  function canEdit(p, c, draftOwner) {
+    if (c.who === 'lead') return isLead();
+    if (isLead()) return true;
+    if (!D.me.name) return false;
+    const takes = !p.owner && draftOwner === D.me.name;
+    if (c.who === 'assign') return c.k === 'owner' && !p.owner;
+    if (c.who === 'second') return p.owner2 === D.me.name;
+    return p.owner === D.me.name || takes;
+  }
+
+  const activeNotice = n => { const t = todayKey(); return (!n.start || n.start <= t) && (!n.end || n.end >= t); };
+  const isRead = n => D.reads.indexOf(n.id) >= 0;
+  function daysAgo(s) { const d = new Date(String(s).slice(0, 10) + 'T00:00:00'); return (now() - d) / 864e5; }
+
+  function can(k) { return !!(D && D.me.menus && D.me.menus.indexOf(k) >= 0); }
+
+  /* ================= 렌더링 ================= */
+  function render() {
+    document.title = D.team;
+    $('#brandTeam').textContent = D.team;
+    const yearSel = D.years.length > 1
+      ? `<select class="year-sel" id="yearSel" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${y === D.baseYear ? '' : ' (지난 연도)'}</option>`).join('')}</select>`
+      : `${esc(D.year)}년 귀속`;
+    $('#brandYear').innerHTML = yearSel;
+    const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
+    $('#mtop').innerHTML = `<div><b>${esc(D.team)}</b><span>${D.years.length > 1 ? `<select id="yearSelM" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속</option>`).join('')}</select>` : `${esc(D.year)}년 귀속 연말정산`}</span></div>
+      <span class="avatar" title="${esc(D.me.email || '')}">${esc(D.me.name ? D.me.name.slice(-2) : '?')}</span>`;
+    $('#meBox').innerHTML = D.me.name
+      ? `<b>${esc(D.me.name)} · ${esc(role)}</b><span>${esc(D.me.email)}</span>`
+      : `<b>등록되지 않은 사용자</b><span>${esc(D.me.email || '')}</span>`;
+
+    const todo = D.me.name ? D.people.filter(myTodo).length : 0;
+    $('#cReview').outerHTML = `<span id="cReview">${todo ? `<span class="count" title="내가 처리할 대상자">${todo}</span>` : ''}</span>`;
+    const unread = D.notices.filter(n => activeNotice(n) && !isRead(n)).length;
+    $('#cNotice').outerHTML = `<span id="cNotice">${unread ? `<span class="count soft" title="안 읽은 글">N ${unread}</span>` : ''}</span>`;
+    const issues = A ? A.members.filter(m => m.email && needsAttention(m.name)).length : 0;
+    $('#cAdmin').outerHTML = `<span id="cAdmin">${issues ? `<span class="count" title="권한 확인 필요">${issues}</span>` : ''}</span>`;
+
+    const allowed = ['dash', 'review', 'notice', 'rules', 'files', 'admin'].filter(can);
+    if (!can(page)) page = allowed[0] || 'none';
+    document.querySelectorAll('#nav button').forEach(b => {
+      b.hidden = !can(b.dataset.page);
+      if (b.dataset.page === page) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+
+    // 지난 연도를 보고 있으면 모든 화면 위에 알린다
+    const note = D.year !== D.baseYear
+      ? `<div class="year-note"><span><b>${esc(D.year)}년 귀속</b> 자료를 보고 있습니다. 지금 진행 중인 연도는 ${esc(D.baseYear)}년입니다.</span><button class="btn small" onclick="switchYear('${esc(D.baseYear)}')">${esc(D.baseYear)}년으로 돌아가기</button></div>` : '';
+    $('#main').innerHTML = note + PAGES[page]();
+    if (page === 'admin' && !A) loadAdmin(false);
+    renderDemoBar();
+  }
+
+  const PAGES = {
+    none() {
+      return `<div class="head"><div><h1>접근 권한이 없습니다</h1></div></div>
+        <div class="notice">${D.me.name ? '볼 수 있는 메뉴가 없습니다.' : `${esc(D.me.email || '이 계정')}은(는) [담당자] 시트에 등록되어 있지 않습니다.`} 관리자에게 등록과 권한을 요청하세요.</div>`;
+    },
+    dash: () => VIEWS.dash(),
+    review: () => VIEWS.review(),
+    notice: () => VIEWS.notice(),
+    rules: () => VIEWS.rules(),
+    files: () => VIEWS.files(),
+    admin: () => VIEWS.admin(),
+  };
+  const VIEWS = {};
+
+  /* ================= 대시보드 ================= */
+  function noticeBanners() {
+    const top = D.notices.filter(n => activeNotice(n) && (n.pinned || n.level === '긴급'));
+    if (!top.length) return '';
+    return `<div class="alerts">${top.map(n => `
+      <button class="alert-row lv-${esc(n.level)}" onclick="openNotice='${esc(n.id)}';go('notice')">
+        <span class="alert-tag">${n.level === '일반' ? '고정' : esc(n.level)}</span>
+        <span class="alert-title">${isRead(n) ? '' : '<span class="unread"></span>'}${esc(n.title)}</span>
+        <span class="alert-date">${esc(n.date.slice(5, 10))}</span>
+      </button>`).join('')}</div>`;
+  }
+
+  VIEWS.dash = function () {
+    // 퇴사자는 진행률·할 일에서 뺀다 (서류 검토 명단에는 흐리게 남아 있음)
+    const P = D.people.filter(p => !p.retired);
+    const gone = D.people.length - P.length;
+    const cnt = k => P.filter(p => pStatus(p) === k).length;
+    const done = cnt('done');
+    const pct = P.length ? Math.round(done / P.length * 100) : 0;
+    const leave = P.filter(p => p.leave).length;
+    const mine = D.me.name ? P.filter(myTodo) : [];
+
+    const stat = (label, value, sub, onclick, cls) => `<button class="stat ${cls || ''}" onclick="${onclick}"><span class="stat-l">${label}</span><span class="stat-v">${value}</span><span class="stat-s">${sub}</span></button>`;
+    const kpis = `
+      <div class="stats">
+        ${stat('검토 대상', `${P.length}<small>명</small>`, [leave ? `휴직 ${leave}명` : '', gone ? `퇴사 ${gone}명 제외` : ''].filter(Boolean).join(' · ') || '전체', "reviewTab='all';reviewStatus='all';reviewEmp='';go('review')")}
+        ${D.me.name ? stat('내 차례', `${mine.length}<small>명</small>`, '1차·미비·2차', "reviewTab='mine';reviewStatus='all';go('review')", mine.length ? 'hot' : '') : ''}
+        ${stat('미비서류', `${cnt('supp')}<small>명</small>`, '보완 요청', "reviewTab='all';reviewStatus='supp';go('review')", cnt('supp') ? 'warn' : '')}
+        ${stat('2차 대기', `${cnt('wait2')}<small>명</small>`, '1차 완료', "reviewTab='all';reviewStatus='wait2';go('review')")}
+        <button class="stat done" onclick="reviewTab='all';reviewStatus='done';go('review')"><span class="stat-l">검토완료</span><span class="stat-v">${pct}<small>%</small></span><span class="stat-s">${done} / ${P.length}명</span><span class="meter"><i style="width:${pct}%"></i></span></button>
+      </div>`;
+
+    // 담당자별 진행
+    const owners = [...new Set(P.map(p => p.owner || '(미배정)'))].sort((a, b) => (a === '(미배정)') - (b === '(미배정)') || a.localeCompare(b, 'ko'));
+    const todoRows = mine.slice(0, 5).map(p => `
+      <div class="list-row" style="cursor:pointer" onclick="openPerson('${esc(p.id)}')">
+        <span class="who">${esc(p.name)}</span>${statusChip(p)}
+        <span class="meta">${esc(p.dept)}${p.owner2 === D.me.name && pStatus(p) === 'wait2' ? ' · 2차 검토 차례' : ''}${p.missing ? ` · ⚠ ${esc(p.missing)}` : ''}</span>
+      </div>`).join('') + (mine.length > 5 ? `<button class="linkish more-link" onclick="reviewTab='mine';reviewStatus='all';go('review')">외 ${mine.length - 5}명 더 보기</button>` : '') || '<div class="empty">지금 처리할 대상자가 없습니다.</div>';
+
+    const recentNotices = D.notices.filter(activeNotice).slice(0, 4).map(n => `
+      <div class="list-row" style="cursor:pointer;grid-template-columns:auto minmax(0,1fr) auto" onclick="openNotice='${esc(n.id)}';go('notice')">
+        <span class="chip cat-${esc(n.category)}">${esc(n.category)}</span>
+        <span class="who" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isRead(n) ? '' : '<span class="unread"></span>'}${esc(n.title)}</span>
+        <span class="meta">${esc(n.date.slice(5, 10))}</span>
+      </div>`).join('') || '<div class="empty">게시 중인 공지가 없습니다.</div>';
+
+    return `
+      <div class="head">
+        <div><h1>${esc(D.year)}년 귀속 연말정산</h1></div>
+        <span class="head-meta">${D.me.name ? `${esc(D.me.name)}님 · ` : ''}${esc(todayKey())}</span>
+      </div>
+      ${can('notice') ? noticeBanners() : ''}
+      ${can('review') || can('dash') ? kpis : ''}
+      ${calendarHtml()}
+      <div class="grid-3">
+        <section class="panel">
+          <div class="panel-head"><h2>담당자별 진행</h2><span>미비 · 완료율</span></div>
+          ${owners.map(o => {
+            const list = P.filter(p => (p.owner || '(미배정)') === o);
+            const sup = list.filter(p => pStatus(p) === 'supp').length, d = list.filter(p => pStatus(p) === 'done').length;
+            const pc = list.length ? Math.round(d / list.length * 100) : 0;
+            return `<div class="prog2"><b>${esc(o)}</b><span class="n">${list.length}명</span><span class="n ${sup ? 'warn' : ''}">${sup ? `미비 ${sup}` : ''}</span><span class="meter" title="검토완료 ${d}명"><i style="width:${pc}%"></i></span><span class="n pc">${pc}%</span></div>`;
+          }).join('') || '<div class="empty">대상자가 없습니다.</div>'}
+        </section>
+        ${D.me.name && can('review') ? `<section class="panel"><div class="panel-head"><h2>내 차례</h2><span>${mine.length}명</span></div><div class="list">${todoRows}</div></section>` : ''}
+        ${can('notice') ? `<section class="panel"><div class="panel-head"><h2>최근 공지</h2><button class="linkish" onclick="go('notice')">전체</button></div><div class="list">${recentNotices}</div></section>` : ''}
+      </div>`;
+  };
+
+  /* ---------- 일정 캘린더 (대시보드) ---------- */
+  let calMonth = null;   // 보고 있는 달의 1일
+  let calSel = null;     // 고른 날짜 'yyyy-mm-dd'
+  const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+  const dkey = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  const pdate = k => new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10));
+  const dlabel = k => { const d = pdate(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAYS[d.getDay()]})`; };
+  const eventsOn = k => D.events.filter(e => e.start <= k && e.end >= k);
+  const evRange = e => e.end !== e.start ? `${dlabel(e.start)} ~ ${dlabel(e.end)}` : dlabel(e.start);
+
+  function calendarHtml() {
+    const past = D.year !== D.baseYear;
+    if (!calMonth) {
+      // 지난 연도는 그 연도 첫 일정이 있는 달부터, 진행 중인 연도는 이번 달부터
+      const t = past && D.events.length ? pdate(D.events[0].start) : now();
+      calMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+    }
+    const y = calMonth.getFullYear(), m = calMonth.getMonth();
+    const start = new Date(y, m, 1 - new Date(y, m, 1).getDay());
+    const today = todayKey();
+    let cells = DAYS.map((d, i) => `<div class="dow ${i === 0 ? 'sun' : ''}">${d}</div>`).join('');
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start); d.setDate(start.getDate() + i);
+      if (i === 35 && d.getMonth() !== m) break; // 5주로 끝나는 달
+      const k = dkey(d), list = eventsOn(k);
+      cells += `<button class="cal-day ${d.getMonth() !== m ? 'out' : ''} ${d.getDay() === 0 ? 'sun' : ''} ${k === today ? 'today' : ''} ${k === calSel ? 'sel' : ''}" onclick="calPick('${k}')" aria-label="${dlabel(k)} 일정 ${list.length}건">
+        <span class="dn">${d.getDate()}</span>
+        ${list.slice(0, 3).map(e => `<span class="ev k-${esc(e.kind)}" title="${esc(e.title)}">${esc(e.title)}</span>`).join('')}
+        ${list.length > 3 ? `<span class="more">+${list.length - 3}</span>` : ''}
+      </button>`;
+    }
+    // 오른쪽: 고른 날의 일정, 아니면 오늘부터 30일
+    let side;
+    if (calSel) {
+      const list = eventsOn(calSel);
+      side = `<div class="ag-day">${dlabel(calSel)}</div>` + (list.map(agRow).join('') || '<div class="empty">일정이 없습니다.</div>');
+    } else if (past) {
+      side = D.events.map(agRow).join('') || '<div class="empty">이 연도에 등록된 일정이 없습니다.</div>';
+    } else {
+      const until = dkey(new Date(pdate(today).getTime() + 30 * 864e5));
+      const list = D.events.filter(e => e.end >= today && e.start <= until);
+      side = list.map(agRow).join('') || '<div class="empty">30일 안에 잡힌 일정이 없습니다.</div>';
+    }
+    const lead = isLead();
+    return `
+      <section class="panel">
+        <div class="panel-head">
+          <div class="cal-nav">
+            <button class="btn small" onclick="calMove(-1)" aria-label="이전 달">‹</button>
+            <b>${y}년 ${m + 1}월</b>
+            <button class="btn small" onclick="calMove(1)" aria-label="다음 달">›</button>
+            <button class="btn small" onclick="calMonth=null;calSel=null;render()">오늘</button>
+          </div>
+          ${lead ? `<button class="btn small primary" onclick="openEventForm(null, calSel)">+ 일정</button>` : '<span>일정은 총괄이 등록합니다</span>'}
+        </div>
+        <div class="cal-layout">
+          <div class="cal-grid">${cells}</div>
+          <div>
+            <div class="panel-head" style="margin-bottom:6px"><h2>${calSel ? '이 날 일정' : past ? `${esc(D.year)}년 귀속 일정` : '다가오는 일정'}</h2>${calSel ? `<button class="linkish" onclick="calSel=null;render()">${past ? '전체 일정 보기' : '다가오는 일정 보기'}</button>` : past ? `<span>${D.events.length}건</span>` : '<span>오늘부터 30일</span>'}</div>
+            <div class="agenda">${side}</div>
+          </div>
+        </div>
+      </section>`;
+  }
+  function agRow(e) {
+    // 날짜·구분 한 줄 + 제목 한 줄 (메모는 눌러서 보기)
+    return `<div class="ag"><span class="tm">${esc(evRange(e))} · ${esc(e.kind)}</span>
+      <button class="tt k-${esc(e.kind)}" onclick="openEvent('${esc(e.id)}')" title="${esc(e.memo)}">${esc(e.title)}</button></div>`;
+  }
+  function calMove(n) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); calSel = null; render(); }
+  function calPick(k) { calSel = calSel === k ? null : k; render(); }
+
+  function openEvent(id) {
+    const e = D.events.find(x => x.id === id);
+    if (!e) return;
+    if (isLead()) return openEventForm(id);
+    openModal(`<h3>${esc(e.title)}</h3>
+      <p class="sub">${esc(evRange(e))} · ${esc(e.kind)}${e.author ? ` · 등록 ${esc(e.author)}` : ''}</p>
+      ${e.memo ? `<div class="post-text" style="margin-bottom:14px">${esc(e.memo)}</div>` : ''}
+      <div class="modal-actions"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+  }
+  function openEventForm(id, dateKey) {
+    const e = id ? D.events.find(x => x.id === id) : { title: '', start: dateKey || todayKey(), end: '', kind: '일정', memo: '' };
+    openModal(`
+      <h3>${id ? '일정 수정' : '일정 추가'}</h3>
+      <p class="sub">${esc(D.year)}년 귀속 일정입니다. 담당자 모두의 대시보드 캘린더에 보입니다.</p>
+      <form class="form" id="evForm" novalidate>
+        <div class="fld"><label for="evTitle">제목</label><input class="field-in" id="evTitle" value="${esc(e.title)}" placeholder="예) 미비서류 보완 마감"></div>
+        <div class="two">
+          <div class="fld"><label for="evStart">시작일</label><input class="field-in" type="date" id="evStart" value="${esc(e.start)}"></div>
+          <div class="fld"><label for="evEnd">종료일 (하루면 비움)</label><input class="field-in" type="date" id="evEnd" value="${esc(e.end !== e.start ? e.end : '')}"></div>
+        </div>
+        <div class="fld"><label for="evKind">구분</label><select class="field-in" id="evKind">${D.eventKinds.map(k => `<option ${k === e.kind ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>
+        <div class="fld"><label for="evMemo">메모 (선택)</label><textarea class="field-in" id="evMemo" style="min-height:70px">${esc(e.memo)}</textarea></div>
+        <div class="msg err" id="evErr" hidden></div>
+        <div class="modal-actions">
+          ${id ? '<button type="button" class="btn danger" style="margin-right:auto" id="evDel">삭제</button>' : ''}
+          <button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary">${id ? '저장' : '추가'}</button>
+        </div>
+      </form>`);
+    $('#evForm').onsubmit = ev => {
+      ev.preventDefault();
+      const data = { id: id || '', title: $('#evTitle').value.trim(), start: $('#evStart').value, end: $('#evEnd').value, kind: $('#evKind').value, memo: $('#evMemo').value.trim() };
+      const err = m => { $('#evErr').textContent = m; $('#evErr').hidden = false; };
+      if (!data.title || !data.start) return err('제목과 시작일을 입력해 주세요.');
+      if (data.end && data.end < data.start) return err('종료일이 시작일보다 빠릅니다.');
+      // 화면에 먼저 반영
+      const old = D.events.slice();
+      const shown = Object.assign({ author: D.me.name }, data, { id: id || 'tmp' + Date.now(), end: data.end || data.start });
+      D.events = (id ? D.events.map(x => x.id === id ? shown : x) : D.events.concat(shown)).sort((a, b) => a.start.localeCompare(b.start));
+      calMonth = new Date(+data.start.slice(0, 4), +data.start.slice(5, 7) - 1, 1);
+      closeModal(); render();
+      saveInBackground('apiSaveEvent', [data], { ok: id ? '일정을 수정했습니다.' : '일정을 추가했습니다.', done: () => { if (page === 'dash') render(); }, undo: () => { D.events = old; }, retry: m => { openEventForm(id, data.start); $('#evTitle').value = data.title; err(`저장하지 못했습니다: ${m}`); } });
+    };
+    if (id) $('#evDel').onclick = () => {
+      const old = D.events.slice();
+      D.events = D.events.filter(x => x.id !== id);
+      closeModal(); render();
+      saveInBackground('apiDeleteEvent', [id], { ok: '일정을 삭제했습니다.', done: () => { if (page === 'dash') render(); }, undo: () => { D.events = old; } });
+    };
+  }
+
+  function logRow(l, noName) {
+    const p = D.people.find(x => x.empNo === l.empNo);
+    return `<div class="log"><span class="d">${esc(l._tmp ? '방금' : l.date.slice(2, 16))}</span><span class="chip plain" style="justify-self:start">${esc(l.kind)}</span>
+      <p>${noName ? '' : `${p ? `<button class="linkish" onclick="openPerson('${esc(p.id)}')"><b>${esc(l.name)}</b></button>` : `<b>${esc(l.name)}</b>`} · `}${esc(l.body)} <span class="who">— ${esc(l.author)}</span></p></div>`;
+  }
+
+  /* ================= 서류 검토 ================= */
+  // 재직 구분: 퇴사여부가 휴직여부보다 우선
+  const empState = p => p.retired ? '퇴사' : p.leave ? '휴직' : '재직';
+  const empChip = p => p.retired || p.leave ? `<span class="chip emp-${empState(p)}">${empState(p)}</span>` : '';
+  function reviewBase() {
+    if (reviewTab === 'mine') return D.people.filter(isMine);
+    return D.people.filter(p => !reviewOwner || p.owner === reviewOwner || p.owner2 === reviewOwner || (reviewOwner === '(미배정)' && !p.owner));
+  }
+  function reviewFiltered() {
+    const q = reviewQuery.trim().toLowerCase();
+    return reviewBase()
+      .filter(p => reviewStatus === 'all' || pStatus(p) === reviewStatus)
+      .filter(p => !reviewEmp || empState(p) === reviewEmp)
+      .filter(p => !q || [p.empNo, p.name, p.dept, p.phone, p.email, p.missing, p.note1, p.note2].join(' ').toLowerCase().includes(q))
+      .sort((a, b) => String(a.no).localeCompare(String(b.no), 'ko', { numeric: true }) || String(a.empNo).localeCompare(String(b.empNo), 'ko', { numeric: true }));
+  }
+  const mini = (p, items) => `<span class="mini">${items.map(([k, l]) => `<span class="${p[k] ? 'on' : ''}" title="${esc(col(k).l)}">${l}</span>`).join('')}</span>`;
+
+  function reviewListHtml() {
+    const list = reviewFiltered();
+    // 명단: 시트와 같은 기본 정보 10개 열을 한 줄씩 보여주고, 줄을 누르면 수정 화면이 뜬다
+    // 대상자가 많으면 처음에는 앞 200명만 그리고 「더 보기」로 늘린다 (검색·필터는 전체 대상)
+    const BASIC = ['no', 'dept', 'empNo', 'name', 'subgroup', 'payArea', 'rank', 'phone', 'email', 'leave'];
+    const shown = list.slice(0, reviewLimit);
+    const rows = shown.map(p => `
+      <tr class="${p.retired ? 'gone' : ''}" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
+        ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? empChip(p) : esc(p[k])}</td>`).join('')}
+      </tr>`).join('');
+    return rows
+      ? `<div class="table-wrap"><table class="sheet-grid"><thead><tr>${BASIC.map(k => `<th>${k === 'leave' ? '휴직·퇴사' : esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+        ${list.length > shown.length ? `<button class="btn small more-rows" onclick="reviewLimit+=${PAGE_ROWS};$('#reviewList').innerHTML=reviewListHtml()">${PAGE_ROWS}명 더 보기 (남은 ${list.length - shown.length}명)</button>` : ''}
+        <p class="hint" style="margin-top:8px">${list.length > shown.length ? `${list.length}명 중 ${shown.length}명 표시` : `${list.length}명`} · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
+      : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
+  }
+
+  const PAGE_ROWS = 200;
+  let reviewLimit = PAGE_ROWS;
+
+  function logsListHtml() {
+    const q = logQuery.trim().toLowerCase();
+    const list = D.logs.filter(l => !q || [l.name, l.empNo, l.author, l.kind, l.body].join(' ').toLowerCase().includes(q));
+    return list.slice(0, 300).map(l => logRow(l)).join('') || '<div class="empty">응대기록이 없습니다.</div>';
+  }
+
+  VIEWS.review = function () {
+    const tab = (k, label) => `<button role="tab" aria-selected="${reviewTab === k}" onclick="reviewTab='${k}';reviewStatus='all';reviewLimit=PAGE_ROWS;render()">${label}</button>`;
+    const head = `
+      <div class="head">
+        <div><h1>서류 검토</h1></div>
+        <div class="head-actions">
+          <a class="btn small" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
+          ${isLead() ? `<details class="menu"><summary class="btn small primary">명단 관리 ▾</summary><div class="menu-pop">
+            <button onclick="this.closest('details').open=false;openImport()">대상자 업로드</button>
+            <button onclick="this.closest('details').open=false;openTemplate()">양식 다운로드</button>
+            <button onclick="this.closest('details').open=false;openAddPerson()">대상자 한 명 추가</button>
+          </div></details>` : ''}
+        </div>
+      </div>
+      <div class="subtabs" role="tablist">${tab('mine', `내 담당 <span class="tab-n">${D.people.filter(isMine).length}</span>`)}${tab('all', `전체 <span class="tab-n">${D.people.length}</span>`)}${tab('logs', `응대기록 <span class="tab-n">${D.logs.length}</span>`)}</div>`;
+
+    if (reviewTab === 'logs') {
+      return head + `<section class="panel">
+        <input class="search" id="logSearch" type="search" placeholder="대상자·담당자·내용 검색" value="${esc(logQuery)}" aria-label="응대기록 검색">
+        <div class="logs" id="logList">${logsListHtml()}</div>
+        <p style="color:var(--muted);font-size:12px;margin:10px 0 0">응대기록은 대상자를 눌러 남깁니다. 누가 응대했든 모든 담당자가 같은 기록을 봅니다.</p>
+      </section>`;
+    }
+    const base = reviewBase();
+    const scopeNote = D.me.scope && D.me.scope !== '전체' && !isLead()
+      ? `<p class="hint" style="margin:0 0 10px">열람 범위: ${D.me.scope.split(',').filter(x => x !== '본인' && x !== '(미배정)').length ? `내 담당 + ${esc(D.me.scope.split(',').filter(x => x !== '본인').filter(x => x !== '(미배정)').map(x => `${x} 담당`).join(', '))}` : '내 담당만'} + 담당자 없는 대상자 (관리자가 정합니다)</p>` : '';
+    const owners = [...new Set(D.people.flatMap(p => [p.owner, p.owner2]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+    const chips = [['all', '전체']].concat(Object.keys(STATUS).map(k => [k, STATUS[k][0]]))
+      .map(([k, l]) => `<button aria-pressed="${reviewStatus === k}" onclick="reviewStatus='${k}';reviewLimit=PAGE_ROWS;render()">${l} ${k === 'all' ? base.length : base.filter(p => pStatus(p) === k).length}</button>`).join('');
+    return head + `
+      <section class="panel">
+        ${scopeNote}
+        <div class="search-row">
+          <input class="search" id="reviewSearch" type="search" placeholder="사원번호·이름·부서·미비서류·특이사항 검색" value="${esc(reviewQuery)}" aria-label="대상자 검색">
+          ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;reviewLimit=PAGE_ROWS;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
+          <select class="field-in" onchange="reviewEmp=this.value;reviewLimit=PAGE_ROWS;render()" aria-label="재직 구분">${[['', '재직·휴직·퇴사 전체'], ['재직', `재직 ${base.filter(p => empState(p) === '재직').length}`], ['휴직', `휴직 ${base.filter(p => p.leave && !p.retired).length}`], ['퇴사', `퇴사 ${base.filter(p => p.retired).length}`]].map(([v, l]) => `<option value="${v}" ${v === reviewEmp ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        </div>
+        <div class="filters" style="margin-bottom:10px">${chips}</div>
+        <div id="reviewList">${reviewListHtml()}</div>
+      </section>`;
+  };
+
+  // 검색: 입력이 잠깐(0.15초) 멈추면 목록만 다시 그린다 (한 글자마다 그리지 않음)
+  let searchTimer = null;
+  const SEARCHES = {
+    reviewSearch: v => { reviewQuery = v; reviewLimit = PAGE_ROWS; $('#reviewList').innerHTML = reviewListHtml(); },
+    logSearch: v => { logQuery = v; $('#logList').innerHTML = logsListHtml(); },
+    ruleSearch: v => { ruleQuery = v; $('#ruleList').innerHTML = ruleListHtml(); },
+    fileSearch: v => { fileQuery = v; $('#fileList').innerHTML = fileListHtml(); },
+  };
+  document.addEventListener('input', e => {
+    const fn = SEARCHES[e.target.id];
+    if (!fn) return;
+    const v = e.target.value;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => fn(v), 150);
+  });
+
+  /* ---------- 대상자 상세 (입력) ---------- */
+  let curPerson = null;
+  let draftOwner = '';
+  const GROUP_ORDER = ['진행', '1차 특이·수정사항', '주택자금 · 월세', '2차 검토', '담당'];
+
+  function fieldHtml(p, c) {
+    const id = 'pf_' + c.k;
+    const off = !canEdit(p, c, draftOwner);
+    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}" ${off && c.who === 'lead' ? 'title="총괄·관리자만 바꿀 수 있습니다"' : ''}><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}${off && c.who === 'lead' ? ' <small style="color:var(--muted)">(총괄·관리자)</small>' : ''}</label>`;
+    if (c.t === 'long') return `<div class="fld"><label for="${id}">${esc(c.l)}</label><textarea class="field-in" id="${id}" ${off ? 'disabled' : ''} style="min-height:64px">${esc(p[c.k])}</textarea></div>`;
+    if (c.who === 'assign') {
+      const opts = [''].concat(D.staff.map(s => s.name));
+      if (p[c.k] && opts.indexOf(p[c.k]) < 0) opts.push(p[c.k]);
+      const v = c.k === 'owner' && draftOwner ? draftOwner : p[c.k];
+      return `<div class="fld"><label for="${id}">${esc(c.l)}</label><select class="field-in" id="${id}" ${isLead() ? '' : 'disabled'}>${opts.map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o || '(없음)')}</option>`).join('')}</select></div>`;
+    }
+    return `<div class="fld"><label for="${id}">${esc(c.l)}</label><input class="field-in" id="${id}" value="${esc(p[c.k])}" ${off ? 'disabled' : ''}></div>`;
+  }
+
+  function groupHtml(p, g) {
+    const cs = D.cols.filter(c => c.g === g);
+    const bools = cs.filter(c => c.t === 'bool'), longs = cs.filter(c => c.t === 'long'), shorts = cs.filter(c => !c.t);
+    const who = cs[0].who;
+    const note = who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
+    return `<div class="sec">${esc(g)}<span>${esc(note)}</span></div>
+      ${shorts.length ? `<div class="three">${shorts.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
+      ${bools.length ? `<div class="bools">${bools.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
+      ${longs.map(c => fieldHtml(p, c)).join('')}`;
+  }
+
+  function personFiles(p) {
+    return D.files.filter(f => f.area === 'person' && f.ref === (p.empNo || p.id));
+  }
+
+  function openPerson(id) {
+    const p = D.people.find(x => x.id === id);
+    if (!p) return toast('대상자를 찾을 수 없습니다. 새로고침해 주세요.');
+    curPerson = p;
+    draftOwner = '';
+    drawPerson();
+  }
+
+  function drawPerson() {
+    const p = curPerson;
+    const editable = D.cols.some(c => canEdit(p, c, draftOwner) && c.who !== 'assign') || isLead();
+    const canTake = !p.owner && D.me.name && !isLead() && !draftOwner;
+    const groups = GROUP_ORDER.filter(g => D.cols.some(c => c.g === g));
+    const logs = D.logs.filter(l => l.empNo === p.empNo);
+    const files = personFiles(p);
+    $('#modal').classList.add('wide');
+    openModal(`
+      <h3>${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:14px">${esc(p.empNo)} · ${esc(p.dept)} ${esc(p.rank)}</span> ${empChip(p)} ${statusChip(p)}</h3>
+      <p class="sub">${p.phone ? `☎ ${esc(p.phone)} · ` : ''}${p.email ? `${esc(p.email)} · ` : ''}최종 수정 ${esc(p.updated || '-')}${p.editor ? ` (${esc(p.editor)})` : ''}</p>
+      <form class="form" id="personForm" novalidate>
+        ${canTake ? `<div class="notice take"><span>아직 1차 담당자가 없습니다. 맡으면 검토 내용을 입력할 수 있습니다.</span><button type="button" class="btn small primary" onclick="draftOwner=D.me.name;drawPerson()">내가 담당하기</button></div>` : ''}
+        ${!editable && !canTake ? `<div class="notice">보기만 할 수 있습니다. 1차 담당자(${esc(p.owner || '미지정')})·2차 검토 담당자(${esc(p.owner2 || '미지정')})·총괄이 입력합니다. 응대기록은 누구나 남길 수 있습니다.</div>` : ''}
+        ${groupHtml(p, '기본 정보')}
+        ${groups.map(g => groupHtml(p, g)).join('')}
+
+        <div class="sec">증빙 첨부<span>${files.length}개</span></div>
+        <div id="pFiles">${filesView(files) || '<div class="hint">올린 파일이 없습니다.</div>'}</div>
+        ${(editable || canTake || D.me.name) ? uploaderHtml('person', '파일 올리기 (올리는 즉시 저장됩니다)') : ''}
+
+        <div class="msg err" id="pErr" hidden></div>
+        <div class="modal-actions">
+          ${isLead() ? '<button type="button" class="btn danger" style="margin-right:auto" onclick="deletePerson()">대상자 삭제</button>' : ''}
+          <button type="button" class="btn" onclick="closeModal()">닫기</button>
+          ${editable || draftOwner ? '<button type="submit" class="btn primary" id="pOk">저장</button>' : ''}
+        </div>
+      </form>
+      <div class="sec" style="margin-top:18px">응대기록<span>${logs.length}건 · 누구나 작성</span></div>
+      <div class="logs" id="pLogs">${logs.map(l => logRow(l, true)).join('') || '<div class="hint" style="padding:6px 0">아직 응대기록이 없습니다.</div>'}</div>
+      ${D.me.name || D.me.isAdmin ? `<form class="log-form" id="logForm">
+        <select class="field-in" id="logKind" aria-label="응대 구분">${D.logKinds.map(k => `<option>${esc(k)}</option>`).join('')}</select>
+        <input class="field-in" id="logBody" placeholder="예) 의료비 영수증 재제출 요청, 2/5까지 받기로 함" aria-label="응대 내용">
+        <button class="btn primary">기록</button>
+      </form>` : ''}`, true);
+
+    if ($('#drop-person')) initUploader('person', 'person', [], { ref: p.empNo || p.id, refLabel: `${p.name}(${p.empNo})`, onDone: () => { $('#pFiles').innerHTML = filesView(personFiles(p)) || ''; } });
+    $('#personForm').onsubmit = e => { e.preventDefault(); savePerson(); };
+    // 휴직·퇴사는 둘 중 하나만
+    [['pf_leave', 'pf_retired'], ['pf_retired', 'pf_leave']].forEach(([a, b]) => { const x = $('#' + a), y = $('#' + b); if (x && y) x.onchange = () => { if (x.checked && !y.disabled) y.checked = false; }; });
+    if ($('#logForm')) $('#logForm').onsubmit = e => { e.preventDefault(); addLog(); };
+  }
+
+  function savePerson() {
+    const p = curPerson;
+    const patch = {};
+    D.cols.forEach(c => {
+      const el = $('#pf_' + c.k);
+      if (!el || el.disabled) return;
+      const v = c.t === 'bool' ? el.checked : el.value.trim();
+      if (v !== p[c.k]) patch[c.k] = v;
+    });
+    if (draftOwner && !p.owner) patch.owner = draftOwner;
+    if (!Object.keys(patch).length) { closeModal(); toast('바뀐 내용이 없습니다.'); return; }
+    if (uploadsBusy('person')) { $('#pErr').textContent = BUSY_MSG; $('#pErr').hidden = false; return; }
+    // 화면에 바로 반영
+    const before = Object.assign({}, p);
+    const idx = D.people.indexOf(p);
+    Object.assign(p, patch);
+    if (patch.empNo !== undefined) p.id = patch.empNo || before.id;
+    closeModal();
+    render();
+    saveInBackground('apiSavePerson', [before.id, patch], {
+      ok: `${before.name}님 검토 내용을 저장했습니다.`,
+      undo: () => { if (idx >= 0) D.people[idx] = Object.assign(p, before); },
+      // 실패하면 고치던 내용을 그대로 다시 띄운다
+      retry: msg => {
+        openPerson(before.id);
+        Object.keys(patch).forEach(k => { const el = $('#pf_' + k); if (!el) return; if (el.type === 'checkbox') el.checked = !!patch[k]; else el.value = patch[k]; });
+        if (patch.owner && !before.owner) { draftOwner = patch.owner; }
+        $('#pErr').textContent = `저장하지 못했습니다: ${msg}`; $('#pErr').hidden = false;
+      },
+    });
+  }
+
+  function addLog() {
+    const body = $('#logBody').value.trim();
+    if (!body) return;
+    const p = curPerson, kind = $('#logKind').value;
+    const tmp = { _tmp: true, date: '방금 ', empNo: p.empNo, name: p.name, author: D.me.name, kind, body };
+    const drawLogs = () => { const el = $('#pLogs'); if (el && curPerson === p) el.innerHTML = D.logs.filter(l => l.empNo === p.empNo).map(l => logRow(l, true)).join('') || ''; };
+    D.logs.unshift(tmp);
+    drawLogs();
+    $('#logBody').value = '';
+    saveInBackground('apiAddLog', [p.id, kind, body], {
+      ok: '응대기록을 남겼습니다.',
+      done: drawLogs,
+      undo: () => { D.logs = D.logs.filter(l => l !== tmp); drawLogs(); if ($('#logBody') && curPerson === p) $('#logBody').value = body; },
+    });
+  }
+
+  function deletePerson() {
+    const p = curPerson;
+    openModal(`<h3>${esc(p.name)}(${esc(p.empNo)})님을 삭제할까요?</h3><p class="sub">[대상자] 시트에서 이 행을 지웁니다. 응대기록과 첨부 파일 기록은 남습니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="drawPerson()">취소</button><button class="btn primary" id="dpOk">삭제</button></div>`);
+    $('#dpOk').onclick = () => {
+      $('#dpOk').disabled = true;
+      call('apiDeletePerson', p.id).then(data => { applyData(data); closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+    };
+  }
+
+  function openAddPerson() {
+    const staff = [''].concat(D.staff.map(s => s.name));
+    const sel = id => `<select class="field-in" id="${id}">${staff.map(s => `<option value="${esc(s)}">${esc(s || '(없음)')}</option>`).join('')}</select>`;
+    openModal(`
+      <h3>대상자 추가</h3>
+      <p class="sub">한 명씩 추가합니다. 여러 명은 「대상자 업로드」로 엑셀 파일을 올리거나 [대상자] 시트에 직접 붙여넣으세요.</p>
+      <form class="form" id="apForm" novalidate>
+        <div class="two"><div class="fld"><label for="apEmp">사원번호</label><input class="field-in" id="apEmp"></div><div class="fld"><label for="apName">성명</label><input class="field-in" id="apName"></div></div>
+        <div class="two"><div class="fld"><label for="apDept">부서</label><input class="field-in" id="apDept"></div><div class="fld"><label for="apRank">직급</label><input class="field-in" id="apRank"></div></div>
+        <div class="two"><div class="fld"><label for="apOwner">담당자</label>${sel('apOwner')}</div><div class="fld"><label for="apOwner2">2차검토 담당자</label>${sel('apOwner2')}</div></div>
+        <div class="msg err" id="apErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="apOk">추가</button></div>
+      </form>`);
+    $('#apForm').onsubmit = e => {
+      e.preventDefault();
+      const f = { empNo: $('#apEmp').value.trim(), name: $('#apName').value.trim(), dept: $('#apDept').value.trim(), rank: $('#apRank').value.trim(), owner: $('#apOwner').value, owner2: $('#apOwner2').value };
+      if (!f.name) { $('#apErr').textContent = '성명을 입력해 주세요.'; $('#apErr').hidden = false; return; }
+      if (f.empNo && D.people.some(p => p.empNo === f.empNo)) { $('#apErr').textContent = '같은 사원번호가 이미 있습니다.'; $('#apErr').hidden = false; return; }
+      $('#apOk').disabled = true;
+      call('apiAddPerson', f).then(data => { applyData(data); closeModal(); reviewTab = 'all'; render(); toast(`${f.name}님을 추가했습니다.`); })
+        .catch(err => { $('#apOk').disabled = false; $('#apErr').textContent = err.message || String(err); $('#apErr').hidden = false; });
+    };
+  }
+
+  /* ---------- 대상자 업로드: 엑셀·CSV 파일 또는 붙여넣기 (총괄·관리자) ---------- */
+  // 구글 시트 복사본(TSV) 파싱: 줄바꿈이 들어간 셀은 "..."로 감싸져 온다
+  function parseTSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"' && cell === '') q = true;
+      else if (ch === '\t') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim()));
+  }
+  const normH = s => String(s).replace(/\s/g, '').toLowerCase();
+  const matchCol = h => { const n = normH(h); return D.cols.find(c => normH(c.l) === n || (c.re && new RegExp(c.re).test(n))); };
+  /**
+   * 표(행 배열) → 대상자 목록. 위쪽 10줄 안에서 열 이름이 2개 이상 맞는 줄을 제목 행으로 본다
+   * (파일 맨 위에 "2026 귀속 연말정산" 같은 제목 줄이 있어도 된다). 제목 행이 없으면 기존 시트 열 순서로 읽는다.
+   */
+  function readRows(rows, emptyMsg) {
+    rows = (rows || []).map(r => r.map(c => c == null ? '' : String(c))).filter(r => r.some(c => c.trim()));
+    if (!rows.length) return { err: emptyMsg };
+    let h = -1;
+    for (let k = 0; k < Math.min(rows.length, 10); k++) if (rows[k].map(matchCol).filter(Boolean).length >= 2) { h = k; break; }
+    const hdr = h >= 0 ? rows[h].map(matchCol) : null;
+    const map = hdr || D.cols.slice(0, rows[0].length);
+    const unknown = hdr ? rows[h].filter((x, i) => x.trim() && !hdr[i]) : [];
+    if (!map.some(c => c && c.k === 'name')) return { err: '「성명」 열을 찾지 못했습니다. 제목 행(No., 부서, 사원번호, 성명…)이 있는지 확인해 주세요.' };
+    // 빈 칸은 보내지 않는다: 이미 있는 대상자의 값이 빈 칸으로 지워지지 않게 (체크를 풀려면 X)
+    const data = rows.slice(h + 1).map(r => { const o = {}; map.forEach((c, i) => { const v = (r[i] || '').trim(); if (c && v) o[c.k] = v; }); return o; }).filter(o => o.name);
+    const emps = data.map(o => o.empNo).filter(Boolean);
+    const dupInFile = emps.filter((e, i) => emps.indexOf(e) !== i);
+    return { data, cols: map.filter(Boolean).length, unknown, dupInFile: [...new Set(dupInFile)] };
+  }
+
+  /* 엑셀 파일은 SheetJS로 읽는다 (처음 쓸 때만 내려받음) */
+  let xlsxLoading = null;
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (!xlsxLoading) xlsxLoading = new Promise((resolve, reject) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload = () => resolve(window.XLSX);
+      sc.onerror = () => { xlsxLoading = null; reject(new Error('엑셀 읽기 도구를 불러오지 못했습니다. 인터넷 연결을 확인하거나, 엑셀에서 복사해 붙여넣기 탭을 써주세요.')); };
+      document.head.appendChild(sc);
+    });
+    return xlsxLoading;
+  }
+  /** CSV: UTF-8로 읽고 글자가 깨지면 엑셀 기본 저장 형식(EUC-KR)으로 다시 읽는다 */
+  function decodeCsv(buf) {
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (text.includes('\uFFFD')) { try { text = new TextDecoder('euc-kr').decode(buf); } catch (e) { /* 지원 안 하는 브라우저 */ } }
+    return text.replace(/^﻿/, '');
+  }
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"' && cell === '') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+  /** 파일 → 행 배열. 엑셀은 성명 열이 있는 첫 시트를 쓴다 */
+  function readFileRows(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    return file.arrayBuffer().then(buf => {
+      if (ext === 'csv' || ext === 'txt' || ext === 'tsv') {
+        const text = decodeCsv(buf);
+        return { rows: ext === 'csv' ? parseCSV(text) : parseTSV(text), sheet: '' };
+      }
+      if (!['xlsx', 'xls', 'xlsm'].includes(ext)) throw new Error('엑셀(.xlsx, .xls) 또는 CSV 파일만 올릴 수 있습니다.');
+      return loadXlsx().then(X => {
+        const wb = X.read(buf, { type: 'array', cellDates: true });
+        const sheets = wb.SheetNames.map(n => ({ n, rows: X.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '', dateNF: 'yyyy-mm-dd' }) }));
+        const hit = sheets.find(x => !readRows(x.rows, '').err) || sheets[0];
+        return { rows: hit ? hit.rows : [], sheet: hit ? hit.n : '' };
+      });
+    });
+  }
+
+  /* ---------- 대상자 양식 다운로드 ---------- */
+  function openTemplate() {
+    openModal(`
+      <h3>대상자 양식 다운로드</h3>
+      <p class="sub">엑셀(.xlsx) 파일로 받습니다. 작성한 뒤 「대상자 업로드」로 올리면 됩니다.</p>
+      <div class="form">
+        <div class="tpl-opt">
+          <div><b>빈 양식</b><span>시트와 같은 열 ${D.cols.length}개 + 작성 안내. 새 대상자 명단을 만들 때</span></div>
+          <button type="button" class="btn primary" onclick="downloadTemplate(false)">빈 양식 받기</button>
+        </div>
+        <div class="tpl-opt">
+          <div><b>현재 명단 포함</b><span>지금 보이는 대상자 ${D.people.length}명이 채워진 파일. 엑셀에서 한꺼번에 고쳐 다시 올릴 때</span></div>
+          <button type="button" class="btn" onclick="downloadTemplate(true)">명단으로 받기</button>
+        </div>
+        <div class="hint">체크 항목은 O(체크)·X(체크 풀기)로, 담당자는 목록에서 고를 수 있습니다. 파일은 내 구글 드라이브의 「연말정산 대상자 업로드 양식」 시트로 만들어집니다.</div>
+        <div id="tplMsg"></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button></div>
+      </div>`);
+  }
+  function downloadTemplate(withPeople) {
+    const msg = $('#tplMsg');
+    // 예시 화면: 파일을 만들 서버가 없으므로 열 구성만 보여준다
+    if (window.MockApi) {
+      msg.innerHTML = `<div class="notice">예시 화면이라 파일을 내려받을 수 없습니다. 실제 웹앱에서는 아래 열이 들어간 엑셀 파일이 새 탭에서 바로 내려받아집니다${withPeople ? ` (대상자 ${D.people.length}명 포함)` : ''}.</div>
+        <div class="table-wrap" style="margin-top:8px"><table class="sheet-grid" style="min-width:0"><thead><tr>${D.cols.slice(0, 12).map(c => `<th>${esc(c.l)}</th>`).join('')}<th>…</th></tr></thead></table></div>`;
+      return;
+    }
+    // 서버 응답을 기다린 뒤 창을 열면 팝업 차단에 걸리므로, 누르는 순간 빈 탭을 먼저 연다
+    const w = window.open('', '_blank');
+    if (w) { try { w.document.write('<p style="font-family:sans-serif;padding:24px">양식을 만드는 중입니다… 잠시 후 다운로드가 시작됩니다.</p>'); } catch (e) { /* 무시 */ } }
+    msg.innerHTML = '<div class="hint">양식을 만드는 중…</div>';
+    call('apiTemplateLink', !!withPeople)
+      .then(res => {
+        if (w) w.location.href = res.url;
+        msg.innerHTML = `<div class="msg ok">${w ? '새 탭에서 다운로드가 시작됩니다.' : '아래를 눌러 받으세요.'}${res.count ? ` (대상자 ${res.count}명)` : ''}
+          <br><a href="${esc(res.url)}" target="_blank" rel="noopener">엑셀(.xlsx)로 받기</a> · <a href="${esc(res.sheetUrl)}" target="_blank" rel="noopener">구글 시트로 열기</a></div>`;
+      })
+      .catch(e => { if (w) w.close(); msg.innerHTML = `<div class="msg err">${esc(e.message || String(e))}</div>`; });
+  }
+
+  function openImport() {
+    let src = 'file';      // file | paste
+    let fileResult = null; // 파일에서 읽은 결과
+    openModal(`
+      <h3>대상자 업로드</h3>
+      <p class="sub">엑셀·CSV 파일을 올리거나, 시트에서 복사해 붙여넣으세요. 열 이름(No., 부서, 사원번호, 성명…)으로 자동 매칭합니다.<br>
+      · 사원번호가 같으면 갱신, 없으면 새로 추가 · <b>빈 칸은 기존 값을 그대로 둡니다</b> · 체크는 O, 체크를 풀려면 X<br>
+      · 양식이 없으면 <button type="button" class="linkish" onclick="openTemplate()">양식 다운로드</button>부터 받으세요.</p>
+      <div class="subtabs" role="tablist" style="margin-bottom:12px">
+        <button type="button" role="tab" id="imTabFile" aria-selected="true">파일 올리기</button>
+        <button type="button" role="tab" id="imTabPaste" aria-selected="false">붙여넣기</button>
+      </div>
+      <form class="form" id="imForm" novalidate>
+        <div id="imFileBox">
+          <div class="drop" id="imDrop" tabindex="0" role="button"><span class="desk-only">파일을 끌어다 놓거나 </span><u>눌러서 파일 선택</u> · .xlsx .xls .csv</div>
+          <input type="file" id="imFile" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden>
+          <div class="hint" id="imFileName" style="margin-top:6px"></div>
+        </div>
+        <textarea class="field-in" id="imText" style="min-height:200px" aria-label="붙여넣을 내용" placeholder="시트에서 제목 행부터 복사해 붙여넣으세요" hidden></textarea>
+        <div class="hint" id="imHint"></div>
+        <div id="imPreview"></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="imOk" disabled>가져오기</button></div>
+      </form>`, true);
+
+    const current = () => src === 'file' ? (fileResult || { err: '' }) : readRows(parseTSV($('#imText').value), '붙여넣은 내용이 없습니다.');
+    const show = () => {
+      const r = current();
+      $('#imOk').disabled = !!r.err || !r.data;
+      if (r.err !== undefined && !r.data) { $('#imHint').innerHTML = r.err ? `<span style="color:var(--warn-ink)">${esc(r.err)}</span>` : ''; $('#imPreview').innerHTML = ''; return; }
+      const isNew = o => !o.empNo || !D.people.some(p => p.empNo === o.empNo);
+      // 파일 안에서 같은 사원번호는 한 사람으로 센다 (아래쪽 줄이 위쪽을 갱신)
+      const uniq = r.data.filter((o, i) => !o.empNo || r.data.findIndex(x => x.empNo === o.empNo) === i);
+      const add = uniq.filter(isNew).length;
+      $('#imHint').innerHTML = `인식된 열 ${r.cols}개 · 대상자 <b>${uniq.length}명</b> (새로 추가 ${add}명 · 갱신 ${uniq.length - add}명)`
+        + (r.unknown.length ? `<br>무시되는 열: ${r.unknown.map(esc).join(', ')}` : '')
+        + (r.dupInFile.length ? `<br><span style="color:var(--warn-ink)">파일 안에서 사원번호가 겹칩니다: ${r.dupInFile.map(esc).join(', ')} (아래쪽 줄 내용이 남습니다)</span>` : '');
+      // 앞 5명 미리 보기
+      const keys = ['no', 'dept', 'empNo', 'name', 'rank', 'owner', 'owner2'];
+      $('#imPreview').innerHTML = `<div class="table-wrap"><table class="sheet-grid" style="min-width:0"><thead><tr>${keys.map(k => `<th>${esc(col(k).l)}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${r.data.slice(0, 5).map(o => `<tr style="cursor:default">${keys.map(k => `<td>${esc(o[k] || '')}</td>`).join('')}<td>${isNew(o) ? '<span class="chip info">추가</span>' : '<span class="chip plain">갱신</span>'}</td></tr>`).join('')}</tbody></table></div>
+        ${r.data.length > 5 ? `<p class="hint" style="margin:6px 0 0">외 ${r.data.length - 5}명</p>` : ''}`;
+    };
+    const setSrc = v => {
+      src = v;
+      $('#imTabFile').setAttribute('aria-selected', String(v === 'file'));
+      $('#imTabPaste').setAttribute('aria-selected', String(v === 'paste'));
+      $('#imFileBox').hidden = v !== 'file';
+      $('#imText').hidden = v !== 'paste';
+      show();
+    };
+    const takeFile = file => {
+      if (!file) return;
+      fileResult = { err: '' };
+      $('#imFileName').textContent = `${file.name} 읽는 중…`;
+      show();
+      readFileRows(file)
+        .then(({ rows, sheet }) => { fileResult = readRows(rows, '파일에 내용이 없습니다.'); $('#imFileName').textContent = `${file.name}${sheet ? ` · 시트 「${sheet}」` : ''}`; })
+        .catch(e => { fileResult = { err: e.message || String(e) }; $('#imFileName').textContent = file.name; })
+        .then(show);
+    };
+    $('#imTabFile').onclick = () => setSrc('file');
+    $('#imTabPaste').onclick = () => setSrc('paste');
+    const drop = $('#imDrop'), input = $('#imFile');
+    drop.onclick = () => input.click();
+    drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } };
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); takeFile(e.dataTransfer.files[0]); };
+    input.onchange = () => { takeFile(input.files[0]); input.value = ''; };
+    $('#imText').oninput = show;
+    $('#imForm').onsubmit = e => {
+      e.preventDefault();
+      const r = current();
+      if (r.err || !r.data) return;
+      // 같은 사원번호 줄은 하나로 합친다 (아래쪽 줄의 값이 이긴다)
+      const merged = [], at = {};
+      r.data.forEach(o => { if (o.empNo && at[o.empNo] !== undefined) Object.assign(merged[at[o.empNo]], o); else { if (o.empNo) at[o.empNo] = merged.length; merged.push(Object.assign({}, o)); } });
+      $('#imOk').disabled = true;
+      $('#imOk').textContent = `${merged.length}명 저장 중…`;
+      call('apiImportPeople', merged).then(data => { applyData(data); closeModal(); reviewTab = 'all'; reviewStatus = 'all'; render(); toast(`${data.added}명 추가 · ${data.updated}명 갱신했습니다.`); })
+        .catch(err => { $('#imOk').disabled = false; $('#imOk').textContent = '가져오기'; fail(err); });
+    };
+  }
+
+  /* ================= 공지사항 ================= */
+  VIEWS.notice = function () {
+    const cats = ['all', 'unread'].concat(D.noticeCategories);
+    const base = D.notices.filter(n => showOld || activeNotice(n));
+    const pick = c => c === 'all' ? base : c === 'unread' ? base.filter(n => !isRead(n)) : base.filter(n => n.category === c);
+    const list = pick(noticeFilter);
+    const rows = list.map(n => {
+      const open = openNotice === n.id;
+      const canEditN = n.author === D.me.name || isLead();
+      return `<article class="post">
+        <button class="post-head" onclick="toggleNotice('${esc(n.id)}')" aria-expanded="${open}">
+          <span class="chip cat-${esc(n.category)}">${esc(n.category)}</span>
+          <span class="post-title">${isRead(n) ? '' : '<span class="unread" title="안 읽음"></span>'}${n.pinned ? '<span class="pin">📌</span>' : ''}${n.level !== '일반' ? `<span class="chip lv-${esc(n.level)}" style="margin-right:6px">${esc(n.level)}</span>` : ''}${esc(n.title)}${n.files && n.files.length ? '<span class="clip" title="첨부 파일">📎</span>' : ''}${n.comments.length ? `<span class="cc">[${n.comments.length}]</span>` : ''}</span>
+          <span class="post-meta">${esc(n.author)} · ${esc(n.date.slice(0, 10))}</span>
+        </button>
+        ${open ? `<div class="post-body">
+          ${n.start || n.end ? `<div class="hint">게시 기간 ${esc(n.start || '처음')} ~ ${esc(n.end || '계속')}${activeNotice(n) ? '' : ' · 게시 기간이 아닙니다'}</div>` : ''}
+          <div class="post-text">${esc(n.body)}</div>
+          ${filesView(n.files)}
+          <div class="comments">
+            ${n.comments.map(c => `<div class="cmt"><b>${esc(c.author)}<span>${esc(c.date)}</span></b><p>${esc(c.body)}</p></div>`).join('')}
+            <form class="cmt-form" onsubmit="addNoticeComment(event, '${esc(n.id)}')">
+              <input class="field-in" id="cmtIn" placeholder="${n.category === '질문' ? '답변 달기' : '댓글·질문 달기'}" aria-label="댓글">
+              <button class="btn small primary">등록</button>
+            </form>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn small" onclick="markUnread('${esc(n.id)}')">안 읽음으로</button>
+            <button class="btn small" onclick="copyNotice('${esc(n.id)}')">메신저용 복사</button>
+            ${canEditN ? `<button class="btn small" onclick="openNoticeForm('${esc(n.id)}')">수정</button><button class="btn small danger" onclick="deleteNotice('${esc(n.id)}')">삭제</button>` : ''}
+          </div>
+        </div>` : ''}
+      </article>`;
+    }).join('') || `<div class="empty">${noticeFilter === 'unread' ? '안 읽은 글이 없습니다.' : '글이 없습니다.'}</div>`;
+    return `
+      <div class="head">
+        <div><h1>공지사항</h1></div>
+        <div class="head-actions"><button class="btn primary" onclick="openNoticeForm()">글쓰기</button></div>
+      </div>
+      <section class="panel">
+        <div class="panel-head">
+          <div class="filters">${cats.map(c => `<button aria-pressed="${noticeFilter === c}" onclick="noticeFilter='${c}';render()">${c === 'all' ? '전체' : c === 'unread' ? '안 읽음' : c} ${pick(c).length}</button>`).join('')}</div>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" class="check" ${showOld ? 'checked' : ''} onchange="showOld=this.checked;render()"> 지난 공지 포함</label>
+        </div>
+        <div class="posts">${rows}</div>
+      </section>`;
+  };
+
+  function toggleNotice(id) {
+    openNotice = openNotice === id ? null : id;
+    if (openNotice && D.reads.indexOf(id) < 0) {
+      D.reads.push(id);
+      call('apiMarkRead', id).then(applyData).catch(() => { /* 읽음 표시는 실패해도 넘어간다 */ });
+    }
+    render();
+  }
+  function markUnread(id) {
+    D.reads = D.reads.filter(x => x !== id);
+    openNotice = null;
+    render();
+    call('apiMarkUnread', id).then(applyData).catch(fail);
+  }
+  function copyNotice(id) {
+    const n = D.notices.find(x => x.id === id);
+    const text = `[${n.category}] ${n.title}\n\n${n.body}`;
+    try { navigator.clipboard.writeText(text).then(() => toast('복사했습니다. 메신저·메일에 붙여넣으세요.'), () => toast('복사하지 못했습니다.')); }
+    catch (e) { toast('복사하지 못했습니다.'); }
+  }
+
+  function openNoticeForm(id, draftData, errMsg) {
+    const lead = isLead();
+    const n = draftData || (id ? D.notices.find(x => x.id === id) : { category: lead ? '공지' : '질문', level: '일반', title: '', body: '', start: '', end: '', pinned: false, files: [] });
+    const cats = D.noticeCategories.filter(c => lead || D.noticeLeaderOnly.indexOf(c) < 0 || c === n.category);
+    $('#modal').classList.remove('wide');
+    openModal(`
+      <h3>${id ? '글 수정' : '글쓰기'}</h3>
+      <p class="sub">${lead ? '공지·응대지침은 담당자 모두에게 안내됩니다.' : '자료나 질문을 올리면 다른 담당자·총괄이 댓글로 답합니다.'}</p>
+      <form class="form" id="nForm" novalidate>
+        <div class="two">
+          <div class="fld"><label for="nCat">분류</label><select class="field-in" id="nCat">${cats.map(c => `<option ${c === n.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+          ${lead ? `<div class="fld"><label for="nLv">중요도</label><select class="field-in" id="nLv">${['일반', '중요', '긴급'].map(l => `<option ${l === n.level ? 'selected' : ''}>${l}</option>`).join('')}</select></div>` : '<div></div>'}
+        </div>
+        <div class="fld"><label for="nTitle">제목</label><input class="field-in" id="nTitle" value="${esc(n.title)}"></div>
+        <div class="fld"><label for="nBody">내용</label><textarea class="field-in" id="nBody" style="min-height:160px">${esc(n.body)}</textarea></div>
+        ${lead ? `<div class="two">
+          <div class="fld"><label for="nStart">게시 시작 (비우면 바로)</label><input class="field-in" type="date" id="nStart" value="${esc(n.start)}"></div>
+          <div class="fld"><label for="nEnd">게시 종료 (비우면 계속)</label><input class="field-in" type="date" id="nEnd" value="${esc(n.end)}"></div>
+        </div>
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="nPin" ${n.pinned ? 'checked' : ''}> 맨 위에 고정 (대시보드에 배너로 표시)</label>` : ''}
+        ${uploaderHtml('notice', '첨부 파일')}
+        <div class="msg err" id="nErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="nOk">${id ? '저장' : '등록'}</button></div>
+      </form>`);
+    initUploader('notice', 'notice', n.files);
+    $('#nForm').onsubmit = e => {
+      e.preventDefault();
+      const v = sel => $(sel) ? $(sel).value : '';
+      const data = { id: id || '', category: $('#nCat').value, level: v('#nLv') || '일반', title: $('#nTitle').value.trim(), body: $('#nBody').value.trim(), start: v('#nStart'), end: v('#nEnd'), pinned: !!($('#nPin') && $('#nPin').checked), files: uploadedFiles('notice') };
+      const err = msg => { $('#nErr').textContent = msg; $('#nErr').hidden = false; };
+      if (!data.title || !data.body) return err('제목과 내용을 입력해 주세요.');
+      if (data.start && data.end && data.start > data.end) return err('게시 종료일이 시작일보다 빠릅니다.');
+      if (uploadsBusy('notice')) return err(BUSY_MSG);
+      const old = D.notices.slice();
+      const tmpId = id || 'tmp' + Date.now();
+      const ex = D.notices.find(x => x.id === id);
+      const shown = Object.assign({ id: tmpId, date: id ? ex.date : '방금', author: id ? ex.author : D.me.name, comments: id ? ex.comments : [], updated: '방금' }, data, { id: tmpId, level: lead ? data.level : '일반', pinned: lead && data.pinned });
+      D.notices = id ? D.notices.map(x => x.id === id ? shown : x) : [shown].concat(D.notices);
+      if (D.reads.indexOf(tmpId) < 0) D.reads.push(tmpId);
+      closeModal(); openNotice = tmpId; noticeFilter = 'all'; page = 'notice'; render();
+      saveInBackground('apiSaveNotice', [data], {
+        ok: id ? '수정했습니다.' : '등록했습니다.',
+        done: res => { if (openNotice === tmpId) openNotice = res.savedId; if (page === 'notice') render(); },
+        undo: () => { D.notices = old; },
+        retry: msg => openNoticeForm(id, data, `저장하지 못했습니다: ${msg}`),
+      });
+    };
+    if (errMsg) { $('#nErr').textContent = errMsg; $('#nErr').hidden = false; }
+  }
+
+  function addNoticeComment(e, id) {
+    e.preventDefault();
+    const text = $('#cmtIn').value.trim();
+    if (!text) return;
+    const n = D.notices.find(x => x.id === id);
+    const mine = { _tmp: true, date: '방금', author: D.me.name, body: text };
+    n.comments.push(mine);
+    render();
+    saveInBackground('apiAddNoticeComment', [id, text], {
+      done: () => { if (page === 'notice') render(); },
+      undo: () => { n.comments.splice(n.comments.indexOf(mine), 1); },
+    });
+  }
+
+  function deleteNotice(id) {
+    openModal(`<h3>글을 삭제할까요?</h3><p class="sub">목록에서 사라집니다. 시트에는 기록이 남습니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="delOk">삭제</button></div>`);
+    $('#delOk').onclick = () => {
+      $('#delOk').disabled = true;
+      call('apiDeleteNotice', id).then(data => { applyData(data); openNotice = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+    };
+  }
+
+  /* ================= 연말정산 기준 ================= */
+  function hl(text) {
+    const t = esc(text);
+    if (!ruleQuery) return t;
+    const q = esc(ruleQuery).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return t.replace(new RegExp(q, 'gi'), m => `<mark>${m}</mark>`);
+  }
+  function filteredRules() {
+    const q = ruleQuery.trim().toLowerCase();
+    return D.rules
+      .filter(r => ruleCat === 'all' || r.category === ruleCat)
+      .filter(r => !q || (r.title + ' ' + r.body + ' ' + r.category).toLowerCase().includes(q))
+      .sort((a, b) => D.ruleCategories.indexOf(a.category) - D.ruleCategories.indexOf(b.category) || a.title.localeCompare(b.title, 'ko'));
+  }
+  function ruleListHtml() {
+    const list = filteredRules();
+    return list.map(r => {
+      const open = openRule === r.id || (ruleQuery && list.length <= 2);
+      const first = r.body.split('\n').find(l => l.trim() && !/^\(.*\)$/.test(l.trim())) || '';
+      return `<article class="rule">
+        <button class="rule-head" onclick="toggleRule('${esc(r.id)}')" aria-expanded="${open}">
+          <span class="rule-title">${hl(r.title)}${r.files && r.files.length ? '<span class="clip" title="첨부 파일">📎</span>' : ''}</span>
+          <span class="rule-date">${ruleCat === 'all' ? `<span class="chip plain">${esc(r.category)}</span> ` : ''}${r.year ? `${esc(r.year)}년 귀속` : ''}</span>
+          ${open ? '' : `<span class="rule-sum">${hl(first)}</span>`}
+        </button>
+        ${open ? `<div class="rule-body">
+          <div class="rule-meta"><span><b>적용</b>${esc(r.year ? r.year + '년 귀속' : '-')}</span><span><b>담당</b>${esc(r.owner || '-')}</span><span><b>최종 개정</b>${esc(r.updated)} (${esc(r.editor)})</span></div>
+          <div class="rule-text">${hl(r.body)}</div>
+          ${r.files && r.files.length ? `<div class="sub-label">첨부 파일</div>${filesView(r.files)}` : ''}
+          ${r.link ? `<a class="post-link" href="${esc(r.link)}" target="_blank" rel="noopener">📄 원문 보기</a>` : ''}
+          ${r.history.length ? `<details class="hist"><summary>개정 이력 ${r.history.length}건</summary><ol>${r.history.map(h => `<li><span>${esc(h.date)} · ${esc(h.editor)}</span>${esc(h.note)}</li>`).join('')}</ol></details>` : ''}
+          ${isLead() ? `<div style="display:flex;gap:6px"><button class="btn small" onclick="openRuleForm('${esc(r.id)}')">수정</button><button class="btn small danger" onclick="deleteRule('${esc(r.id)}')">삭제</button></div>` : ''}
+        </div>` : ''}
+      </article>`;
+    }).join('') || `<div class="empty">${ruleQuery ? `"${esc(ruleQuery)}"에 해당하는 기준이 없습니다.` : '등록된 기준이 없습니다.'}</div>`;
+  }
+
+  VIEWS.rules = function () {
+    const cats = ['all'].concat(D.ruleCategories);
+    const cnt = c => c === 'all' ? D.rules.length : D.rules.filter(r => r.category === c).length;
+    return `
+      <div class="head">
+        <div><h1>연말정산 기준</h1></div>
+        <div class="head-actions">${isLead() ? '<button class="btn primary" onclick="openRuleForm()">기준 등록</button>' : ''}</div>
+      </div>
+      <div class="rules-layout">
+        <section class="panel" style="padding:10px">
+          <div class="cats">${cats.filter(c => c === 'all' || cnt(c)).map(c => `<button aria-pressed="${ruleCat === c}" onclick="ruleCat='${esc(c)}';openRule=null;render()">${c === 'all' ? '전체' : esc(c)}<span>${cnt(c)}</span></button>`).join('')}</div>
+        </section>
+        <section class="panel">
+          <input class="search" id="ruleSearch" type="search" placeholder="검색 (예: 월세, 의료비, 부양가족, 종전근무지)" value="${esc(ruleQuery)}" aria-label="기준 검색">
+          <div id="ruleList">${ruleListHtml()}</div>
+        </section>
+      </div>`;
+  };
+  function toggleRule(id) { openRule = openRule === id ? null : id; $('#ruleList').innerHTML = ruleListHtml(); }
+
+  function openRuleForm(id, draftData, errMsg) {
+    const r = draftData || (id ? D.rules.find(x => x.id === id) : { category: ruleCat !== 'all' ? ruleCat : D.ruleCategories[0], title: '', body: '', year: D.year, owner: '', link: '', files: [] });
+    $('#modal').classList.remove('wide');
+    openModal(`
+      <h3>${id ? '기준 수정' : '기준 등록'}</h3>
+      <p class="sub">담당자 모두가 응대할 때 보는 기준입니다. 국세청 안내 원문이 있으면 링크나 파일로 함께 올려주세요.</p>
+      <form class="form" id="rForm" novalidate>
+        <div class="two">
+          <div class="fld"><label for="rCat">분류</label><select class="field-in" id="rCat">${D.ruleCategories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+          <div class="fld"><label for="rYear">적용 귀속연도</label><input class="field-in" id="rYear" inputmode="numeric" value="${esc(r.year)}"></div>
+        </div>
+        <div class="fld"><label for="rTitle">제목</label><input class="field-in" id="rTitle" value="${esc(r.title)}"></div>
+        <div class="fld"><label for="rBody">내용</label><textarea class="field-in" id="rBody" style="min-height:200px">${esc(r.body)}</textarea></div>
+        <div class="two">
+          <div class="fld"><label for="rOwner">담당</label><input class="field-in" id="rOwner" value="${esc(r.owner)}"></div>
+          <div class="fld"><label for="rLink">원문 링크 (선택)</label><input class="field-in" id="rLink" value="${esc(r.link)}" placeholder="https://"></div>
+        </div>
+        ${uploaderHtml('rule', '첨부 파일 (국세청 안내 PDF 등)')}
+        ${id ? '<div class="fld"><label for="rNote">개정 내용 (이력에 남습니다)</label><input class="field-in" id="rNote" placeholder="예) 월세 공제 한도 750만원 → 1,000만원"></div>' : ''}
+        <div class="msg err" id="rErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="rOk">${id ? '저장' : '등록'}</button></div>
+      </form>`);
+    initUploader('rule', 'rules', r.files);
+    $('#rForm').onsubmit = e => {
+      e.preventDefault();
+      const rule = { id: id || '', category: $('#rCat').value, year: $('#rYear').value.trim(), title: $('#rTitle').value.trim(), body: $('#rBody').value.trim(), owner: $('#rOwner').value.trim(), link: $('#rLink').value.trim(), changeNote: $('#rNote') ? $('#rNote').value.trim() : '', files: uploadedFiles('rule') };
+      if (!rule.title || !rule.body) { $('#rErr').textContent = '제목과 내용을 입력해 주세요.'; $('#rErr').hidden = false; return; }
+      if (uploadsBusy('rule')) { $('#rErr').textContent = BUSY_MSG; $('#rErr').hidden = false; return; }
+      const old = D.rules.slice();
+      const tmpId = id || 'tmp' + Date.now();
+      const ex = D.rules.find(x => x.id === id);
+      const shown = Object.assign({ history: [] }, ex || {}, rule, { id: tmpId, updated: todayKey(), editor: D.me.name });
+      shown.history = [{ date: todayKey(), editor: D.me.name, note: rule.changeNote || (id ? '내용 수정' : '최초 등록') }].concat(ex ? ex.history : []);
+      D.rules = id ? D.rules.map(x => x.id === id ? shown : x) : D.rules.concat(shown);
+      closeModal(); openRule = tmpId; ruleCat = 'all'; ruleQuery = ''; page = 'rules'; render();
+      saveInBackground('apiSaveRule', [rule], {
+        ok: id ? '기준을 수정했습니다. 개정 이력에 기록됩니다.' : '기준을 등록했습니다.',
+        done: res => { if (openRule === tmpId) openRule = res.savedId; if (page === 'rules') render(); },
+        undo: () => { D.rules = old; },
+        retry: msg => openRuleForm(id, rule, `저장하지 못했습니다: ${msg}`),
+      });
+    };
+    if (errMsg) { $('#rErr').textContent = errMsg; $('#rErr').hidden = false; }
+  }
+
+  function deleteRule(id) {
+    openModal(`<h3>이 기준을 삭제할까요?</h3><p class="sub">목록에서 사라지고, 시트와 개정 이력에는 기록이 남습니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="rdOk">삭제</button></div>`);
+    $('#rdOk').onclick = () => {
+      $('#rdOk').disabled = true;
+      call('apiDeleteRule', id).then(data => { applyData(data); openRule = null; closeModal(); render(); toast('삭제했습니다.'); }).catch(e => { closeModal(); fail(e); });
+    };
+  }
+
+  /* ================= 첨부파일 ================= */
+  function filesFiltered() {
+    const q = fileQuery.trim().toLowerCase();
+    return D.files
+      .filter(f => fileArea === 'all' || f.area === fileArea)
+      .filter(f => !q || [f.name, f.refLabel, f.uploader, f.memo].join(' ').toLowerCase().includes(q));
+  }
+  function refCell(f) {
+    if (f.area === 'person') {
+      const p = D.people.find(x => (x.empNo || x.id) === f.ref);
+      return p && can('review') ? `<button class="linkish" onclick="openPerson('${esc(p.id)}')">${esc(f.refLabel)}</button>` : esc(f.refLabel);
+    }
+    if (f.area === 'notice' && can('notice')) return `<button class="linkish" onclick="openNotice='${esc(f.ref)}';showOld=true;go('notice')">${esc(f.refLabel)}</button>`;
+    if (f.area === 'rules' && can('rules')) return `<button class="linkish" onclick="openRule='${esc(f.ref)}';ruleCat='all';ruleQuery='';go('rules')">${esc(f.refLabel)}</button>`;
+    return esc(f.memo || f.refLabel || '-');
+  }
+  function fileListHtml() {
+    const list = filesFiltered();
+    const rows = list.map(f => `
+      <tr>
+        <td data-label="파일" class="c-wide">${fileRow(f, { link: true })}</td>
+        <td data-label="구분"><span class="chip ${f.area === 'person' ? 'info' : 'plain'}">${esc(D.fileAreas[f.area] || f.area)}</span></td>
+        <td data-label="대상 · 메모">${refCell(f)}</td>
+        <td data-label="올린 사람">${esc(f.uploader)}</td>
+        <td data-label="올린 일시" class="nowrap">${esc(f.date.slice(2, 16))}</td>
+        <td class="c-act" data-label="">${f.uploader === D.me.name || isLead() ? `<button class="btn small danger" onclick="deleteFile('${esc(f.id)}')">삭제</button>` : ''}</td>
+      </tr>`).join('');
+    return rows ? `<div class="table-wrap"><table class="t cards"><thead><tr><th>파일</th><th>구분</th><th>대상 · 메모</th><th>올린 사람</th><th>올린 일시</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="empty">${fileQuery ? '검색 결과가 없습니다.' : '올린 파일이 없습니다.'}</div>`;
+  }
+  VIEWS.files = function () {
+    const areas = ['all'].concat(Object.keys(D.fileAreas).filter(a => D.files.some(f => f.area === a) || a === 'etc'));
+    const cnt = a => a === 'all' ? D.files.length : D.files.filter(f => f.area === a).length;
+    return `
+      <div class="head">
+        <div><h1>첨부파일</h1></div>
+        <div class="head-actions">${D.me.name || D.me.isAdmin ? '<button class="btn primary" onclick="openEtcUpload()">자료 올리기</button>' : ''}</div>
+      </div>
+      <section class="panel">
+        <div class="filters" style="margin-bottom:12px">${areas.map(a => `<button aria-pressed="${fileArea === a}" onclick="fileArea='${a}';render()">${a === 'all' ? '전체' : esc(D.fileAreas[a])} ${cnt(a)}</button>`).join('')}</div>
+        <input class="search" id="fileSearch" type="search" placeholder="파일명·대상자·올린 사람 검색" value="${esc(fileQuery)}" aria-label="첨부파일 검색">
+        <div id="fileList">${fileListHtml()}</div>
+        <p style="color:var(--muted);font-size:12px;margin:10px 0 0">증빙 서류에는 개인정보가 들어 있습니다. 첨부 폴더는 담당자에게만 공유되며, 삭제한 파일은 드라이브 휴지통으로 이동합니다(30일 안에 복구 가능).</p>
+      </section>`;
+  };
+  function openEtcUpload() {
+    $('#modal').classList.remove('wide');
+    openModal(`
+      <h3>자료 올리기</h3>
+      <p class="sub">서식, 안내문처럼 특정 대상자와 상관없는 자료를 올립니다. 대상자 증빙은 서류 검토에서 대상자를 눌러 올리세요.</p>
+      <div class="form">
+        <div class="fld"><label for="etcMemo">메모 (무슨 자료인지)</label><input class="field-in" id="etcMemo" placeholder="예) 2026 귀속 소득·세액공제신고서 양식"></div>
+        ${uploaderHtml('etc', '파일 (올리는 즉시 저장됩니다)')}
+        <div class="modal-actions"><button type="button" class="btn primary" onclick="closeModal();render()">완료</button></div>
+      </div>`);
+    initUploader('etc', 'etc', [], { memo: () => $('#etcMemo').value.trim() });
+  }
+  function deleteFile(id) {
+    const f = D.files.find(x => x.id === id);
+    openModal(`<h3>${esc(f.name)} 파일을 삭제할까요?</h3>
+      <p class="sub">목록에서 빼고 드라이브 휴지통으로 옮깁니다. ${f.area === 'notice' || f.area === 'rules' ? '이 파일이 붙은 글에서도 열 수 없게 됩니다.' : ''}</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="dfOk">삭제</button></div>`);
+    $('#dfOk').onclick = () => {
+      const old = D.files.slice();
+      D.files = D.files.filter(x => x.id !== id);
+      closeModal(); render();
+      saveInBackground('apiDeleteFile', [id], { ok: '삭제했습니다.', undo: () => { D.files = old; } });
+    };
+  }
+
+  /* ================= 권한 관리 (관리자 전용) ================= */
+  let A = null;          // 서버에서 받은 관리 데이터
+  let aDraft = null;     // 편집 중인 담당자 목록
+  let aDirty = false;
+  let menuDraft = null;
+  let adminTab = 'members';
+  let adminLoading = false;
+
+  function loadAdmin(force) {
+    if (adminLoading) return;
+    adminLoading = true;
+    call('apiAdminData', !!force)
+      .then(d => { adminLoading = false; setAdmin(d); })
+      .catch(e => { adminLoading = false; fail(e); });
+  }
+  function refreshAdmin() { A = null; render(); loadAdmin(true); }
+  function setAdmin(data) {
+    A = data;
+    aDraft = A.members.map(m => Object.assign({}, m));
+    menuDraft = JSON.parse(JSON.stringify(A.menuAccess));
+    aDirty = false;
+    if (page === 'admin') render();
+  }
+
+  const ACCESS = {
+    sheet: { owner: ['ok', '소유자'], editor: ['ok', '편집'], viewer: ['pend', '보기만'], none: ['no', '없음'] },
+    folder: { owner: ['ok', '소유자'], editor: ['ok', '편집'], viewer: ['pend', '보기만'], none: ['no', '없음'], 'n/a': ['plain', '설정 필요'] },
+  };
+  function accessChip(kind, v) {
+    const [cls, label] = (ACCESS[kind][v] || ['plain', '–']);
+    return `<span class="chip ${cls}">${cls === 'ok' ? '✓ ' : cls === 'no' ? '✕ ' : ''}${label}</span>`;
+  }
+  function needsAttention(name) {
+    const st = A && A.status.people[name];
+    if (!st) return true;
+    return ['sheet', 'folder'].some(k => { const c = (ACCESS[k][st[k]] || ['plain'])[0]; return c === 'no' || c === 'pend'; });
+  }
+
+  VIEWS.admin = function () {
+    if (!A) return '<div class="loading">권한 정보를 불러오는 중… (시트·첨부 폴더 공유 상태를 확인합니다)</div>';
+    const tab = (k, label) => `<button role="tab" aria-selected="${adminTab === k}" onclick="adminTab='${k}';render()">${label}</button>`;
+    const body = { members: adminMembers, scope: adminScope, menus: adminMenus, settings: adminSettings, guide: adminGuide }[adminTab]();
+    return `<div class="subtabs" role="tablist">${tab('members', '담당자·권한')}${tab('scope', '열람 범위')}${tab('menus', '메뉴 권한')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
+  };
+
+  function adminMembers() {
+    const res = A.status.resources;
+    const resLine = (label, x) => `<span>${x.ok ? '<span class="chip ok">✓</span>' : '<span class="chip pend">!</span>'} <b>${label}</b> ${esc(x.ok ? x.name : x.error)}</span>`;
+    const issues = aDraft.filter(m => m.email && needsAttention(m.name)).length;
+    const noEmail = aDraft.filter(m => m.name && !m.email).length;
+    const sel = (i, v) => `<select class="field-in" style="padding:5px 6px;min-width:90px" onchange="aEdit(${i},'role',this.value)">${A.roles.map(r => `<option ${r === v ? 'selected' : ''}>${r}</option>`).join('')}</select>`;
+    const rows = aDraft.map((m, i) => {
+      const st = A.status.people[m.name];
+      const saved = A.members.some(x => x.name === m.name && x.email === m.email);
+      return `<tr>
+        <td data-label="이름"><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
+        <td data-label="이메일" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일"></td>
+        <td data-label="역할">${sel(i, m.role)}</td>
+        <td data-label="관리자"><label style="display:flex;justify-content:center"><input type="checkbox" class="check" ${m.admin ? 'checked' : ''} onchange="aEdit(${i},'admin',this.checked)" aria-label="관리자"></label></td>
+        <td data-label="열람 범위"><button class="linkish" onclick="adminTab='scope';render()">${isFull(m) ? '전체 (총괄·관리자)' : !m.scope || m.scope === SCOPE_ALL ? '전체' : scopeList(m).length ? `본인 + ${esc(scopeList(m).join(', '))}` : '본인 담당만'}</button></td>
+        ${st && saved ? `<td data-label="스프레드시트">${accessChip('sheet', st.sheet)}</td><td data-label="첨부 폴더">${accessChip('folder', st.folder)}</td>`
+          : `<td colspan="2" class="c-wide"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
+        <td class="c-x"><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">×</button></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="head">
+        <div><h1>담당자·권한</h1><p>시트·첨부 폴더 공유와 시트 보호는 「권한 한 번에 적용」으로 처리됩니다.</p></div>
+        <div class="head-actions">
+          <button class="btn" onclick="refreshAdmin()">상태 새로고침</button>
+          <button class="btn primary" onclick="applyAll()">권한 한 번에 적용</button>
+        </div>
+      </div>
+      <section class="panel">
+        <div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px">${resLine('스프레드시트', res.sheet)}${resLine('첨부 폴더', res.folder)}</div>
+        <p style="margin:10px 0 0;font-size:13px;color:${issues || noEmail ? 'var(--warn-ink)' : 'var(--ok-ink)'}">
+          ${issues || noEmail ? `확인이 필요한 사람 ${issues}명${noEmail ? ` · 이메일 없는 사람 ${noEmail}명` : ''}. "권한 한 번에 적용"을 누르면 대부분 해결됩니다.` : '✓ 모든 담당자의 권한이 정상입니다.'}
+        </p>
+      </section>
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="t cards admin-cards">
+            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">관리자</th><th>열람 범위</th><th>스프레드시트</th><th>첨부 폴더</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <button class="btn small add" onclick="aAdd()">+ 담당자 추가</button>
+        <details class="help"><summary>도움말</summary><div>
+          · <b>응대담당</b>: [대상자] 시트 담당자 칸에 이름이 있는 사람의 1차 검토 입력<br>
+          · <b>2차검토</b>: 2차검토 담당자 칸에 이름이 있는 사람의 2차 검토 입력<br>
+          · <b>총괄</b>: 모든 대상자 입력·담당 배정, 공지·응대지침·기준 등록<br>
+          · <b>관리자</b>: 이 권한 관리 메뉴 사용 (스프레드시트 소유자는 항상 관리자)<br>
+          · 이름은 [대상자] 시트의 담당자 칸과 똑같이 적어야 내 담당으로 연결됩니다.
+        </div></details>
+      </section>
+      <div class="save-bar" id="aBar" ${aDirty ? '' : 'hidden'}><div class="left">변경사항이 있습니다. 저장해야 반영됩니다.</div>
+        <div style="display:flex;gap:8px"><button class="btn" onclick="setAdmin(A)">되돌리기</button><button class="btn primary" id="aSave" onclick="saveMembers()">변경사항 저장</button></div></div>`;
+  }
+
+  function aEdit(i, k, v) {
+    aDraft[i][k] = v;
+    aDirty = true;
+    const bar = $('#aBar');
+    if (bar) bar.hidden = false;
+  }
+  function aAdd() {
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], admin: false, scope: '전체' });
+    aDirty = true;
+    render();
+    const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');
+    inputs[inputs.length - 1].focus();
+  }
+  function saveMembers(after) {
+    const list = aDraft.filter(m => m.name.trim()).map((m, i) => Object.assign({}, m, { order: i + 1 }));
+    const btn = $('#aSave');
+    if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+    return call('apiSaveMembers', list)
+      .then(data => { setAdmin(data); load(); toast('담당자 목록을 저장했습니다.'); if (after) after(); })
+      .catch(e => { if (btn) { btn.disabled = false; btn.textContent = '변경사항 저장'; } fail(e); });
+  }
+  function aRemove(i) {
+    const m = aDraft[i];
+    const saved = A.members.some(x => x.name === m.name);
+    if (!saved) { aDraft.splice(i, 1); render(); return; }
+    openModal(`<h3>${esc(m.name)}님을 담당자에서 뺄까요?</h3>
+      <p class="sub">담당자 목록에서 지우고 저장합니다. [대상자] 시트의 담당자 칸과 응대기록은 그대로 남습니다.</p>
+      ${m.email ? `<label style="display:flex;gap:8px;align-items:center;margin-bottom:14px"><input type="checkbox" class="check" id="rvk" checked> 스프레드시트·첨부 폴더 접근도 해제 (${esc(m.email)})</label>` : ''}
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="rmOk">빼기</button></div>`);
+    $('#rmOk').onclick = () => {
+      const revoke = $('#rvk') && $('#rvk').checked;
+      $('#rmOk').disabled = true;
+      aDraft.splice(i, 1);
+      saveMembers(() => {
+        if (!revoke) { closeModal(); return; }
+        call('apiRevokeAccess', m.email).then(res => { setAdmin(res.data); showLog(`${m.name}님 접근 해제`, res.log); }).catch(e => { closeModal(); fail(e); });
+      });
+    };
+  }
+  function applyAll() {
+    const run = () => {
+      openModal(`<h3>권한을 적용하는 중…</h3><p class="sub">시트·첨부 폴더 공유와 시트 보호를 처리하고 있습니다. 인원에 따라 10~30초 걸릴 수 있습니다.</p>`);
+      call('apiApplyPermissions').then(res => { setAdmin(res.data); showLog('권한 적용 결과', res.log); }).catch(e => { closeModal(); fail(e); });
+    };
+    if (aDirty) saveMembers(run); else run();
+  }
+  function showLog(title, log) {
+    openModal(`<h3>${esc(title)}</h3>
+      <div class="list" style="margin:10px 0 16px">${log.map(l => `<div class="list-row" style="grid-template-columns:24px minmax(0,1fr)"><span>${l.ok ? '✓' : '⚠️'}</span><span class="meta" style="color:${l.ok ? 'var(--ink)' : 'var(--warn-ink)'}">${esc(l.text)}</span></div>`).join('')}</div>
+      <div class="modal-actions"><button class="btn primary" onclick="closeModal()">확인</button></div>`);
+  }
+
+  /* ---------- 열람 범위: 담당자마다 어느 담당자의 대상자까지 볼지 ---------- */
+  const SCOPE_ALL = '전체', UNASSIGNED = '(미배정)';
+  const scopeList = m => (m.scope && m.scope !== SCOPE_ALL ? m.scope.split(',').filter(x => x && x !== '본인') : []);
+  const isFull = m => m.role === '총괄' || m.admin;
+  /** 서버의 canSee_와 같은 규칙으로 보이는 인원 수 (1차·2차 담당은 항상 포함) */
+  function scopeCount(m) {
+    const all = isFull(m) || !m.scope || m.scope === SCOPE_ALL, list = scopeList(m);
+    return A.assign.filter(([o, o2]) => all || !o || o === m.name || o2 === m.name || list.includes(o)).length;
+  }
+  function adminScope() {
+    // 열: 실제로 1차 담당이 있는 이름 + 응대담당 (총괄·2차검토만 하는 사람은 뺀다)
+    // 담당자가 없는 대상자는 항상 모두에게 보이므로 열로 두지 않는다
+    const cols = [...new Set(Object.keys(A.owners).filter(k => k !== UNASSIGNED).concat(aDraft.filter(m => m.name && m.role === '응대담당').map(m => m.name)))];
+    const head = cols.map(c => `<th style="text-align:center;white-space:nowrap">${esc(c)}<br><span style="font-weight:400">${A.owners[c] || 0}명</span></th>`).join('');
+    const rows = aDraft.map((m, i) => {
+      if (!m.name) return '';
+      if (isFull(m)) return `<tr><td class="strong">${esc(m.name)}<br><span style="color:var(--muted);font-size:12px">${esc(m.role)}${m.admin ? '·관리자' : ''}</span></td>
+        <td colspan="${cols.length + 1}" style="color:var(--muted)">총괄·관리자는 항상 모든 대상자를 봅니다.</td><td class="num">${scopeCount(m)}명</td></tr>`;
+      const all = !m.scope || m.scope === SCOPE_ALL, list = scopeList(m);
+      return `<tr><td class="strong">${esc(m.name)}<br><span style="color:var(--muted);font-size:12px">${esc(m.role)}</span></td>
+        <td style="text-align:center"><input type="checkbox" class="check" ${all ? 'checked' : ''} onchange="setScopeAll(${i}, this.checked)" aria-label="${esc(m.name)} 전체"></td>
+        ${cols.map(c => c === m.name
+          ? `<td style="text-align:center"><input type="checkbox" class="check" checked disabled title="본인 담당은 항상 보입니다" aria-label="본인 담당"></td>`
+          : `<td style="text-align:center"><input type="checkbox" class="check" ${all || list.includes(c) ? 'checked' : ''} ${all ? 'disabled' : ''} onchange="toggleScope(${i}, '${esc(c)}', this.checked)" aria-label="${esc(m.name)}에게 ${esc(c)} 담당 보이기"></td>`).join('')}
+        <td class="num"><b>${scopeCount(m)}명</b></td></tr>`;
+    }).join('');
+    return `
+      <div class="head"><div><h1>열람 범위</h1><p>체크하지 않은 담당자의 대상자는 보이지 않습니다. 설정하지 않으면 전체입니다.</p></div></div>
+      <section class="panel">
+        <div class="table-wrap"><table class="t">
+          <thead><tr><th>볼 사람 ＼ 담당자</th><th style="text-align:center">전체</th>${head}<th class="num">보이는 인원</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <details class="help"><summary>도움말</summary><div>
+          · 본인이 1차 담당이거나 2차검토 담당인 대상자는 항상 보입니다.<br>
+          · 아무 설정도 하지 않으면(전체) 모든 대상자가 보입니다.<br>
+          · 담당자가 정해지지 않은 대상자(${A.owners[UNASSIGNED] || 0}명)는 누구에게나 보이고, 「내가 담당하기」로 맡을 수 있습니다.<br>
+          · 응대기록과 대상자 증빙 첨부도 보이는 대상자 것만 나옵니다.<br>
+          · 바꾼 뒤 아래 「변경사항 저장」을 누르세요. 담당자는 새로고침하면 반영됩니다.
+        </div></details>
+      </section>
+      <div class="save-bar" id="aBar" ${aDirty ? '' : 'hidden'}><div class="left">변경사항이 있습니다. 저장해야 반영됩니다.</div>
+        <div style="display:flex;gap:8px"><button class="btn" onclick="setAdmin(A)">되돌리기</button><button class="btn primary" id="aSave" onclick="saveMembers()">변경사항 저장</button></div></div>`;
+  }
+  function setScopeAll(i, on) {
+    aDraft[i].scope = on ? SCOPE_ALL : '본인';
+    aDirty = true; render();
+  }
+  function toggleScope(i, name, on) {
+    const list = scopeList(aDraft[i]).filter(x => x !== name);
+    if (on) list.push(name);
+    aDraft[i].scope = ['본인'].concat(list).join(',');
+    aDirty = true; render();
+  }
+
+  function adminMenus() {
+    const rows = A.menus.map(m => `<tr><td class="strong">${esc(m.label)}</td>
+      ${A.roles.map(r => `<td style="text-align:center"><input type="checkbox" class="check" ${menuDraft[r][m.key] !== false ? 'checked' : ''} onchange="menuDraft['${r}']['${m.key}']=this.checked;$('#mSave').disabled=false" aria-label="${r} ${esc(m.label)}"></td>`).join('')}
+      <td style="text-align:center"><input type="checkbox" class="check" checked disabled aria-label="관리자 ${esc(m.label)}"></td></tr>`).join('');
+    return `
+      <div class="head"><div><h1>메뉴 권한</h1><p>끈 메뉴는 화면과 서버에서 모두 막힙니다.</p></div></div>
+      <section class="panel">
+        <div class="table-wrap"><table class="t" style="max-width:620px">
+          <thead><tr><th>메뉴</th>${A.roles.map(r => `<th style="text-align:center">${r}</th>`).join('')}<th style="text-align:center">관리자</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <details class="help"><summary>도움말</summary><div>· 관리자는 항상 모든 메뉴와 [권한 관리] 메뉴를 봅니다.<br>· 서류 검토를 끄면 그 역할에게는 대상자 증빙 첨부도 보이지 않습니다.</div></details>
+        <button class="btn primary" id="mSave" disabled onclick="saveMenus()">저장</button>
+      </section>`;
+  }
+  function saveMenus() {
+    $('#mSave').disabled = true;
+    call('apiSaveMenuAccess', menuDraft).then(data => { A.menuAccess = data.menuAccess; menuDraft = JSON.parse(JSON.stringify(data.menuAccess)); load(); toast('메뉴 권한을 저장했습니다. 다른 담당자는 새로고침하면 반영됩니다.'); })
+      .catch(e => { $('#mSave').disabled = false; fail(e); });
+  }
+
+  function adminSettings() {
+    const st = A.settings, res = A.status.resources;
+    const status = x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ 연결됨: ${esc(x.name)}` : esc(x.error)}</div>`;
+    return `
+      <div class="head"><div><h1>설정</h1></div></div>
+      <section class="panel" style="max-width:640px">
+        <form class="form" id="sForm" novalidate>
+          <div class="two">
+            <div class="fld"><label for="sTeam">업무명 (화면 제목)</label><input class="field-in" id="sTeam" value="${esc(st.team)}"></div>
+            <div class="fld"><label for="sYear">기본 연도 (지금 진행 중인 귀속연도)</label><select class="field-in" id="sYear">${st.years.map(y => `<option ${y === st.year ? 'selected' : ''}>${esc(y)}</option>`).join('')}</select></div>
+          </div>
+          <div class="fld"><label for="sFolder">첨부 폴더 (폴더 주소 또는 ID)</label><input class="field-in" id="sFolder" value="${esc(st.folderId)}" placeholder="https://drive.google.com/drive/folders/... 를 그대로 붙여넣어도 됩니다">${status(res.folder)}</div>
+          <p class="hint">증빙 서류가 올라가는 폴더입니다. 새 폴더를 만들어 담당자에게만 공유하세요. 기본 연도는 처음 접속했을 때 보이는 연도입니다.</p>
+          <div class="msg err" id="sErr" hidden></div>
+          <div><button class="btn primary" id="sOk">저장</button></div>
+        </form>
+      </section>
+      <section class="panel" style="max-width:640px">
+        <div class="panel-head"><h2>연도 관리</h2><span>관리 중인 연도: ${st.years.map(esc).join(', ')}</span></div>
+        <p class="hint" style="margin:0 0 12px">새 귀속연도를 시작하면 [대상자_연도]·[응대기록_연도]·[일정_연도] 시트를 새로 만듭니다. 지난 연도 자료는 그대로 남고, 왼쪽 위 연도 선택으로 언제든 볼 수 있습니다. 공지·기준·첨부도 연도별로 나뉘어 보입니다.</p>
+        <form class="form" id="yForm" novalidate>
+          <div class="fld"><label for="yYear">새 귀속연도</label><input class="field-in" id="yYear" inputmode="numeric" value="${Number(st.years[0]) + 1}" style="max-width:160px"></div>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="yCarry" checked> ${esc(st.year)}년 대상자 명단 가져오기 (기본 정보·담당자만, 진행 체크·특이사항은 비움)</label>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="yRules" checked> ${esc(st.year)}년 연말정산 기준 복사 (새 연도에서 고쳐 쓰기)</label>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="yBase" checked> 새 연도를 기본 연도로 지정</label>
+          <div class="msg err" id="yErr" hidden></div>
+          <div><button class="btn primary" id="yOk">새 연도 시작</button></div>
+        </form>
+      </section>`;
+  }
+  document.addEventListener('submit', e => {
+    if (e.target.id !== 'yForm') return;
+    e.preventDefault();
+    const y = $('#yYear').value.trim();
+    const err = m => { $('#yErr').textContent = m; $('#yErr').hidden = false; };
+    if (!/^\d{4}$/.test(y)) return err('연도는 2027처럼 네 자리로 입력해 주세요.');
+    if (A.settings.years.includes(y)) return err(`${y}년은 이미 있습니다.`);
+    $('#yOk').disabled = true; $('#yOk').textContent = `${y}년 만드는 중…`;
+    call('apiStartYear', { year: y, from: A.settings.year, carry: $('#yCarry').checked, copyRules: $('#yRules').checked, makeBase: $('#yBase').checked })
+      .then(res => { setAdmin(res.data); D = null; load(); toast(`${y}년 귀속을 시작했습니다.${res.carried ? ` 대상자 ${res.carried}명을 가져왔습니다.` : ''}${res.copied ? ` 기준 ${res.copied}건을 복사했습니다.` : ''}`); })
+      .catch(e2 => { $('#yOk').disabled = false; $('#yOk').textContent = '새 연도 시작'; err(e2.message || String(e2)); });
+  });
+  document.addEventListener('submit', e => {
+    if (e.target.id !== 'sForm') return;
+    e.preventDefault();
+    const s2 = { team: $('#sTeam').value, year: $('#sYear').value, folderId: $('#sFolder').value };
+    $('#sOk').disabled = true;
+    call('apiSaveSettings', s2).then(data => { setAdmin(data); load(); toast('설정을 저장했습니다.'); })
+      .catch(err => { $('#sOk').disabled = false; $('#sErr').textContent = err.message || String(err); $('#sErr').hidden = false; });
+  });
+
+  function adminGuide() {
+    const url = A.webAppUrl || '(아직 웹앱으로 배포되지 않았습니다)';
+    const msg = `[${D.team} 안내]\n아래 주소로 접속해 주세요. (회사 구글 계정으로 로그인)\n${url}\n\n· 처음 접속하면 "권한 검토" 화면이 한 번 나옵니다. "허용"을 눌러주세요.\n· "Google에서 확인하지 않은 앱" 경고가 나오면 "고급 → 이동"을 누르면 됩니다.\n· 서류 검토 > 내 담당에서 맡은 대상자를 확인하고, 응대한 내용은 응대기록에 남겨주세요.`;
+    return `
+      <div class="head"><div><h1>접속 안내</h1></div></div>
+      <section class="panel" style="max-width:720px;display:flex;flex-direction:column;gap:12px">
+        <div class="fld"><label for="gUrl">웹앱 주소</label><div style="display:flex;gap:6px"><input class="field-in" id="gUrl" value="${esc(url)}" readonly><button class="btn" onclick="copyText('gUrl')">복사</button></div></div>
+        <div class="fld"><label for="gMsg">안내 문구 (메신저·메일에 붙여넣기)</label><textarea class="field-in" id="gMsg" style="min-height:190px">${esc(msg)}</textarea></div>
+        <div><button class="btn primary" onclick="copyText('gMsg')">안내 문구 복사</button></div>
+      </section>`;
+  }
+  function copyText(id) {
+    const el = $('#' + id);
+    const done = () => toast('복사했습니다.');
+    try {
+      navigator.clipboard.writeText(el.value).then(done, () => { el.select(); toast('선택했습니다. Ctrl+C로 복사하세요.'); });
+    } catch (e) { el.select(); toast('선택했습니다. Ctrl+C로 복사하세요.'); }
+  }
+
+  /* ================= 첨부 파일 올리기 ================= */
+  const MAX_FILE = 10 * 1024 * 1024;
+  const UP = {};
+  function fileSize(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`; }
+  function extOf(name) { const m = /\.([a-z0-9]+)$/i.exec(name || ''); return m ? m[1].toUpperCase().slice(0, 4) : 'FILE'; }
+  function extClass(ext) {
+    ext = ext.toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return 'xls';
+    if (['doc', 'docx', 'hwp', 'hwpx', 'txt'].includes(ext)) return 'doc';
+    if (['ppt', 'pptx'].includes(ext)) return 'ppt';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext)) return 'img';
+    return '';
+  }
+  function fileRow(f, opts) {
+    opts = opts || {};
+    const ext = extOf(f.name);
+    const inner = `<span class="ext ${extClass(ext)}">${esc(ext)}</span>
+      <span class="fn">${esc(f.name)}${opts.inline ? '' : `<span class="fs">${opts.msg ? esc(opts.msg) : fileSize(f.size || 0)}</span>`}</span>${opts.tail || ''}`;
+    return opts.link
+      ? `<a class="file" href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(f.name)} (${fileSize(f.size || 0)})">${inner}</a>`
+      : `<div class="file ${opts.status || ''}">${inner}</div>`;
+  }
+  function filesView(files, inline) {
+    return files && files.length ? `<div class="files ${inline ? 'inline' : ''}">${files.map(f => fileRow(f, { link: true, inline })).join('')}</div>` : '';
+  }
+
+  function uploaderHtml(key, label) {
+    return `<div class="fld"><label for="drop-${key}">${label}</label>
+      <div class="drop" id="drop-${key}" tabindex="0" role="button"><span class="desk-only">파일을 끌어다 놓거나 </span><u>눌러서 파일 선택</u> · 한 파일 10MB 이하</div>
+      <input type="file" id="file-${key}" multiple hidden>
+      <div class="files" id="up-${key}"></div></div>`;
+  }
+  /** extra: { ref, refLabel, memo(함수), onDone } — 대상자 증빙·일반 자료는 올리자마자 [첨부]에 기록된다 */
+  function initUploader(key, area, existing, extra) {
+    UP[key] = { area, extra: extra || {}, items: (existing || []).map(f => ({ status: 'done', f })) };
+    const drop = $('#drop-' + key), input = $('#file-' + key);
+    drop.onclick = () => input.click();
+    drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } };
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); addFiles(key, e.dataTransfer.files); };
+    input.onchange = () => { addFiles(key, input.files); input.value = ''; };
+    drawUploader(key);
+  }
+  function addFiles(key, list) {
+    const ex = UP[key].extra;
+    Array.from(list).forEach(file => {
+      const it = { status: 'up', f: { name: file.name, size: file.size } };
+      UP[key].items.push(it);
+      if (file.size > MAX_FILE) { it.status = 'err'; it.msg = '10MB를 넘어 올릴 수 없습니다'; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        call('apiUploadFile', { name: file.name, mimeType: file.type, data: String(reader.result).split(',')[1], area: UP[key].area, ref: ex.ref || '', refLabel: ex.refLabel || '', memo: typeof ex.memo === 'function' ? ex.memo() : '' })
+          .then(res => { it.status = 'done'; it.f = res.file; applyData(res); if (ex.onDone) ex.onDone(); })
+          .catch(e => { it.status = 'err'; it.msg = e.message || String(e); })
+          .then(() => drawUploader(key));
+      };
+      reader.onerror = () => { it.status = 'err'; it.msg = '파일을 읽지 못했습니다'; drawUploader(key); };
+      reader.readAsDataURL(file);
+    });
+    drawUploader(key);
+  }
+  function drawUploader(key) {
+    const el = $('#up-' + key);
+    if (!el) return;
+    // 올리는 즉시 저장되는 곳(대상자 증빙·일반 자료)은 완료된 파일을 빼지 않는다
+    const instant = UP[key].area === 'person' || UP[key].area === 'etc';
+    el.innerHTML = UP[key].items.map((it, i) => fileRow(it.f, {
+      status: it.status === 'done' ? '' : it.status,
+      msg: it.status === 'err' ? it.msg : it.status === 'done' && instant ? '저장됨' : '',
+      tail: instant && it.status === 'done' ? '<span class="chip ok">✓</span>' : `<button type="button" class="icon-btn" onclick="removeUpload('${key}', ${i})" aria-label="${esc(it.f.name)} 첨부 빼기">×</button>`,
+    })).join('');
+  }
+  function removeUpload(key, i) { UP[key].items.splice(i, 1); drawUploader(key); }
+  function uploadsBusy(key) { return !!UP[key] && UP[key].items.some(it => it.status === 'up'); }
+  function uploadedFiles(key) { return UP[key] ? UP[key].items.filter(it => it.status === 'done').map(it => it.f) : []; }
+  const BUSY_MSG = '파일을 올리는 중입니다. 업로드가 끝난 뒤 다시 눌러주세요.';
+
+  document.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a.file[href^="#demo"]');
+    if (a) { e.preventDefault(); toast('예시 화면이라 파일을 열 수 없습니다. 실제로는 구글 드라이브에서 열립니다.'); }
+  });
+
+  /* ================= 모달 ================= */
+  function openModal(html, wide) {
+    $('#modal').classList.toggle('wide', !!wide);
+    $('#modal').innerHTML = html;
+    $('#scrim').hidden = false;
+    $('#modal').scrollTop = 0;
+    const first = $('#modal').querySelector('select:not([disabled]), input:not([disabled]):not([type=checkbox]), textarea:not([disabled])');
+    if (first && !wide) first.focus();
+  }
+  function closeModal() { $('#scrim').hidden = true; }
+  $('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#scrim').hidden) closeModal(); });
+
+  /* ================= 기타 동작 ================= */
+  function go(p) { page = p; closeModal(); render(); window.scrollTo(0, 0); }
+
+  document.addEventListener('click', e => { document.querySelectorAll('details.menu[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }); });
+  $('#nav').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) go(b.dataset.page);
+  });
+
+  // 예시 화면 전용: 보는 사람 전환
+  function renderDemoBar() {
+    const bar = $('#demoBar');
+    if (!window.MockApi || !MockApi.users) return;
+    bar.hidden = false;
+    bar.innerHTML = `<b>예시 화면</b><span>모든 이름·사번·금액은 예시 데이터입니다.</span>
+      <label>보는 사람 <select id="demoUser">${MockApi.users().map(u => `<option value="${esc(u.email)}" ${u.email === D.me.email ? 'selected' : ''}>${esc(u.name)} (${esc(u.role)})</option>`).join('')}</select></label>`;
+    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); A = null; reviewTab = 'mine'; D = null; load(); };
+  }
+
+  load();
+</script>
+
+</body></html>
