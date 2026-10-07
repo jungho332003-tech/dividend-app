@@ -31,7 +31,7 @@ window.MockApi = (function () {
   const COLS = [
     ['no', 'No.', '', '기본 정보', 'info'], ['dept', '부서', '', '기본 정보', 'info'], ['empNo', '사원번호', '', '기본 정보', 'info'], ['name', '성명', '', '기본 정보', 'info'],
     ['subgroup', '사원하위그룹명', '', '기본 정보', 'info'], ['payArea', '급여영역', '', '기본 정보', 'info'], ['rank', '직급', '', '기본 정보', 'info'],
-    ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'info'],
+    ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'info'], ['retired', '퇴사여부', 'bool', '기본 정보', 'info', '^(퇴사|퇴직)(여부)?$'],
     ['owner', '담당자', '', '담당', 'assign'], ['owner2', '2차검토 담당자', '', '담당', 'assign'],
     ['review2', '2차 서류검토 여부', 'bool', '2차 검토', 'second'], ['ehr', '시스템 등록', 'bool', '진행', 'first', '^(시스템등록|e-?hr등록)$'],
     ['arrived', '서류 도착여부', 'bool', '진행', 'first'], ['verified', '서류확인 및 검증', 'bool', '진행', 'first'],
@@ -66,7 +66,7 @@ window.MockApi = (function () {
     person({ no: '13', dept: '생산팀', empNo: '20130612', name: '권도윤', subgroup: '정규직', payArea: '공장', rank: '차장', phone: '010-2201-1113', email: 'doyun.kwon@example.com', owner: '박지호', owner2: '최유나', manual: true, missing: '기부금 영수증 원본(교회)', note1: '수기 제출 — 기부금 영수증 사본만 옴' }),
     person({ no: '14', dept: '생산팀', empNo: '20230102', name: '남궁별', subgroup: '정규직', payArea: '공장', rank: '사원', phone: '010-2201-1114', email: 'byul.namgung@example.com', owner: '박지호', owner2: '최유나', prevWork: '다라물산, 마바테크', prevCount: '2' }),
     person({ no: '15', dept: '품질팀', empNo: '20240205', name: '전시우', subgroup: '정규직', payArea: '공장', rank: '사원', phone: '010-2201-1115', email: 'siwoo.jeon@example.com', owner: '', owner2: '' }),
-    person({ no: '16', dept: '품질팀', empNo: '20240819', name: '홍나래', subgroup: '계약직', payArea: '공장', rank: '사원', phone: '010-2201-1116', email: 'narae.hong@example.com', owner: '', owner2: '', ehr: true }),
+    person({ no: '16', dept: '품질팀', empNo: '20240819', name: '홍나래', subgroup: '계약직', payArea: '공장', rank: '사원', phone: '010-2201-1116', email: 'narae.hong@example.com', owner: '', owner2: '', ehr: true, retired: true, note1: '2027.01.20 계약만료 퇴사 — 퇴사 때 연말정산 완료(검토 제외)' }),
     // 17~30: 담당자들이 자주 만나는 연말정산 응대 사례
     person({ no: '17', dept: '인사팀', empNo: '20120905', name: '노승현', subgroup: '정규직', payArea: '본사', rank: '차장', phone: '010-2201-1117', email: 'seunghyun.noh@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, note1: '모친 기본공제 신청 — 형(타사 재직)도 공제 신청했다고 함. 형제 중 한 명만 가능, 본인과 형 협의 결과 회신 대기' }),
     person({ no: '18', dept: '재무팀', empNo: '20170814', name: '구하늘', subgroup: '정규직', payArea: '본사', rank: '과장', phone: '010-2201-1118', email: 'haneul.koo@example.com', owner: '김도현', owner2: '최유나', ehr: true, arrived: true, verified: true, note1: '맞벌이 — 자녀 2명 중 첫째만 본인 공제, 둘째는 배우자 회사에서 공제. 자녀 교육비도 공제받는 쪽으로 맞춤 확인' }),
@@ -280,7 +280,7 @@ window.MockApi = (function () {
       let added = 0, updated = 0;
       rows.forEach(src => {
         const o = {};
-        COLS.forEach(c => { if (!(c.k in src)) return; const v = String(src[c.k]).trim(); o[c.k] = c.t !== 'bool' ? v : c.loose ? !!v && !/^(x|n|no|false|0|없음|무|해당없음|-)$/i.test(v) : /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직)$/i.test(v); });
+        COLS.forEach(c => { if (!(c.k in src)) return; const v = String(src[c.k]).trim(); o[c.k] = c.t !== 'bool' ? v : c.loose ? !!v && !/^(x|n|no|false|0|없음|무|해당없음|-)$/i.test(v) : /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직|퇴사|퇴직)$/i.test(v); });
         const ex = o.empNo && people.find(p => p.empNo === o.empNo);
         if (ex) { Object.assign(ex, o, { updated: stamp(), editor: m.name }); updated++; }
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }

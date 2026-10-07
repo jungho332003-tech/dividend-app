@@ -44,6 +44,8 @@ const COLS = [
   { k: 'phone', l: '전화번호', g: '기본 정보', who: 'info' },
   { k: 'email', l: '이메일주소', g: '기본 정보', who: 'info' },
   { k: 'leave', l: '휴직여부', t: 'bool', g: '기본 정보', who: 'info' },
+  // 퇴사자: 체크하면 명단에서 흐리게 보이고 대시보드 진행률에서 빠진다
+  { k: 'retired', l: '퇴사여부', t: 'bool', re: '^(퇴사|퇴직)(여부)?$', g: '기본 정보', who: 'info' },
   { k: 'owner', l: '담당자', g: '담당', who: 'assign' },
   { k: 'owner2', l: '2차검토 담당자', g: '담당', who: 'assign' },
   { k: 'review2', l: '2차 서류검토 여부', t: 'bool', g: '2차 검토', who: 'second' },
@@ -72,7 +74,7 @@ const META_COLS = [
 ];
 
 // 시트의 O, Y, ○, 완료 같은 표기를 체크로 인식
-const TRUE_RE = /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직)$/i;
+const TRUE_RE = /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직|퇴사|퇴직)$/i;
 function toBool_(v) {
   return v === true || TRUE_RE.test(String(v == null ? '' : v).trim());
 }

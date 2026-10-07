@@ -45,6 +45,16 @@ function setupPeopleSheets_(ss, year) {
   }
 }
 
+/** 새로 생긴 열(예: 퇴사여부)이 시트에 없으면 오른쪽 끝에 제목만 붙인다. 「기본 시트 만들기」를 다시 안 해도 저장된다 */
+function ensureCol_(sh, map, col) {
+  if (map[col.k]) return map[col.k];
+  const at = sh.getLastColumn() + 1;
+  sh.getRange(1, at).setValue(col.l);
+  styleHeader_(sh.getRange(1, at));
+  map[col.k] = at;
+  return at;
+}
+
 /** 1행 제목 → { 키: 열번호(1부터) } */
 function colMap_(sh) {
   const last = sh.getLastColumn();
@@ -176,7 +186,7 @@ function apiSavePerson(id, patch) {
       if (!canEdit_(me, cur, col, patch)) {
         throw new Error(`[${col.l}] 칸은 ${col.who === 'second' ? '2차검토 담당자' : col.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
       }
-      if (!map[k]) throw new Error(`[대상자] 시트에 "${col.l}" 열이 없습니다. 관리자에게 "기본 시트 만들기"를 다시 실행해 달라고 요청하세요.`);
+      ensureCol_(sh, map, col);
     });
     if (keys.indexOf('empNo') >= 0) {
       const emp = String(patch.empNo || '').trim();
@@ -250,6 +260,7 @@ function apiImportPeople(rows) {
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
+    COLS.forEach(c => { if (!map[c.k] && (rows || []).some(src => c.k in src)) ensureCol_(sh, map, c); });
     const width = sh.getLastColumn();
     const last = sh.getLastRow();
     const data = last >= 2 ? sh.getRange(2, 1, last - 1, width).getValues() : [];
@@ -365,7 +376,7 @@ function apiTemplateLink(withPeople) {
     ['· [대상자] 시트 2행부터 한 사람씩 적고, 웹앱 서류 검토 > 대상자 업로드에 이 파일을 올리세요.'],
     ['· 성명은 꼭 적어야 합니다. 사원번호가 이미 있으면 그 사람 정보를 갱신하고, 없으면 새로 추가합니다.'],
     ['· 빈 칸은 기존 값을 그대로 둡니다. 필요 없는 열은 비워 두거나 지워도 됩니다.'],
-    ['· 체크 항목(휴직여부, 시스템 등록, 서류 도착여부, 종전근무지 여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
+    ['· 체크 항목(휴직여부, 퇴사여부, 시스템 등록, 서류 도착여부, 종전근무지 여부 등)은 O로 적습니다. 이미 체크된 것을 풀려면 X로 적습니다.'],
     [`· 담당자·2차검토 담당자는 [담당자] 목록의 이름과 똑같이 적어야 내 담당으로 연결됩니다: ${staff.join(', ') || '(담당자 없음)'}`],
     ['· 열 순서는 바꿔도 됩니다. 1행 제목(열 이름)으로 맞춥니다.'],
     [''],

@@ -28,12 +28,12 @@ function withDefaults(api) {
     ['설정', '담당자', '대상자_' + Y, '응대기록_' + Y, '일정_' + Y, '공지', '공지댓글', '기준', '기준개정이력', '첨부', '메뉴권한'].forEach(n => assert(ss.getSheetByName(n), n));
     assert(!ss.getSheetByName('대상자'));
     const hdr = ss.getSheetByName('대상자_' + Y).getRange(1, 1, 1, 40).getValues()[0].filter(Boolean);
-    assert.strictEqual(hdr.length, 30);
-    assert.strictEqual(hdr[0], 'No.'); assert.strictEqual(hdr[13], '시스템 등록'); assert.strictEqual(hdr[28], '최종수정');
+    assert.strictEqual(hdr.length, 31);
+    assert.strictEqual(hdr[0], 'No.'); assert.strictEqual(hdr[10], '퇴사여부'); assert.strictEqual(hdr[14], '시스템 등록'); assert.strictEqual(hdr[29], '최종수정');
     assert(!hdr.includes('수기서류 제출') && !hdr.includes('월세액') && hdr.includes('종전근무지 여부'));
     assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7);
   });
-  ok('initialize twice is safe', () => { api.initialize(); assert.strictEqual(ss.getSheetByName('대상자_' + Y).getLastColumn(), 30); assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7); });
+  ok('initialize twice is safe', () => { api.initialize(); assert.strictEqual(ss.getSheetByName('대상자_' + Y).getLastColumn(), 31); assert.strictEqual(ss.getSheetByName('기준').getLastRow(), 7); });
 
   // 담당자 등록 (소유자 owner@x.com = 관리자)
   const mem = ss.getSheetByName('담당자');
@@ -58,7 +58,7 @@ function withDefaults(api) {
     assert.strictEqual(p.ehr, true); assert.strictEqual(p.arrived, true); assert.strictEqual(p.verified, false);
     assert.strictEqual(p.note1, '줄1\n줄2'); assert.strictEqual(p.editor, '정해린');
     const sh = ss.getSheetByName('대상자_' + Y);
-    assert.strictEqual(sh.get(2, 14), 'O'); // 시스템 등록 열(14번째)
+    assert.strictEqual(sh.get(2, 15), 'O'); // 시스템 등록 열(15번째)
   });
   ok('re-import updates by 사원번호', () => { const r = api.apiImportPeople([{ empNo: '1002', name: '서지안', dept: '재무2팀' }]); assert.strictEqual(r.updated, 1); assert.strictEqual(r.people.length, 3); assert.strictEqual(r.people[1].dept, '재무2팀'); assert.strictEqual(r.people[1].owner, '이수민'); });
 
@@ -208,7 +208,7 @@ function withDefaults(api) {
     assert(/\/export\?format=xlsx$/.test(r1.url)); assert.strictEqual(r1.count, 0);
     const book = books[Object.keys(books)[0]];
     const sh = book.getSheetByName('대상자');
-    assert.strictEqual(sh.get(1, 1), 'No.'); assert.strictEqual(sh.get(1, 4), '성명'); assert.strictEqual(sh.getLastColumn(), 28);
+    assert.strictEqual(sh.get(1, 1), 'No.'); assert.strictEqual(sh.get(1, 4), '성명'); assert.strictEqual(sh.getLastColumn(), 29);
     assert(book.getSheetByName('작성 안내'));
     const r2 = api.apiTemplateLink(true);
     assert.strictEqual(Object.keys(books).length, 1, 'reuses the same template');
@@ -313,8 +313,9 @@ function withDefaults(api) {
   ok('existing sheet: only meta columns appended', () => {
     api.initialize();
     assert(!ss.getSheetByName('대상자') && ss.getSheetByName('대상자_' + String(ss.getSheetByName('설정').get(3, 2))) === sh, '예전 대상자 시트를 연도 이름으로 바꿔 씀');
-    assert.strictEqual(sh.getLastColumn(), 37);
-    assert.strictEqual(sh.get(1, 36), '최종수정');
+    assert.strictEqual(sh.getLastColumn(), 38);
+    assert.strictEqual(sh.get(1, 36), '퇴사여부');
+    assert.strictEqual(sh.get(1, 37), '최종수정');
   });
   const mem = ss.getSheetByName('담당자');
   mem.getRange(2, 1, 5, 5).clearContent();
@@ -335,6 +336,21 @@ function withDefaults(api) {
     assert.strictEqual(sh.get(2, 18), '가나상사', '체크 유지 시 회사명 그대로');
     api.apiSavePerson('7001', { prevWork: false });
     assert.strictEqual(sh.get(2, 18), '');
+  });
+  ok('퇴사여부 열이 없어도 저장하면 끝에 붙는다', () => {
+    sh.getRange(1, 36).setValue('');
+    const r = api.apiSavePerson('7001', { retired: true });
+    assert.strictEqual(sh.get(1, 39), '퇴사여부');
+    assert.strictEqual(sh.get(2, 39), 'O');
+    assert.strictEqual(r.personPatch.retired, true);
+    assert.strictEqual(api.apiBootstrap().people[0].retired, true);
+  });
+  ok('업로드: 퇴사여부에 "퇴사"라고 적어도 체크', () => {
+    state.user = 'owner@x.com';
+    api.apiImportPeople([{ empNo: '7002', name: '퇴사자', retired: '퇴사' }, { empNo: '7001', name: '기존직원', retired: 'X' }]);
+    const ps = api.apiBootstrap().people;
+    assert.strictEqual(ps.find(p => p.empNo === '7002').retired, true);
+    assert.strictEqual(ps.find(p => p.empNo === '7001').retired, false);
   });
 }
 console.log(`\n${pass} passed${process.exitCode ? ' (with failures)' : ''}`);

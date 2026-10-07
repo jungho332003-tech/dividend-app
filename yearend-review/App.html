@@ -485,6 +485,10 @@
   .sheet-grid th { background: var(--panel-2); font-weight: 700; color: var(--ink); height: 44px; }
   .sheet-grid td.nm { font-weight: 600; }
   .sheet-grid tbody tr { cursor: pointer; }
+  .sheet-grid tr.gone td { color: var(--muted); background: var(--panel-2); }
+  .sheet-grid tr.gone td.nm { text-decoration: line-through; text-decoration-color: var(--line); }
+  .chip.emp-휴직 { background: var(--pend-bg); color: var(--pend-ink); }
+  .chip.emp-퇴사 { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
   .sheet-grid tbody tr:hover td { background: var(--accent-soft); }
   .modal.wide { max-width: 820px; }
   .form .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -655,6 +659,7 @@
   let reviewTab = 'mine';      // mine | all | logs
   let reviewStatus = 'all';
   let reviewOwner = '';
+  let reviewEmp = '';       // '' | 재직 | 휴직 | 퇴사
   let reviewQuery = '';
   let logQuery = '';
   let noticeFilter = 'all';
@@ -736,7 +741,7 @@
     $('#main').innerHTML = `<div class="loading">${esc(y)}년 자료를 불러오는 중…</div>`;
     call('apiSetYear', y).then(data => {
       setData(data);
-      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; calMonth = null; calSel = null;
+      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; reviewEmp = ''; calMonth = null; calSel = null;
       reviewTab = D.people.some(isMine) ? 'mine' : 'all';
       render();
       toast(`${y}년 귀속 자료로 바꿨습니다.`);
@@ -869,7 +874,9 @@
   }
 
   VIEWS.dash = function () {
-    const P = D.people;
+    // 퇴사자는 진행률·할 일에서 뺀다 (서류 검토 명단에는 흐리게 남아 있음)
+    const P = D.people.filter(p => !p.retired);
+    const gone = D.people.length - P.length;
     const cnt = k => P.filter(p => pStatus(p) === k).length;
     const done = cnt('done');
     const pct = P.length ? Math.round(done / P.length * 100) : 0;
@@ -879,7 +886,7 @@
     const stat = (label, value, sub, onclick, cls) => `<button class="stat ${cls || ''}" onclick="${onclick}"><span class="stat-l">${label}</span><span class="stat-v">${value}</span><span class="stat-s">${sub}</span></button>`;
     const kpis = `
       <div class="stats">
-        ${stat('검토 대상', `${P.length}<small>명</small>`, leave ? `휴직 ${leave}명` : '전체', "reviewTab='all';reviewStatus='all';go('review')")}
+        ${stat('검토 대상', `${P.length}<small>명</small>`, [leave ? `휴직 ${leave}명` : '', gone ? `퇴사 ${gone}명 제외` : ''].filter(Boolean).join(' · ') || '전체', "reviewTab='all';reviewStatus='all';reviewEmp='';go('review')")}
         ${D.me.name ? stat('내 차례', `${mine.length}<small>명</small>`, '1차·미비·2차', "reviewTab='mine';reviewStatus='all';go('review')", mine.length ? 'hot' : '') : ''}
         ${stat('미비서류', `${cnt('supp')}<small>명</small>`, '보완 요청', "reviewTab='all';reviewStatus='supp';go('review')", cnt('supp') ? 'warn' : '')}
         ${stat('2차 대기', `${cnt('wait2')}<small>명</small>`, '1차 완료', "reviewTab='all';reviewStatus='wait2';go('review')")}
@@ -1053,6 +1060,9 @@
   }
 
   /* ================= 서류 검토 ================= */
+  // 재직 구분: 퇴사여부가 휴직여부보다 우선
+  const empState = p => p.retired ? '퇴사' : p.leave ? '휴직' : '재직';
+  const empChip = p => p.retired || p.leave ? `<span class="chip emp-${empState(p)}">${empState(p)}</span>` : '';
   function reviewBase() {
     if (reviewTab === 'mine') return D.people.filter(isMine);
     return D.people.filter(p => !reviewOwner || p.owner === reviewOwner || p.owner2 === reviewOwner || (reviewOwner === '(미배정)' && !p.owner));
@@ -1061,6 +1071,7 @@
     const q = reviewQuery.trim().toLowerCase();
     return reviewBase()
       .filter(p => reviewStatus === 'all' || pStatus(p) === reviewStatus)
+      .filter(p => !reviewEmp || empState(p) === reviewEmp)
       .filter(p => !q || [p.empNo, p.name, p.dept, p.phone, p.email, p.missing, p.note1, p.note2].join(' ').toLowerCase().includes(q))
       .sort((a, b) => String(a.no).localeCompare(String(b.no), 'ko', { numeric: true }) || String(a.empNo).localeCompare(String(b.empNo), 'ko', { numeric: true }));
   }
@@ -1073,11 +1084,11 @@
     const BASIC = ['no', 'dept', 'empNo', 'name', 'subgroup', 'payArea', 'rank', 'phone', 'email', 'leave'];
     const shown = list.slice(0, reviewLimit);
     const rows = shown.map(p => `
-      <tr onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
-        ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? (p.leave ? 'O' : '') : esc(p[k])}</td>`).join('')}
+      <tr class="${p.retired ? 'gone' : ''}" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
+        ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? empChip(p) : esc(p[k])}</td>`).join('')}
       </tr>`).join('');
     return rows
-      ? `<div class="table-wrap"><table class="sheet-grid"><thead><tr>${BASIC.map(k => `<th>${esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ? `<div class="table-wrap"><table class="sheet-grid"><thead><tr>${BASIC.map(k => `<th>${k === 'leave' ? '휴직·퇴사' : esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
         ${list.length > shown.length ? `<button class="btn small more-rows" onclick="reviewLimit+=${PAGE_ROWS};$('#reviewList').innerHTML=reviewListHtml()">${PAGE_ROWS}명 더 보기 (남은 ${list.length - shown.length}명)</button>` : ''}
         <p class="hint" style="margin-top:8px">${list.length > shown.length ? `${list.length}명 중 ${shown.length}명 표시` : `${list.length}명`} · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
       : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
@@ -1127,6 +1138,7 @@
         <div class="search-row">
           <input class="search" id="reviewSearch" type="search" placeholder="사원번호·이름·부서·미비서류·특이사항 검색" value="${esc(reviewQuery)}" aria-label="대상자 검색">
           ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;reviewLimit=PAGE_ROWS;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
+          <select class="field-in" onchange="reviewEmp=this.value;reviewLimit=PAGE_ROWS;render()" aria-label="재직 구분">${[['', '재직·휴직·퇴사 전체'], ['재직', `재직 ${base.filter(p => empState(p) === '재직').length}`], ['휴직', `휴직 ${base.filter(p => p.leave && !p.retired).length}`], ['퇴사', `퇴사 ${base.filter(p => p.retired).length}`]].map(([v, l]) => `<option value="${v}" ${v === reviewEmp ? 'selected' : ''}>${l}</option>`).join('')}</select>
         </div>
         <div class="filters" style="margin-bottom:10px">${chips}</div>
         <div id="reviewList">${reviewListHtml()}</div>
@@ -1200,7 +1212,7 @@
     const files = personFiles(p);
     $('#modal').classList.add('wide');
     openModal(`
-      <h3>${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:14px">${esc(p.empNo)} · ${esc(p.dept)} ${esc(p.rank)}</span> ${statusChip(p)}</h3>
+      <h3>${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:14px">${esc(p.empNo)} · ${esc(p.dept)} ${esc(p.rank)}</span> ${empChip(p)} ${statusChip(p)}</h3>
       <p class="sub">${p.phone ? `☎ ${esc(p.phone)} · ` : ''}${p.email ? `${esc(p.email)} · ` : ''}최종 수정 ${esc(p.updated || '-')}${p.editor ? ` (${esc(p.editor)})` : ''}</p>
       <form class="form" id="personForm" novalidate>
         ${canTake ? `<div class="notice take"><span>아직 1차 담당자가 없습니다. 맡으면 검토 내용을 입력할 수 있습니다.</span><button type="button" class="btn small primary" onclick="draftOwner=D.me.name;drawPerson()">내가 담당하기</button></div>` : ''}
@@ -1229,6 +1241,8 @@
 
     if ($('#drop-person')) initUploader('person', 'person', [], { ref: p.empNo || p.id, refLabel: `${p.name}(${p.empNo})`, onDone: () => { $('#pFiles').innerHTML = filesView(personFiles(p)) || ''; } });
     $('#personForm').onsubmit = e => { e.preventDefault(); savePerson(); };
+    // 휴직·퇴사는 둘 중 하나만
+    [['pf_leave', 'pf_retired'], ['pf_retired', 'pf_leave']].forEach(([a, b]) => { const x = $('#' + a), y = $('#' + b); if (x && y) x.onchange = () => { if (x.checked && !y.disabled) y.checked = false; }; });
     if ($('#logForm')) $('#logForm').onsubmit = e => { e.preventDefault(); addLog(); };
   }
 
