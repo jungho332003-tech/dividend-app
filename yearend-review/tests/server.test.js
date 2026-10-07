@@ -90,6 +90,19 @@ function withDefaults(api) {
     const r = api.apiSavePerson('1002', { empNo: '2002' });
     assert.strictEqual(r.personPatch.id, '2002'); assert.strictEqual(r.oldId, '1002');
   });
+  ok('휴직·퇴사는 관리자만', () => {
+    as('kim@x.com'); throwsMsg(() => api.apiSavePerson('1001', { retired: true }), /관리자만/);
+    as('lead@x.com'); throwsMsg(() => api.apiSavePerson('1001', { leave: true }), /관리자만/);
+    api.apiImportPeople([{ empNo: '1001', name: '오민재', retired: 'O', dept: '인사2팀' }]);
+    let p = api.apiBootstrap().people.find(x => x.empNo === '1001');
+    assert.strictEqual(p.retired, false, '총괄 업로드의 퇴사 칸은 건너뜀'); assert.strictEqual(p.dept, '인사2팀');
+    as('owner@x.com');
+    assert.strictEqual(api.apiSavePerson('1001', { retired: true }).personPatch.retired, true);
+    api.apiImportPeople([{ empNo: '1001', name: '오민재', retired: 'X', leave: '휴직' }]);
+    p = api.apiBootstrap().people.find(x => x.empNo === '1001');
+    assert.strictEqual(p.retired, false); assert.strictEqual(p.leave, true);
+    api.apiSavePerson('1001', { leave: false, dept: '인사팀' });
+  });
   ok('add/delete person', () => {
     as('kim@x.com'); throwsMsg(() => api.apiAddPerson({ name: 'x' }), /총괄 또는 관리자/);
     as('lead@x.com');
@@ -339,6 +352,7 @@ function withDefaults(api) {
   });
   ok('퇴사여부 열이 없어도 저장하면 끝에 붙는다', () => {
     sh.getRange(1, 36).setValue('');
+    state.user = 'owner@x.com';
     const r = api.apiSavePerson('7001', { retired: true });
     assert.strictEqual(sh.get(1, 39), '퇴사여부');
     assert.strictEqual(sh.get(2, 39), 'O');

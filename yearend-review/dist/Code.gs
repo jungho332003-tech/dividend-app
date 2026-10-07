@@ -38,6 +38,7 @@ const CFG = {
  *  re: 해마다 이름이 바뀌는 열 매칭용 (공백 뺀 제목에 대해)
  *  who: 누가 고칠 수 있나
  *       info   기본 정보 — 1차 담당자·총괄
+ *       admin  휴직·퇴사 — 관리자만
  *       assign 담당 배정 — 총괄 (비어 있으면 본인을 1차 담당자로 지정 가능)
  *       first  1차 검토 — 1차 담당자·총괄
  *       second 2차 검토 — 2차 검토 담당자·총괄
@@ -52,9 +53,9 @@ const COLS = [
   { k: 'rank', l: '직급', g: '기본 정보', who: 'info' },
   { k: 'phone', l: '전화번호', g: '기본 정보', who: 'info' },
   { k: 'email', l: '이메일주소', g: '기본 정보', who: 'info' },
-  { k: 'leave', l: '휴직여부', t: 'bool', g: '기본 정보', who: 'info' },
-  // 퇴사자: 체크하면 명단에서 흐리게 보이고 대시보드 진행률에서 빠진다
-  { k: 'retired', l: '퇴사여부', t: 'bool', re: '^(퇴사|퇴직)(여부)?$', g: '기본 정보', who: 'info' },
+  // 휴직·퇴사는 관리자만 정한다. 퇴사자는 명단에서 흐리게 보이고 대시보드 진행률에서 빠진다
+  { k: 'leave', l: '휴직여부', t: 'bool', g: '기본 정보', who: 'admin' },
+  { k: 'retired', l: '퇴사여부', t: 'bool', re: '^(퇴사|퇴직)(여부)?$', g: '기본 정보', who: 'admin' },
   { k: 'owner', l: '담당자', g: '담당', who: 'assign' },
   { k: 'owner2', l: '2차검토 담당자', g: '담당', who: 'assign' },
   { k: 'review2', l: '2차 서류검토 여부', t: 'bool', g: '2차 검토', who: 'second' },
@@ -624,6 +625,7 @@ function findPersonRow_(sh, map, id) {
 
 /** 이 사람이 이 대상자의 이 칸을 고칠 수 있나 */
 function canEdit_(me, cur, col, patch) {
+  if (col.who === 'admin') return !!me.isAdmin;
   if (me.isLeader || me.isAdmin) return true;
   if (!me.name) return false;
   // 담당자가 비어 있으면 본인을 1차 담당자로 지정할 수 있다 (같은 저장에서 다른 칸도 함께 고칠 수 있다)
@@ -631,6 +633,10 @@ function canEdit_(me, cur, col, patch) {
   if (col.who === 'assign') return col.k === 'owner' && takes;
   if (col.who === 'second') return cur.owner2 === me.name;
   return cur.owner === me.name || takes;
+}
+
+function whoLabel_(col) {
+  return { admin: '관리자', second: '2차검토 담당자', assign: '총괄' }[col.who] || '담당자';
 }
 
 /** 저장할 값. 체크박스 칸(지금 값이 true/false)이면 체크박스로, 아니면 기존 시트처럼 O로 쓴다 */
@@ -663,7 +669,7 @@ function apiSavePerson(id, patch) {
     keys.forEach(k => {
       const col = COLS.find(c => c.k === k);
       if (!canEdit_(me, cur, col, patch)) {
-        throw new Error(`[${col.l}] 칸은 ${col.who === 'second' ? '2차검토 담당자' : col.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
+        throw new Error(`[${col.l}] 칸은 ${whoLabel_(col)}만 고칠 수 있습니다.`);
       }
       ensureCol_(sh, map, col);
     });
@@ -739,7 +745,7 @@ function apiImportPeople(rows) {
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
-    COLS.forEach(c => { if (!map[c.k] && (rows || []).some(src => c.k in src)) ensureCol_(sh, map, c); });
+    COLS.forEach(c => { if (!map[c.k] && (c.who !== 'admin' || me.isAdmin) && (rows || []).some(src => c.k in src)) ensureCol_(sh, map, c); });
     const width = sh.getLastColumn();
     const last = sh.getLastRow();
     const data = last >= 2 ? sh.getRange(2, 1, last - 1, width).getValues() : [];
@@ -755,6 +761,7 @@ function apiImportPeople(rows) {
       else { r = new Array(width).fill(''); data.push(r); if (emp) byEmp[emp] = data.length - 1; added++; }
       COLS.forEach(c => {
         if (!(c.k in src) || !map[c.k]) return;
+        if (c.who === 'admin' && !me.isAdmin) return; // 휴직·퇴사는 관리자가 올릴 때만 반영
         const old = r[map[c.k] - 1];
         r[map[c.k] - 1] = c.t === 'bool' ? cellValue_(c, old, boolOf_(c, src[c.k])) : String(src[c.k] == null ? '' : src[c.k]).trim();
       });
@@ -1747,7 +1754,7 @@ function apiStartYear(opts) {
       const dst = ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`);
       if (src && src.getLastRow() >= 2) {
         const smap = colMap_(src), dmap = colMap_(dst);
-        const keep = COLS.filter(c => c.who === 'info' || c.who === 'assign');
+        const keep = COLS.filter(c => c.who === 'info' || c.who === 'admin' || c.who === 'assign');
         const rows = src.getRange(2, 1, src.getLastRow() - 1, src.getLastColumn()).getValues()
           .filter(r => keep.some(c => smap[c.k] && String(r[smap[c.k] - 1]).trim()))
           .map(r => {

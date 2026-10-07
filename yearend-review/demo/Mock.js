@@ -31,7 +31,7 @@ window.MockApi = (function () {
   const COLS = [
     ['no', 'No.', '', '기본 정보', 'info'], ['dept', '부서', '', '기본 정보', 'info'], ['empNo', '사원번호', '', '기본 정보', 'info'], ['name', '성명', '', '기본 정보', 'info'],
     ['subgroup', '사원하위그룹명', '', '기본 정보', 'info'], ['payArea', '급여영역', '', '기본 정보', 'info'], ['rank', '직급', '', '기본 정보', 'info'],
-    ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'info'], ['retired', '퇴사여부', 'bool', '기본 정보', 'info', '^(퇴사|퇴직)(여부)?$'],
+    ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'admin'], ['retired', '퇴사여부', 'bool', '기본 정보', 'admin', '^(퇴사|퇴직)(여부)?$'],
     ['owner', '담당자', '', '담당', 'assign'], ['owner2', '2차검토 담당자', '', '담당', 'assign'],
     ['review2', '2차 서류검토 여부', 'bool', '2차 검토', 'second'], ['ehr', '시스템 등록', 'bool', '진행', 'first', '^(시스템등록|e-?hr등록)$'],
     ['arrived', '서류 도착여부', 'bool', '진행', 'first'], ['verified', '서류확인 및 검증', 'bool', '진행', 'first'],
@@ -206,6 +206,7 @@ window.MockApi = (function () {
   const visFiles = m => { const s = seen(m); return files.filter(f => (!f.year || f.year === curYear()) && m.menus.indexOf(AREA_MENU[f.area]) >= 0 && (f.area !== 'person' || s.has(f.ref))); };
   const sortNotices = () => notices.sort((a, b) => (b.pinned - a.pinned) || (['긴급', '중요', '일반'].indexOf(a.level) - ['긴급', '중요', '일반'].indexOf(b.level)) || b.date.localeCompare(a.date));
   function canEdit(m, cur, c, patch) {
+    if (c.who === 'admin') return m.isAdmin;
     if (lead(m)) return true;
     const takes = !cur.owner && patch.owner === m.name;
     if (c.who === 'assign') return c.k === 'owner' && takes;
@@ -259,7 +260,7 @@ window.MockApi = (function () {
       if (!canSee(m, cur)) throw new Error('열람 범위 밖의 대상자입니다.');
       Object.keys(patch).forEach(k => {
         const c = COLS.find(x => x.k === k);
-        if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
+        if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'admin' ? '관리자' : c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
       });
       Object.assign(cur, patch, { updated: stamp(), editor: m.name });
       cur.id = cur.empNo || id;
@@ -280,7 +281,7 @@ window.MockApi = (function () {
       let added = 0, updated = 0;
       rows.forEach(src => {
         const o = {};
-        COLS.forEach(c => { if (!(c.k in src)) return; const v = String(src[c.k]).trim(); o[c.k] = c.t !== 'bool' ? v : c.loose ? !!v && !/^(x|n|no|false|0|없음|무|해당없음|-)$/i.test(v) : /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직|퇴사|퇴직)$/i.test(v); });
+        COLS.forEach(c => { if (!(c.k in src) || (c.who === 'admin' && !m.isAdmin)) return; const v = String(src[c.k]).trim(); o[c.k] = c.t !== 'bool' ? v : c.loose ? !!v && !/^(x|n|no|false|0|없음|무|해당없음|-)$/i.test(v) : /^(o|y|yes|true|1|○|●|◯|v|✓|✔|완료|등록|제출|도착|신청|있음|해당|유|휴직|퇴사|퇴직)$/i.test(v); });
         const ex = o.empNo && people.find(p => p.empNo === o.empNo);
         if (ex) { Object.assign(ex, o, { updated: stamp(), editor: m.name }); updated++; }
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }
@@ -302,7 +303,7 @@ window.MockApi = (function () {
       const m = meInfo(); if (!m.isAdmin) throw new Error('관리자만 사용할 수 있습니다.');
       const y = String(o.year); if (stores[y]) throw new Error(`${y}년은 이미 있습니다.`);
       const from = stores[o.from || settings.year];
-      const keep = COLS.filter(c => c.who === 'info' || c.who === 'assign').map(c => c.k);
+      const keep = COLS.filter(c => c.who === 'info' || c.who === 'admin' || c.who === 'assign').map(c => c.k);
       const carried = o.carry ? from.people.map(p => { const n = blank(); keep.forEach(k => { n[k] = p[k]; }); n.id = n.empNo; n.updated = stamp(); n.editor = m.name; return n; }) : [];
       stores[y] = { people: carried, logs: [], events: [] };
       let copied = 0;

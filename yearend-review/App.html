@@ -796,6 +796,7 @@
 
   /** 서버의 canEdit_와 같은 규칙 (화면에서 막고, 서버에서도 다시 막는다) */
   function canEdit(p, c, draftOwner) {
+    if (c.who === 'admin') return !!D.me.isAdmin;
     if (isLead()) return true;
     if (!D.me.name) return false;
     const takes = !p.owner && draftOwner === D.me.name;
@@ -1169,7 +1170,7 @@
   function fieldHtml(p, c) {
     const id = 'pf_' + c.k;
     const off = !canEdit(p, c, draftOwner);
-    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}"><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}</label>`;
+    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}" ${off && c.who === 'admin' ? 'title="관리자만 바꿀 수 있습니다"' : ''}><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}${off && c.who === 'admin' ? ' <small style="color:var(--muted)">(관리자)</small>' : ''}</label>`;
     if (c.t === 'long') return `<div class="fld"><label for="${id}">${esc(c.l)}</label><textarea class="field-in" id="${id}" ${off ? 'disabled' : ''} style="min-height:64px">${esc(p[c.k])}</textarea></div>`;
     if (c.who === 'assign') {
       const opts = [''].concat(D.staff.map(s => s.name));
@@ -1490,6 +1491,7 @@
       const add = uniq.filter(isNew).length;
       $('#imHint').innerHTML = `인식된 열 ${r.cols}개 · 대상자 <b>${uniq.length}명</b> (새로 추가 ${add}명 · 갱신 ${uniq.length - add}명)`
         + (r.unknown.length ? `<br>무시되는 열: ${r.unknown.map(esc).join(', ')}` : '')
+        + (!D.me.isAdmin && r.data.some(o => 'leave' in o || 'retired' in o) ? '<br>휴직여부·퇴사여부 열은 관리자만 반영할 수 있어 이번 업로드에서는 건너뜁니다.' : '')
         + (r.dupInFile.length ? `<br><span style="color:var(--warn-ink)">파일 안에서 사원번호가 겹칩니다: ${r.dupInFile.map(esc).join(', ')} (아래쪽 줄 내용이 남습니다)</span>` : '');
       // 앞 5명 미리 보기
       const keys = ['no', 'dept', 'empNo', 'name', 'rank', 'owner', 'owner2'];

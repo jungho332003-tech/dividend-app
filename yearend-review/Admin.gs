@@ -257,7 +257,7 @@ function apiStartYear(opts) {
       const dst = ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`);
       if (src && src.getLastRow() >= 2) {
         const smap = colMap_(src), dmap = colMap_(dst);
-        const keep = COLS.filter(c => c.who === 'info' || c.who === 'assign');
+        const keep = COLS.filter(c => c.who === 'info' || c.who === 'admin' || c.who === 'assign');
         const rows = src.getRange(2, 1, src.getLastRow() - 1, src.getLastColumn()).getValues()
           .filter(r => keep.some(c => smap[c.k] && String(r[smap[c.k] - 1]).trim()))
           .map(r => {
