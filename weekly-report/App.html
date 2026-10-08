@@ -247,8 +247,17 @@
 
   /* 예산 막대 */
   .bars { display: flex; flex-direction: column; gap: 12px; }
-  .bar-row { display: grid; grid-template-columns: 88px minmax(0, 1fr) 100px; gap: 12px; align-items: center; cursor: default; }
-  .bar-row .nm { font-size: 13px; color: var(--ink-2); }
+  .bar-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 100px; gap: 12px; align-items: center; cursor: default; }
+  .bar-row .nm { font-size: 13px; color: var(--ink-2); line-height: 1.3; }
+  .bar-row .nm small { display: block; font-size: 11px; color: var(--muted); }
+  .c-move .mv { display: flex; align-items: center; gap: 6px; white-space: nowrap; line-height: 1.8; }
+  .c-move .tag { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; line-height: 18px; }
+  .c-move .tag.out { background: var(--warn-bg); color: var(--warn-ink); }
+  .c-move .tag.in { background: var(--accent-soft); color: var(--accent); }
+  fieldset.b-side { border: 1px solid var(--line); border-radius: 10px; padding: 6px 14px 12px; margin: 0; min-width: 0; }
+  fieldset.b-side legend { padding: 0 6px; }
+  .wk.out { background: var(--warn-ink); color: #fff; }
+  .wk.in { background: var(--accent); color: var(--accent-ink); }
   .bar-row .val { text-align: right; font-size: 13px; font-weight: 600; }
   .track { height: 10px; display: flex; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
   .seg { height: 100%; }
@@ -927,7 +936,7 @@
         <div class="list-row">
           <span class="who">${esc(r.req)}</span>
           <span class="chip plain">${esc(r.date.slice(5, 10))}</span>
-          <span class="meta">${esc(r.from)} → ${esc(r.to)} · <b>${won(r.amount)}원</b></span>
+          <span class="meta">${esc(bLabel(r.fromCost, r.from))} → ${esc(bLabel(r.toCost, r.to))} · <b>${won(r.amount)}원</b></span>
         </div>`).join('') || '<div class="empty">신청 내역이 없습니다.</div>';
 
       const boardPreview = D.board.slice(0, 4).map(p => `
@@ -1209,9 +1218,9 @@
         return `<tr>
           <td class="nowrap c-id"><span class="chip month">${monthName(reqMonth(r))}분</span> ${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">신청 ${esc(r.date)}</span></td>
           <td class="nowrap strong c-who">${esc(r.req)}</td>
-          <td class="nowrap c-move">${esc(r.from)} → ${esc(r.to)}</td>
+          <td class="c-move"><span class="mv"><b class="tag out">변경전</b>${esc(bLabel(r.fromCost, r.from))}</span><span class="mv"><b class="tag in">변경후</b>${esc(bLabel(r.toCost, r.to))}</span></td>
           <td class="num strong c-amt">${won(r.amount)}<span class="unit">원</span></td>
-          <td class="c-full">${esc(r.reason)}${filesView(r.files, true)}</td>
+          <td class="c-full">${esc(r.reason)}</td>
           <td class="nowrap c-act">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
         </tr>`;
       }).join('') || `<tr><td colspan="6" class="empty">${bm === 'all' ? '' : monthName(bm, true) + ' '}신청 내역이 없습니다.</td></tr>`;
@@ -1228,7 +1237,7 @@
           <div class="month-sum">${bm === 'all' ? '전체 기간' : monthName(bm, true)} 합계 <b>${list.length}건 · ${won(total)}원</b></div>
           <div class="table-wrap">
             <table class="t cards budget-cards">
-              <thead><tr><th>적용월 · 신청번호</th><th>신청자</th><th>전출 → 전입</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
+              <thead><tr><th>적용월 · 신청번호</th><th>신청자</th><th>변경전 → 변경후</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -1239,20 +1248,20 @@
       const a = D.budget.accounts;
       const sum = k => a.reduce((s, x) => s + x[k], 0);
       const rows = a.map(x => `
-        <tr><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inAmt)}</td><td class="num">${won(x.outAmt)}</td>
+        <tr><td>${esc(x.cost || '-')}</td><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inAmt)}</td><td class="num">${won(x.outAmt)}</td>
         <td class="num strong">${won(x.current)}</td></tr>`).join('');
       return `
-        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (취소한 건 제외)</p></div></div>
+        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (취소한 건 제외) · 예산은 [예산과목] 시트에 코스트·계정과목별로 입력합니다</p></div></div>
         <section class="panel">
-          <div class="panel-head"><h2>과목별 현재예산</h2><span>원</span></div>
+          <div class="panel-head"><h2>코스트·계정과목별 현재예산</h2><span>원</span></div>
           ${budgetBars()}
         </section>
         <section class="panel">
           <div class="table-wrap">
             <table class="t">
-              <thead><tr><th>과목명</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th></tr></thead>
+              <thead><tr><th>코스트</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th></tr></thead>
               <tbody>${rows}</tbody>
-              <tfoot><tr><td class="strong">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inAmt'))}</td><td class="num">${won(sum('outAmt'))}</td><td class="num strong">${won(sum('current'))}</td></tr></tfoot>
+              <tfoot><tr><td class="strong" colspan="2">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inAmt'))}</td><td class="num">${won(sum('outAmt'))}</td><td class="num strong">${won(sum('current'))}</td></tr></tfoot>
             </table>
           </div>
         </section>`;
@@ -1926,12 +1935,12 @@
 
   function budgetBars() {
     const a = D.budget.accounts;
-    if (!a.length) return '<div class="empty">[예산과목] 시트에 과목을 등록하세요.</div>';
+    if (!a.length) return '<div class="empty">[예산과목] 시트에 코스트·계정과목을 등록하세요.</div>';
     const max = Math.max(...a.map(x => x.current), 1);
     return `<div class="bars" id="bars">${a.map((x, i) => {
       const w = Math.max(x.current, 0) / max * 100;
-      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(x.name)} 현재예산 ${won(x.current)}원">
-        <span class="nm">${esc(x.name)}</span>
+      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(bLabel(x.cost, x.name))} 현재예산 ${won(x.current)}원">
+        <span class="nm">${x.cost ? `<small>${esc(x.cost)}</small>` : ''}${esc(x.name)}</span>
         <span class="track">${w ? `<span class="seg avail" style="width:${w}%"></span>` : ''}</span>
         <span class="val">${won(x.current)}</span>
       </div>`;
@@ -2273,51 +2282,71 @@
   function closeModal() { $('#scrim').hidden = true; }
   $('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeModal(); });
 
+  /** "1100 인사운영 / 교육훈련비" (코스트가 없으면 계정과목만) */
+  const bLabel = (cost, name) => cost ? `${cost} / ${name}` : name;
+  const findAcc = (cost, name) => D.budget.accounts.find(x => (x.cost || '') === cost && x.name === name);
+  function budgetCosts() { return D.budget.accounts.map(a => a.cost || '').filter((c, i, all) => all.indexOf(c) === i); }
+
   function openBudgetForm() {
-    const opts = D.budget.accounts.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+    const costOpts = budgetCosts().map(c => `<option value="${esc(c)}">${esc(c || '(코스트 없음)')}</option>`).join('');
     const reqField = D.me.name
       ? `<div class="fld"><label>신청자</label><input class="field-in" value="${esc(D.me.name)}" disabled></div>`
       : `<div class="fld"><label for="bReq">신청자</label><select class="field-in" id="bReq"><option value="">선택</option>${D.members.map(m => `<option>${esc(m.name)}</option>`).join('')}</select></div>`;
     const pick = budgetMonth && budgetMonth !== 'all' ? budgetMonth : ymNow();
     const months = budgetMonths();
     const monField = `<div class="fld"><label for="bMonth">적용월</label><select class="field-in" id="bMonth">${months.map(m => `<option value="${m.value}" ${m.value === pick ? 'selected' : ''}>${esc(m.label)}${m.current ? ' (이번 달)' : ''}</option>`).join('')}</select></div>`;
+    const side = (key, title, cls) => `
+        <fieldset class="b-side ${cls}">
+          <legend><span class="wk ${cls === 'from' ? 'out' : 'in'}">${title}</span></legend>
+          <div class="two">
+            <div class="fld"><label for="b${key}Cost">${title} 코스트</label><select class="field-in" id="b${key}Cost">${costOpts}</select></div>
+            <div class="fld"><label for="b${key}">${title} 계정과목</label><select class="field-in" id="b${key}"></select></div>
+          </div>
+          ${key === 'From' ? '<div class="hint" id="bHint"></div>' : ''}
+        </fieldset>`;
     openModal(`
       <h3>예산전용 신청</h3>
-      <p class="sub">전출과목의 예산을 줄여 전입과목으로 옮깁니다. 신청하면 바로 반영됩니다.</p>
+      <p class="sub">변경전 예산을 줄여 변경후로 옮깁니다. 신청하면 바로 반영됩니다.</p>
       <form class="form" id="bForm" novalidate>
         <div class="two">${reqField}${monField}</div>
-        <div class="two">
-          <div class="fld"><label for="bFrom">전출과목 (감액)</label><select class="field-in" id="bFrom"><option value="">선택</option>${opts}</select><div class="hint" id="bHint"></div></div>
-          <div class="fld"><label for="bTo">전입과목 (증액)</label><select class="field-in" id="bTo"><option value="">선택</option>${opts}</select></div>
-        </div>
+        ${side('From', '변경전', 'from')}
+        ${side('To', '변경후', 'to')}
         <div class="fld"><label for="bAmt">금액 (원)</label><input class="field-in" id="bAmt" inputmode="numeric" placeholder="예) 500,000"></div>
         <div class="fld"><label for="bReason">사유</label><textarea class="field-in" id="bReason" placeholder="전용이 필요한 사유"></textarea></div>
-        ${uploaderHtml('budget', '증빙 첨부 (선택) · 견적서, 품의서 등')}
         <div class="msg err" id="bErr" hidden></div>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="bSubmit">신청</button></div>
       </form>`);
-    $('#bFrom').onchange = () => {
-      const a = D.budget.accounts.find(x => x.name === $('#bFrom').value);
+    const hint = () => {
+      const a = findAcc($('#bFromCost').value, $('#bFrom').value);
       $('#bHint').textContent = a ? `현재예산 ${won(a.current)}원` : '';
     };
+    // 고른 코스트의 계정과목만 보여준다
+    const fill = key => {
+      const cost = $(`#b${key}Cost`).value;
+      $(`#b${key}`).innerHTML = '<option value="">선택</option>' + D.budget.accounts.filter(a => (a.cost || '') === cost)
+        .map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+      if (key === 'From') hint();
+    };
+    fill('From'); fill('To');
+    $('#bFromCost').onchange = () => fill('From');
+    $('#bToCost').onchange = () => fill('To');
+    $('#bFrom').onchange = hint;
     $('#bAmt').oninput = e => { const n = e.target.value.replace(/[^0-9]/g, ''); e.target.value = n ? Number(n).toLocaleString('ko-KR') : ''; };
-    initUploader('budget', 'budget');
     $('#bForm').onsubmit = e => {
       e.preventDefault();
       const form = {
         requester: D.me.name || ($('#bReq') && $('#bReq').value) || '',
         month: $('#bMonth').value,
-        from: $('#bFrom').value, to: $('#bTo').value,
+        fromCost: $('#bFromCost').value, from: $('#bFrom').value,
+        toCost: $('#bToCost').value, to: $('#bTo').value,
         amount: $('#bAmt').value.replace(/,/g, ''), reason: $('#bReason').value.trim(),
-        files: uploadedFiles('budget'),
       };
       const err = $('#bErr');
-      const a = D.budget.accounts.find(x => x.name === form.from);
+      const a = findAcc(form.fromCost, form.from);
       let msg = '';
       if (!form.requester || !form.from || !form.to || !form.amount || !form.reason) msg = '모든 항목을 입력해 주세요.';
-      else if (form.from === form.to) msg = '전출과목과 전입과목이 같습니다.';
-      else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${form.from} 현재예산 ${won(a.current)}원)`;
-      else if (uploadsBusy('budget')) msg = BUSY_MSG;
+      else if (form.fromCost === form.toCost && form.from === form.to) msg = '변경전과 변경후가 같습니다.';
+      else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${bLabel(form.fromCost, form.from)} 현재예산 ${won(a.current)}원)`;
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)
@@ -2329,7 +2358,7 @@
   function cancelBudget(row, id) {
     const r = D.budget.requests.find(x => x.row === row);
     openModal(`<h3>${esc(id)} 신청을 취소할까요?</h3>
-      <p class="sub">${esc(r.req)} · ${esc(r.from)} → ${esc(r.to)} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
+      <p class="sub">${esc(r.req)} · ${esc(bLabel(r.fromCost, r.from))} → ${esc(bLabel(r.toCost, r.to))} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
       <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" id="cxOk">신청 취소</button></div>`);
     $('#cxOk').onclick = () => {
       $('#cxOk').disabled = true;
@@ -2358,7 +2387,7 @@
   function showTip(row, x, y) {
     const a = D.budget.accounts[Number(row.dataset.i)];
     const tip = $('#tip');
-    tip.innerHTML = `<b>${esc(a.name)}</b>
+    tip.innerHTML = `<b>${esc(bLabel(a.cost, a.name))}</b>
       <div><span>편성액</span>${won(a.budget)}</div>
       <div><span>전입</span>+${won(a.inAmt)}</div>
       <div><span>전출</span>−${won(a.outAmt)}</div>

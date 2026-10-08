@@ -131,7 +131,8 @@ function applyProtections_(ctx) {
   const report = ss.getSheetByName(SHEET.REPORT) || ss.insertSheet(SHEET.REPORT, 0);
   protectSheetWithLeaderRange_(report, report.getRange(REPORT.FIRST_ROW, REPORT.COMMENT_COL, report.getMaxRows() - REPORT.FIRST_ROW + 1, 1), leaders.concat(admins), false, admins);
 
-  // 예산전용: 웹앱·메뉴로 신청 (직접 수정 시 경고만)
+  // 예산전용: 웹앱·메뉴로 신청 (직접 수정 시 경고만). 예전 양식이면 코스트 + 계정과목 양식으로 바꾼다
+  migrateBudgetSheets_(ss);
   const budget = ss.getSheetByName(BUDGET.SHEET);
   if (budget) warnOnlyProtect_(budget);
 

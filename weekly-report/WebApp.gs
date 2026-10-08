@@ -174,6 +174,8 @@ function currentMember_(members) {
 }
 
 function readBudget_(ss) {
+  // 예전 양식이면 코스트 + 계정과목 양식으로 바꾼다 (권한이 없으면 관리자가 "권한 한 번에 적용" 때 바뀐다)
+  try { migrateBudgetSheets_(ss); } catch (e) { /* 권한 없음 */ }
   const reqSh = ss.getSheetByName(BUDGET.SHEET);
   const reqRows = reqSh && reqSh.getLastRow() >= 2
     ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, BCOL.MONTH).getValues()
@@ -189,11 +191,12 @@ function readBudget_(ss) {
         id: String(x.r[0]),
         date: x.r[1] instanceof Date ? fmt(x.r[1], 'yyyy-MM-dd HH:mm') : String(x.r[1]),
         req: String(x.r[2]),
-        from: String(x.r[3]),
-        to: String(x.r[4]),
-        amount: Number(x.r[5]) || 0,
-        reason: String(x.r[6]),
-        files: filesFromCell_(x.r[BCOL.FILES - 1]),
+        fromCost: String(x.r[BCOL.FROM_COST - 1]).trim(),
+        from: String(x.r[BCOL.FROM - 1]).trim(),
+        toCost: String(x.r[BCOL.TO_COST - 1]).trim(),
+        to: String(x.r[BCOL.TO - 1]).trim(),
+        amount: Number(x.r[BCOL.AMOUNT - 1]) || 0,
+        reason: String(x.r[BCOL.REASON - 1]),
         month: monthOfRow_(x.r),
       }))
       .reverse(),
@@ -334,7 +337,7 @@ function apiCancelBudget(row, id) {
   const me = currentMember_(ctx.members);
   requireMenu_(me, 'budget');
   const sh = ctx.ss.getSheetByName(BUDGET.SHEET);
-  const v = sh.getRange(row, 1, 1, 8).getValues()[0];
+  const v = sh.getRange(row, 1, 1, BCOL.MONTH).getValues()[0];
   if (String(v[BCOL.ID - 1]) !== id) throw new Error('신청 내역이 바뀌었습니다. 새로고침 후 다시 시도하세요.');
   if (String(v[BCOL.REQUESTER - 1]) !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 신청한 건만 취소할 수 있습니다.');
   sh.getRange(row, BCOL.CANCELED).setValue('Y');

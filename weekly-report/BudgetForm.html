@@ -17,6 +17,8 @@
     #msg { margin-top: 12px; padding: 8px; border-radius: 4px; display: none; }
     #msg.err { display: block; background: #fde2e2; color: #a11; }
     #msg.ok { display: block; background: #e3f4e1; color: #1b5e20; }
+    h4 { margin: 16px 0 0; font-size: 13px; color: #1a73e8; border-top: 1px solid #eee; padding-top: 10px; }
+    .hint { margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -32,14 +34,27 @@
       </div>
     </div>
 
+    <h4>변경전 (감액)</h4>
     <div class="row">
       <div>
-        <label>전출과목 (감액)</label>
-        <select name="from" id="from" required onchange="showAvailable()"></select>
-        <div class="hint" id="fromHint"></div>
+        <label>변경전 코스트</label>
+        <select name="fromCost" id="fromCost" onchange="fillAccounts('from')"></select>
       </div>
       <div>
-        <label>전입과목 (증액)</label>
+        <label>변경전 계정과목</label>
+        <select name="from" id="from" required onchange="showAvailable()"></select>
+      </div>
+    </div>
+    <div class="hint" id="fromHint"></div>
+
+    <h4>변경후 (증액)</h4>
+    <div class="row">
+      <div>
+        <label>변경후 코스트</label>
+        <select name="toCost" id="toCost" onchange="fillAccounts('to')"></select>
+      </div>
+      <div>
+        <label>변경후 계정과목</label>
         <select name="to" id="to" required></select>
       </div>
     </div>
@@ -60,6 +75,7 @@
 
   <script>
     let accounts = [];
+    const $ = id => document.getElementById(id);
 
     function option(value, text) {
       const o = document.createElement('option');
@@ -70,23 +86,32 @@
 
     google.script.run.withSuccessHandler(data => {
       accounts = data.accounts;
-      const req = document.getElementById('requester');
+      const req = $('requester');
       req.appendChild(option('', '선택'));
       data.members.forEach(n => req.appendChild(option(n, n)));
       if (data.me) req.value = data.me;
-      const mon = document.getElementById('month');
-      (data.months || []).forEach(m => { mon.appendChild(option(m.value, m.label)); if (m.current) mon.value = m.value; });
+      (data.months || []).forEach(m => { $('month').appendChild(option(m.value, m.label)); if (m.current) $('month').value = m.value; });
 
-      ['from', 'to'].forEach(id => {
-        const sel = document.getElementById(id);
-        sel.appendChild(option('', '선택'));
-        accounts.forEach(a => sel.appendChild(option(a.name, a.name)));
-      });
+      // 코스트 목록 (빈 코스트는 "(코스트 없음)")
+      const costs = accounts.map(a => a.cost).filter((c, i, all) => all.indexOf(c) === i);
+      ['fromCost', 'toCost'].forEach(id => costs.forEach(c => $(id).appendChild(option(c, c || '(코스트 없음)'))));
+      fillAccounts('from');
+      fillAccounts('to');
     }).withFailureHandler(showError).getBudgetFormData();
 
+    /** 고른 코스트의 계정과목만 보여준다 */
+    function fillAccounts(side) {
+      const cost = $(side + 'Cost').value;
+      const sel = $(side);
+      sel.innerHTML = '';
+      sel.appendChild(option('', '선택'));
+      accounts.filter(a => a.cost === cost).forEach(a => sel.appendChild(option(a.name, a.name)));
+      if (side === 'from') showAvailable();
+    }
+
     function showAvailable() {
-      const a = accounts.find(x => x.name === document.getElementById('from').value);
-      document.getElementById('fromHint').textContent = a ? `현재예산 ${a.current.toLocaleString()}원` : '';
+      const a = accounts.find(x => x.cost === $('fromCost').value && x.name === $('from').value);
+      $('fromHint').textContent = a ? `현재예산 ${a.current.toLocaleString()}원` : '';
     }
 
     function formatAmount(el) {
@@ -95,22 +120,22 @@
     }
 
     function showError(err) {
-      const m = document.getElementById('msg');
+      const m = $('msg');
       m.className = 'err';
       m.textContent = err.message || err;
-      document.getElementById('submitBtn').disabled = false;
+      $('submitBtn').disabled = false;
     }
 
     function submitForm(e) {
       e.preventDefault();
-      document.getElementById('submitBtn').disabled = true;
-      document.getElementById('msg').className = '';
+      $('submitBtn').disabled = true;
+      $('msg').className = '';
       google.script.run
         .withSuccessHandler(id => {
-          const m = document.getElementById('msg');
+          const m = $('msg');
           m.className = 'ok';
           m.textContent = `신청되었습니다. (신청번호 ${id}) 예산에 바로 반영됩니다.`;
-          document.getElementById('f').querySelectorAll('input, textarea, select').forEach(el => el.disabled = true);
+          $('f').querySelectorAll('input, textarea, select').forEach(el => el.disabled = true);
         })
         .withFailureHandler(showError)
         .submitBudgetTransfer(e.target);
