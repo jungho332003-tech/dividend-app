@@ -1126,7 +1126,7 @@
       const s = stats();
       let rows = '';
       D.members.forEach(m => {
-        const n = Math.max(4, m.thisWeek.length, m.nextWeek.length);
+        const n = Math.max(1, m.thisWeek.length, m.nextWeek.length); // 빈 줄은 만들지 않는다
         for (let i = 0; i < n; i++) {
           const a = m.thisWeek[i] || {};
           const b = m.nextWeek[i] || {};
@@ -2070,7 +2070,7 @@
   function hrCanEdit(x) { return !!D.me.name && (x.author === D.me.name || D.me.isLeader || D.me.isAdmin); }
   function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek).find(x => x.id === id); }
 
-  /** 시트와 같은 모양: 구분별로 금주·차주를 나란히 (구분마다 최소 3줄) */
+  /** 시트와 같은 모양: 구분별로 금주·차주를 나란히 (빈 줄 없이) */
   function hrTableHtml(editable) {
     const h = hrData();
     const cell = (x, cls) => {
@@ -2082,7 +2082,8 @@
     hrCats().forEach(cat => {
       const a = h.thisWeek.filter(x => x.category === cat);
       const b = h.nextWeek.filter(x => x.category === cat);
-      const n = Math.max(3, a.length, b.length);
+      if (!a.length && !b.length) return; // 등록한 항목이 없는 구분은 숨긴다
+      const n = Math.max(a.length, b.length);
       for (let i = 0; i < n; i++) {
         const x = a[i], y = b[i];
         body += `<tr class="${i === 0 ? 'top' : ''}">`;
@@ -2096,7 +2097,7 @@
         <tr><th rowspan="2">구 분</th><th colspan="2">${esc(D.week.thisLabel)}</th><th colspan="2">${esc(D.week.nextLabel)}</th><th rowspan="2">비고</th></tr>
         <tr><th>대상 및 내용</th><th>일자/기간</th><th>대상 및 내용</th><th>발령일</th></tr>
       </thead>
-      <tbody>${body}</tbody>
+      <tbody>${body || '<tr><td colspan="6" class="empty">이번 주·다음 주에 등록된 인사현황이 없습니다.</td></tr>'}</tbody>
     </table>`;
   }
 

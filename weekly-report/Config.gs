@@ -48,7 +48,7 @@ const REPORT = {
   FIRST_ROW: 6,
   COLS: 7,
   COMMENT_COL: 7,
-  MIN_BLOCK_ROWS: 4,
+  MIN_BLOCK_ROWS: 1, // 빈 줄 없이 쓴 만큼만 (아무것도 안 썼으면 이름 줄 하나)
 };
 
 const PROP = {

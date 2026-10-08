@@ -57,7 +57,7 @@ const REPORT = {
   FIRST_ROW: 6,
   COLS: 7,
   COMMENT_COL: 7,
-  MIN_BLOCK_ROWS: 4,
+  MIN_BLOCK_ROWS: 1, // 빈 줄 없이 쓴 만큼만 (아무것도 안 썼으면 이름 줄 하나)
 };
 
 const PROP = {
@@ -1477,7 +1477,7 @@ function apiDeleteRule(id) {
 const HR = {
   SHEET: '인사현황',
   CATEGORIES: ['입사', '휴직', '복직', '퇴사', '인터뷰', '기타'],
-  MIN_ROWS: 3,
+  MIN_ROWS: 1, // 빈 줄 없이 등록한 만큼만
 };
 
 const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10 };
@@ -1534,9 +1534,12 @@ function hrPeriod_(start, end) {
   return `${md(start)}~${tail}`;
 }
 
-/** 구분별로 금주·차주를 나란히 놓은 표 줄: [{category, rows:[{a, b}]}] */
+/** 구분별로 금주·차주를 나란히 놓은 표 줄: [{category, rows:[{a, b}]}]. 등록한 항목이 없는 구분은 뺀다. */
 function hrTable_(hr) {
-  return HR.CATEGORIES.map(cat => {
+  const used = HR.CATEGORIES.concat(hr.thisWeek.concat(hr.nextWeek).map(x => x.category))
+    .filter((c, i, all) => all.indexOf(c) === i)
+    .filter(c => hr.thisWeek.concat(hr.nextWeek).some(x => x.category === c));
+  return used.map(cat => {
     const a = hr.thisWeek.filter(x => x.category === cat);
     const b = hr.nextWeek.filter(x => x.category === cat);
     const n = Math.max(HR.MIN_ROWS, a.length, b.length);
@@ -1634,6 +1637,10 @@ function writeHrTable_(sh, ctx, top) {
     blocks.push({ row: row, n: t.rows.length });
     row += t.rows.length;
   });
+  if (!values.length) {
+    values.push(['', '이번 주·다음 주에 등록된 인사현황이 없습니다.', '', '', '', '']);
+    row++;
+  }
   sh.getRange(h + 2, 1, values.length, 6).setNumberFormat('@').setValues(values)
     .setVerticalAlignment('middle').setWrap(true);
   [3, 5].forEach(c => sh.getRange(h + 2, c, values.length, 1).setHorizontalAlignment('center'));
