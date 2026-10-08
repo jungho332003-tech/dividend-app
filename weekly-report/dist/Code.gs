@@ -897,10 +897,12 @@ function setupTriggers() {
 /**
  * 예산전용 신청 (결재 없이 신청 내역만 기록)
  *
- * [예산과목]  코스트 | 계정과목 | 편성액 | 전입 | 전출 | 현재예산
- * [예산전용]  신청번호 | 신청일시 | 신청자 | 변경전 코스트 | 변경전 계정과목 | 변경후 코스트 | 변경후 계정과목 | 금액 | 사유 | 취소(Y) | 적용월
+ * [예산과목]  코스트 | 계정코드 | 계정과목 | 편성액 | 전입 | 전출 | 현재예산
+ * [예산전용]  신청번호 | 신청일시 | 신청자 | 변경전 코스트 | 변경전 계정코드 | 변경전 계정과목
+ *             | 변경후 코스트 | 변경후 계정코드 | 변경후 계정과목 | 금액 | 사유 | 취소(Y) | 적용월
  *
- * 예산은 "코스트 + 계정과목" 한 쌍마다 관리한다. 변경전(감액) → 변경후(증액)로 옮긴다.
+ * 예산은 "코스트(코스트센터) + 계정과목" 한 쌍마다 관리한다. 변경전(감액) → 변경후(증액)로 옮긴다.
+ * 계정코드는 [예산과목]에서 가져와 신청 내역에 함께 남긴다 (담당자가 ERP 등에 옮겨 적을 때 쓴다).
  * 적용월(yyyy-MM): 어느 달 예산을 전용하는지. 신청할 때 고르고, 내역은 월별로 볼 수 있다.
  * 신청하면 바로 예산에 반영된다. 잘못 신청한 건은 신청자 본인이나 팀장·관리자가 취소한다.
  */
@@ -911,9 +913,15 @@ const BUDGET = {
   ACCOUNT_ROWS: 100,
 };
 
-const BCOL = { ID: 1, DATE: 2, REQUESTER: 3, FROM_COST: 4, FROM: 5, TO_COST: 6, TO: 7, AMOUNT: 8, REASON: 9, CANCELED: 10, MONTH: 11 };
-const BUDGET_HEADER = ['신청번호', '신청일시', '신청자', '변경전 코스트', '변경전 계정과목', '변경후 코스트', '변경후 계정과목', '금액', '사유', '취소(Y)', '적용월'];
-const ACCOUNT_HEADER = ['코스트', '계정과목', '편성액', '전입', '전출', '현재예산'];
+const BCOL = {
+  ID: 1, DATE: 2, REQUESTER: 3,
+  FROM_COST: 4, FROM_CODE: 5, FROM: 6,
+  TO_COST: 7, TO_CODE: 8, TO: 9,
+  AMOUNT: 10, REASON: 11, CANCELED: 12, MONTH: 13,
+};
+const BUDGET_HEADER = ['신청번호', '신청일시', '신청자', '변경전 코스트', '변경전 계정코드', '변경전 계정과목',
+  '변경후 코스트', '변경후 계정코드', '변경후 계정과목', '금액', '사유', '취소(Y)', '적용월'];
+const ACCOUNT_HEADER = ['코스트', '계정코드', '계정과목', '편성액', '전입', '전출', '현재예산'];
 
 function setupBudgetSheets_(ss) {
   if (!ss.getSheetByName(BUDGET.SHEET)) {
@@ -924,12 +932,13 @@ function setupBudgetSheets_(ss) {
 
   if (!ss.getSheetByName(BUDGET.ACCOUNTS)) {
     const sh = ss.insertSheet(BUDGET.ACCOUNTS);
-    sh.getRange(1, 1, 1, 6).setValues([ACCOUNT_HEADER]);
+    sh.getRange(1, 1, 1, 7).setValues([ACCOUNT_HEADER]);
     const samples = [
-      ['1100 인사운영', '복리후생비'], ['1100 인사운영', '채용비'], ['1100 인사운영', '회의비'],
-      ['1200 인재개발', '교육훈련비'], ['1200 인재개발', '도서인쇄비'], ['1200 인재개발', '행사비'],
+      ['1100', '52100', '복리후생비'], ['1100', '52300', '채용비'], ['1100', '52400', '회의비'],
+      ['1200', '52500', '교육훈련비'], ['1200', '52600', '도서인쇄비'], ['1200', '52700', '행사비'],
     ];
-    sh.getRange(2, 1, samples.length, 3).setValues(samples.map(r => r.concat([0])));
+    sh.getRange(2, 1, BUDGET.ACCOUNT_ROWS, 2).setNumberFormat('@'); // 0으로 시작하는 코드도 그대로
+    sh.getRange(2, 1, samples.length, 4).setValues(samples.map(r => r.concat([0])));
     formatAccountSheet_(sh);
   }
   migrateBudgetSheets_(ss);
@@ -938,65 +947,84 @@ function setupBudgetSheets_(ss) {
 function formatBudgetSheet_(sh) {
   styleHeader_(sh.getRange(1, 1, 1, BCOL.MONTH));
   sh.getRange('B2:B').setNumberFormat('yyyy-mm-dd hh:mm');
-  sh.getRange('H2:H').setNumberFormat('#,##0');
-  sh.getRange('I2:I').setWrap(true);
-  sh.getRange('K2:K').setNumberFormat('@');
+  sh.getRange('D2:I').setNumberFormat('@');
+  sh.getRange('J2:J').setNumberFormat('#,##0');
+  sh.getRange('K2:K').setWrap(true);
+  sh.getRange('M2:M').setNumberFormat('@');
   sh.setConditionalFormatRules([
-    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$J2="Y"')
-      .setFontColor('#999999').setStrikethrough(true).setRanges([sh.getRange('A2:K')]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$L2="Y"')
+      .setFontColor('#999999').setStrikethrough(true).setRanges([sh.getRange('A2:M')]).build(),
   ]);
-  [110, 130, 80, 120, 120, 120, 120, 110, 320, 70, 80].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  [110, 130, 80, 90, 90, 120, 90, 90, 120, 110, 300, 70, 80].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.setFrozenRows(1);
-  sh.getRange('J1').setNote('Y면 취소된 건으로 예산에 반영되지 않습니다.');
+  sh.getRange('L1').setNote('Y면 취소된 건으로 예산에 반영되지 않습니다.');
 }
 
 /** 전입·전출·현재예산 수식: 코스트와 계정과목이 모두 같은 신청만 더한다 ("="&칸 → 코스트가 빈칸이어도 빈칸끼리 맞춘다) */
 function formatAccountSheet_(sh) {
-  styleHeader_(sh.getRange(1, 1, 1, 6));
+  styleHeader_(sh.getRange(1, 1, 1, 7));
   const b = `'${BUDGET.SHEET}'!`;
   const formulas = [];
   for (let r = 2; r < 2 + BUDGET.ACCOUNT_ROWS; r++) {
     formulas.push([
-      `=IF($B${r}="","",SUMIFS(${b}$H:$H,${b}$F:$F,"="&$A${r},${b}$G:$G,"="&$B${r},${b}$J:$J,"<>Y"))`,
-      `=IF($B${r}="","",SUMIFS(${b}$H:$H,${b}$D:$D,"="&$A${r},${b}$E:$E,"="&$B${r},${b}$J:$J,"<>Y"))`,
-      `=IF($B${r}="","",N($C${r})+D${r}-E${r})`,
+      `=IF($C${r}="","",SUMIFS(${b}$J:$J,${b}$G:$G,"="&$A${r},${b}$I:$I,"="&$C${r},${b}$L:$L,"<>Y"))`,
+      `=IF($C${r}="","",SUMIFS(${b}$J:$J,${b}$D:$D,"="&$A${r},${b}$F:$F,"="&$C${r},${b}$L:$L,"<>Y"))`,
+      `=IF($C${r}="","",N($D${r})+E${r}-F${r})`,
     ]);
   }
-  sh.getRange(2, 4, BUDGET.ACCOUNT_ROWS, 3).setFormulas(formulas);
-  sh.getRange(2, 3, BUDGET.ACCOUNT_ROWS, 4).setNumberFormat('#,##0');
-  sh.getRange(2, 6, BUDGET.ACCOUNT_ROWS, 1).setFontWeight('bold');
-  sh.setColumnWidth(1, 150).setColumnWidth(2, 150);
+  sh.getRange(2, 5, BUDGET.ACCOUNT_ROWS, 3).setFormulas(formulas);
+  sh.getRange(2, 4, BUDGET.ACCOUNT_ROWS, 4).setNumberFormat('#,##0');
+  sh.getRange(2, 7, BUDGET.ACCOUNT_ROWS, 1).setFontWeight('bold');
+  sh.setColumnWidth(1, 110).setColumnWidth(2, 110).setColumnWidth(3, 150);
   sh.setFrozenRows(1);
-  sh.getRange('A1').setNote('코스트(코스트센터)와 계정과목 한 쌍마다 한 줄. 편성액은 연간(또는 기간) 예산을 입력하세요.');
+  sh.getRange('A1').setNote('코스트센터 코드. 코스트와 계정과목 한 쌍마다 한 줄씩 입력하고, 편성액은 연간(또는 기간) 예산을 입력하세요.');
 }
 
 /**
- * 예전 양식(과목명만, 전출·전입과목)을 코스트 + 계정과목 양식으로 바꾼다. 이미 새 양식이면 아무것도 안 한다.
- * 기존 신청은 코스트가 빈칸인 채로 옮겨지고, 예산과목의 기존 과목도 코스트 빈칸으로 남는다 (나중에 채우면 됨).
+ * 예전 양식을 지금 양식(코스트 + 계정코드 + 계정과목)으로 바꾼다. 이미 지금 양식이면 아무것도 안 한다.
+ *  v1: 과목명만 (전출과목 | 전입과목)
+ *  v2: 코스트 + 계정과목 (계정코드 없음)
+ * 계정코드는 [예산과목]에 같은 코스트·계정과목이 있으면 그 코드로 채운다.
  */
 function migrateBudgetSheets_(ss) {
-  const req = ss.getSheetByName(BUDGET.SHEET);
-  if (req && String(req.getRange(1, BCOL.FROM_COST).getValue()).trim() !== BUDGET_HEADER[BCOL.FROM_COST - 1]) {
-    // 예전: 번호 | 일시 | 신청자 | 전출 | 전입 | 금액 | 사유 | 취소 | 첨부 | 적용월
-    const last = req.getLastRow();
-    const old = last >= 2 ? req.getRange(2, 1, last - 1, 10).getValues() : [];
-    const rows = old.map(r => [r[0], r[1], r[2], '', r[3], '', r[4], r[5], r[6], r[7], r[9] instanceof Date ? fmt(r[9], 'yyyy-MM') : r[9]]);
-    req.getRange(1, 1, Math.max(last, 1), Math.max(req.getLastColumn(), BCOL.MONTH)).clearContent().clearNote();
-    req.getRange(1, 1, 1, BCOL.MONTH).setValues([BUDGET_HEADER]);
-    if (rows.length) {
-      req.getRange(2, BCOL.MONTH, rows.length, 1).setNumberFormat('@');
-      req.getRange(2, 1, rows.length, BCOL.MONTH).setValues(rows);
+  const acc = ss.getSheetByName(BUDGET.ACCOUNTS);
+  if (acc) {
+    const a1 = String(acc.getRange(1, 1).getValue()).trim();
+    const b1 = String(acc.getRange(1, 2).getValue()).trim();
+    let changed = false;
+    if (a1 !== '코스트') { acc.insertColumnsBefore(1, 2); changed = true; }          // v1: 과목명 | 편성액 …
+    else if (b1 !== '계정코드') { acc.insertColumnBefore(2); changed = true; }      // v2: 코스트 | 계정과목 …
+    if (changed) {
+      acc.getRange(1, 1, 1, 7).setValues([ACCOUNT_HEADER]);
+      acc.getRange(2, 1, BUDGET.ACCOUNT_ROWS, 2).setNumberFormat('@');
+      formatAccountSheet_(acc);
     }
-    formatBudgetSheet_(req);
   }
 
-  const acc = ss.getSheetByName(BUDGET.ACCOUNTS);
-  if (acc && String(acc.getRange(1, 1).getValue()).trim() !== ACCOUNT_HEADER[0]) {
-    // 예전: 과목명 | 편성액 | 전입 | 전출 | 현재예산 → 맨 앞에 코스트 열을 넣는다
-    acc.insertColumnBefore(1);
-    acc.getRange(1, 1, 1, 6).setValues([ACCOUNT_HEADER]);
-    formatAccountSheet_(acc);
+  const req = ss.getSheetByName(BUDGET.SHEET);
+  if (!req) return;
+  const header = req.getRange(1, 1, 1, 6).getValues()[0].map(v => String(v).trim());
+  if (header[BCOL.FROM_CODE - 1] === BUDGET_HEADER[BCOL.FROM_CODE - 1]) return;
+  const v1 = header[3] !== '변경전 코스트';
+  const last = req.getLastRow();
+  const old = last >= 2 ? req.getRange(2, 1, last - 1, 11).getValues() : [];
+  const codes = {};
+  getAccounts_().forEach(a => { codes[a.cost + '\u0000' + a.name] = a.code; });
+  const code = (cost, name) => codes[String(cost).trim() + '\u0000' + String(name).trim()] || '';
+  const ym = v => (v instanceof Date ? fmt(v, 'yyyy-MM') : v);
+  const rows = old.map(r => v1
+    // 번호 | 일시 | 신청자 | 전출 | 전입 | 금액 | 사유 | 취소 | 첨부 | 적용월
+    ? [r[0], r[1], r[2], '', code('', r[3]), r[3], '', code('', r[4]), r[4], r[5], r[6], r[7], ym(r[9])]
+    // 번호 | 일시 | 신청자 | 변경전 코스트 | 변경전 계정과목 | 변경후 코스트 | 변경후 계정과목 | 금액 | 사유 | 취소 | 적용월
+    : [r[0], r[1], r[2], r[3], code(r[3], r[4]), r[4], r[5], code(r[5], r[6]), r[6], r[7], r[8], r[9], ym(r[10])]);
+  req.getRange(1, 1, Math.max(last, 1), Math.max(req.getLastColumn(), BCOL.MONTH)).clearContent().clearNote();
+  req.getRange(1, 1, 1, BCOL.MONTH).setValues([BUDGET_HEADER]);
+  if (rows.length) {
+    req.getRange(2, BCOL.FROM_COST, rows.length, 6).setNumberFormat('@');
+    req.getRange(2, BCOL.MONTH, rows.length, 1).setNumberFormat('@');
+    req.getRange(2, 1, rows.length, BCOL.MONTH).setValues(rows);
   }
+  formatBudgetSheet_(req);
 }
 
 /* ---------- 신청 폼 (스프레드시트 메뉴) ---------- */
@@ -1009,7 +1037,7 @@ function openBudgetForm() {
   SpreadsheetApp.getUi().showModalDialog(html, '💰 예산전용 신청');
 }
 
-/** 폼 초기값: 팀원 목록, 로그인 사용자, 코스트·계정과목별 현재예산 */
+/** 폼 초기값: 팀원 목록, 로그인 사용자, 코스트·계정코드·계정과목별 현재예산 */
 function getBudgetFormData() {
   const members = getMembers();
   const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
@@ -1056,23 +1084,27 @@ function monthLabel_(ym) {
   return `${Number(ym.slice(0, 4))}년 ${Number(ym.slice(5, 7))}월`;
 }
 
-/** "1100 인사운영 / 교육훈련비" (코스트가 비어 있으면 계정과목만) */
-function budgetLabel_(cost, account) {
-  return cost ? `${cost} / ${account}` : account;
+/** "1100 / 52500 교육훈련비" (비어 있는 부분은 뺀다) */
+function budgetLabel_(cost, code, account) {
+  const acc = [code, account].filter(Boolean).join(' ');
+  return cost ? `${cost} / ${acc}` : acc;
 }
 
 function getAccounts_() {
   const sh = SpreadsheetApp.getActive().getSheetByName(BUDGET.ACCOUNTS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
-    .filter(r => String(r[1]).trim())
+  const head = String(sh.getRange(1, 2).getValue()).trim();
+  if (head !== '계정코드') return []; // 아직 예전 양식 (관리자가 "권한 한 번에 적용"을 누르면 바뀐다)
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues()
+    .filter(r => String(r[2]).trim())
     .map(r => ({
       cost: String(r[0]).trim(),
-      name: String(r[1]).trim(),
-      budget: Number(r[2]) || 0,
-      inAmt: Number(r[3]) || 0,
-      outAmt: Number(r[4]) || 0,
-      current: Number(r[5]) || 0,
+      code: String(r[1]).trim(),
+      name: String(r[2]).trim(),
+      budget: Number(r[3]) || 0,
+      inAmt: Number(r[4]) || 0,
+      outAmt: Number(r[5]) || 0,
+      current: Number(r[6]) || 0,
     }));
 }
 
@@ -1096,17 +1128,18 @@ function submitBudgetTransfer(form) {
 
   const ss = SpreadsheetApp.getActive();
   try { migrateBudgetSheets_(ss); } catch (e) {
-    throw new Error('예산 시트를 새 양식(코스트 + 계정과목)으로 바꾸지 못했습니다. 관리자에게 "권한 한 번에 적용"을 요청하세요.');
+    throw new Error('예산 시트를 새 양식(코스트 + 계정코드 + 계정과목)으로 바꾸지 못했습니다. 관리자에게 "권한 한 번에 적용"을 요청하세요.');
   }
 
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
     const accounts = getAccounts_();
-    const fromLabel = budgetLabel_(fromCost, from), toLabel = budgetLabel_(toCost, to);
     const account = accounts.find(a => a.cost === fromCost && a.name === from);
-    if (!account) throw new Error(`[${fromLabel}] 예산을 찾을 수 없습니다. [예산과목] 시트를 확인하세요.`);
-    if (!accounts.some(a => a.cost === toCost && a.name === to)) throw new Error(`[${toLabel}] 예산을 찾을 수 없습니다. [예산과목] 시트를 확인하세요.`);
+    const target = accounts.find(a => a.cost === toCost && a.name === to);
+    if (!account) throw new Error(`[${budgetLabel_(fromCost, '', from)}] 예산을 찾을 수 없습니다. [예산과목] 시트를 확인하세요.`);
+    if (!target) throw new Error(`[${budgetLabel_(toCost, '', to)}] 예산을 찾을 수 없습니다. [예산과목] 시트를 확인하세요.`);
+    const fromLabel = budgetLabel_(fromCost, account.code, from), toLabel = budgetLabel_(toCost, target.code, to);
     if (amount > account.current) {
       throw new Error(`현재예산을 초과합니다. (${fromLabel} 현재예산: ${account.current.toLocaleString()}원)`);
     }
@@ -1115,8 +1148,10 @@ function submitBudgetTransfer(form) {
     const now = new Date();
     const id = nextBudgetId_(sh, now);
     const row = sh.getLastRow() + 1;
-    sh.getRange(row, BCOL.MONTH).setNumberFormat('@'); // '2026-10'이 날짜로 바뀌지 않게
-    sh.getRange(row, 1, 1, BCOL.MONTH).setValues([[id, now, requester, fromCost, from, toCost, to, amount, reason, '', month]]);
+    // 코드·적용월이 숫자나 날짜로 바뀌지 않게 (0으로 시작하는 코드, '2026-10')
+    sh.getRange(row, BCOL.FROM_COST, 1, 6).setNumberFormat('@');
+    sh.getRange(row, BCOL.MONTH).setNumberFormat('@');
+    sh.getRange(row, 1, 1, BCOL.MONTH).setValues([[id, now, requester, fromCost, account.code, from, toCost, target.code, to, amount, reason, '', month]]);
     SpreadsheetApp.flush();
     try { CacheService.getDocumentCache().remove(CK.budget); } catch (e) { /* 캐시 없음 */ }
 
@@ -2632,15 +2667,19 @@ function currentMember_(members) {
 }
 
 function readBudget_(ss) {
-  // 예전 양식이면 코스트 + 계정과목 양식으로 바꾼다 (권한이 없으면 관리자가 "권한 한 번에 적용" 때 바뀐다)
+  // 예전 양식이면 코스트 + 계정코드 + 계정과목 양식으로 바꾼다 (권한이 없으면 관리자가 "권한 한 번에 적용" 때 바뀐다)
   try { migrateBudgetSheets_(ss); } catch (e) { /* 권한 없음 */ }
   const reqSh = ss.getSheetByName(BUDGET.SHEET);
   const reqRows = reqSh && reqSh.getLastRow() >= 2
     ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, BCOL.MONTH).getValues()
     : [];
 
+  const accounts = getAccounts_();
+  // 계정코드가 비어 있는 예전 신청은 [예산과목]의 코드로 보여준다
+  const codeOf = (cost, name, v) => String(v || '').trim()
+    || (accounts.find(a => a.cost === String(cost).trim() && a.name === String(name).trim()) || {}).code || '';
   return {
-    accounts: getAccounts_(),
+    accounts: accounts,
     requests: reqRows
       .map((r, i) => ({ r: r, row: i + 2 }))
       .filter(x => String(x.r[0]).trim() && String(x.r[BCOL.CANCELED - 1]).toUpperCase() !== 'Y')
@@ -2650,8 +2689,10 @@ function readBudget_(ss) {
         date: x.r[1] instanceof Date ? fmt(x.r[1], 'yyyy-MM-dd HH:mm') : String(x.r[1]),
         req: String(x.r[2]),
         fromCost: String(x.r[BCOL.FROM_COST - 1]).trim(),
+        fromCode: codeOf(x.r[BCOL.FROM_COST - 1], x.r[BCOL.FROM - 1], x.r[BCOL.FROM_CODE - 1]),
         from: String(x.r[BCOL.FROM - 1]).trim(),
         toCost: String(x.r[BCOL.TO_COST - 1]).trim(),
+        toCode: codeOf(x.r[BCOL.TO_COST - 1], x.r[BCOL.TO - 1], x.r[BCOL.TO_CODE - 1]),
         to: String(x.r[BCOL.TO - 1]).trim(),
         amount: Number(x.r[BCOL.AMOUNT - 1]) || 0,
         reason: String(x.r[BCOL.REASON - 1]),
@@ -2815,4 +2856,4 @@ function apiRemind() {
 // BudgetForm.html (스프레드시트 메뉴의 예산전용 신청 화면)
 // ===================================================================
 
-const BUDGET_FORM_HTML = "<!DOCTYPE html>\n<html>\n<head>\n  <base target=\"_top\">\n  <style>\n    body { font-family: 'Malgun Gothic', sans-serif; font-size: 13px; color: #222; margin: 0; padding: 4px 8px; }\n    label { display: block; font-weight: bold; margin: 12px 0 4px; }\n    select, input, textarea { width: 100%; box-sizing: border-box; padding: 7px; font-size: 13px; border: 1px solid #bbb; border-radius: 4px; }\n    textarea { height: 90px; resize: vertical; }\n    .hint { color: #666; font-size: 12px; margin-top: 4px; min-height: 16px; }\n    .row { display: flex; gap: 10px; }\n    .row > div { flex: 1; }\n    .actions { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; }\n    button { padding: 8px 18px; font-size: 13px; border-radius: 4px; border: 1px solid #bbb; background: #fff; cursor: pointer; }\n    button.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }\n    button:disabled { opacity: .5; cursor: default; }\n    #msg { margin-top: 12px; padding: 8px; border-radius: 4px; display: none; }\n    #msg.err { display: block; background: #fde2e2; color: #a11; }\n    #msg.ok { display: block; background: #e3f4e1; color: #1b5e20; }\n    h4 { margin: 16px 0 0; font-size: 13px; color: #1a73e8; border-top: 1px solid #eee; padding-top: 10px; }\n    .hint { margin-top: 6px; }\n  </style>\n</head>\n<body>\n  <form id=\"f\" onsubmit=\"submitForm(event)\">\n    <div class=\"row\">\n      <div>\n        <label>신청자</label>\n        <select name=\"requester\" id=\"requester\" required></select>\n      </div>\n      <div>\n        <label>적용월</label>\n        <select name=\"month\" id=\"month\" required></select>\n      </div>\n    </div>\n\n    <h4>변경전 (감액)</h4>\n    <div class=\"row\">\n      <div>\n        <label>변경전 코스트</label>\n        <select name=\"fromCost\" id=\"fromCost\" onchange=\"fillAccounts('from')\"></select>\n      </div>\n      <div>\n        <label>변경전 계정과목</label>\n        <select name=\"from\" id=\"from\" required onchange=\"showAvailable()\"></select>\n      </div>\n    </div>\n    <div class=\"hint\" id=\"fromHint\"></div>\n\n    <h4>변경후 (증액)</h4>\n    <div class=\"row\">\n      <div>\n        <label>변경후 코스트</label>\n        <select name=\"toCost\" id=\"toCost\" onchange=\"fillAccounts('to')\"></select>\n      </div>\n      <div>\n        <label>변경후 계정과목</label>\n        <select name=\"to\" id=\"to\" required></select>\n      </div>\n    </div>\n\n    <label>금액 (원)</label>\n    <input name=\"amount\" id=\"amount\" inputmode=\"numeric\" placeholder=\"예) 500,000\" required oninput=\"formatAmount(this)\">\n\n    <label>사유</label>\n    <textarea name=\"reason\" required placeholder=\"전용이 필요한 사유를 적어주세요\"></textarea>\n\n    <div id=\"msg\"></div>\n\n    <div class=\"actions\">\n      <button type=\"button\" onclick=\"google.script.host.close()\">닫기</button>\n      <button type=\"submit\" class=\"primary\" id=\"submitBtn\">신청</button>\n    </div>\n  </form>\n\n  <script>\n    let accounts = [];\n    const $ = id => document.getElementById(id);\n\n    function option(value, text) {\n      const o = document.createElement('option');\n      o.value = value;\n      o.textContent = text;\n      return o;\n    }\n\n    google.script.run.withSuccessHandler(data => {\n      accounts = data.accounts;\n      const req = $('requester');\n      req.appendChild(option('', '선택'));\n      data.members.forEach(n => req.appendChild(option(n, n)));\n      if (data.me) req.value = data.me;\n      (data.months || []).forEach(m => { $('month').appendChild(option(m.value, m.label)); if (m.current) $('month').value = m.value; });\n\n      // 코스트 목록 (빈 코스트는 \"(코스트 없음)\")\n      const costs = accounts.map(a => a.cost).filter((c, i, all) => all.indexOf(c) === i);\n      ['fromCost', 'toCost'].forEach(id => costs.forEach(c => $(id).appendChild(option(c, c || '(코스트 없음)'))));\n      fillAccounts('from');\n      fillAccounts('to');\n    }).withFailureHandler(showError).getBudgetFormData();\n\n    /** 고른 코스트의 계정과목만 보여준다 */\n    function fillAccounts(side) {\n      const cost = $(side + 'Cost').value;\n      const sel = $(side);\n      sel.innerHTML = '';\n      sel.appendChild(option('', '선택'));\n      accounts.filter(a => a.cost === cost).forEach(a => sel.appendChild(option(a.name, a.name)));\n      if (side === 'from') showAvailable();\n    }\n\n    function showAvailable() {\n      const a = accounts.find(x => x.cost === $('fromCost').value && x.name === $('from').value);\n      $('fromHint').textContent = a ? `현재예산 ${a.current.toLocaleString()}원` : '';\n    }\n\n    function formatAmount(el) {\n      const n = el.value.replace(/[^0-9]/g, '');\n      el.value = n ? Number(n).toLocaleString() : '';\n    }\n\n    function showError(err) {\n      const m = $('msg');\n      m.className = 'err';\n      m.textContent = err.message || err;\n      $('submitBtn').disabled = false;\n    }\n\n    function submitForm(e) {\n      e.preventDefault();\n      $('submitBtn').disabled = true;\n      $('msg').className = '';\n      google.script.run\n        .withSuccessHandler(id => {\n          const m = $('msg');\n          m.className = 'ok';\n          m.textContent = `신청되었습니다. (신청번호 ${id}) 예산에 바로 반영됩니다.`;\n          $('f').querySelectorAll('input, textarea, select').forEach(el => el.disabled = true);\n        })\n        .withFailureHandler(showError)\n        .submitBudgetTransfer(e.target);\n    }\n  </script>\n</body>\n</html>\n";
+const BUDGET_FORM_HTML = "<!DOCTYPE html>\n<html>\n<head>\n  <base target=\"_top\">\n  <style>\n    body { font-family: 'Malgun Gothic', sans-serif; font-size: 13px; color: #222; margin: 0; padding: 4px 8px; }\n    label { display: block; font-weight: bold; margin: 12px 0 4px; }\n    select, input, textarea { width: 100%; box-sizing: border-box; padding: 7px; font-size: 13px; border: 1px solid #bbb; border-radius: 4px; }\n    textarea { height: 90px; resize: vertical; }\n    .hint { color: #666; font-size: 12px; margin-top: 4px; min-height: 16px; }\n    .row { display: flex; gap: 10px; }\n    .row > div { flex: 1; }\n    .actions { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; }\n    button { padding: 8px 18px; font-size: 13px; border-radius: 4px; border: 1px solid #bbb; background: #fff; cursor: pointer; }\n    button.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }\n    button:disabled { opacity: .5; cursor: default; }\n    #msg { margin-top: 12px; padding: 8px; border-radius: 4px; display: none; }\n    #msg.err { display: block; background: #fde2e2; color: #a11; }\n    #msg.ok { display: block; background: #e3f4e1; color: #1b5e20; }\n    h4 { margin: 16px 0 0; font-size: 13px; color: #1a73e8; border-top: 1px solid #eee; padding-top: 10px; }\n    .hint { margin-top: 6px; }\n  </style>\n</head>\n<body>\n  <form id=\"f\" onsubmit=\"submitForm(event)\">\n    <div class=\"row\">\n      <div>\n        <label>신청자</label>\n        <select name=\"requester\" id=\"requester\" required></select>\n      </div>\n      <div>\n        <label>적용월</label>\n        <select name=\"month\" id=\"month\" required></select>\n      </div>\n    </div>\n\n    <h4>변경전 (감액)</h4>\n    <div class=\"row\">\n      <div>\n        <label>변경전 코스트</label>\n        <select name=\"fromCost\" id=\"fromCost\" onchange=\"fillAccounts('from')\"></select>\n      </div>\n      <div>\n        <label>변경전 계정과목</label>\n        <select name=\"from\" id=\"from\" required onchange=\"showAvailable()\"></select>\n      </div>\n    </div>\n    <div class=\"hint\" id=\"fromHint\"></div>\n\n    <h4>변경후 (증액)</h4>\n    <div class=\"row\">\n      <div>\n        <label>변경후 코스트</label>\n        <select name=\"toCost\" id=\"toCost\" onchange=\"fillAccounts('to')\"></select>\n      </div>\n      <div>\n        <label>변경후 계정과목</label>\n        <select name=\"to\" id=\"to\" required></select>\n      </div>\n    </div>\n\n    <label>금액 (원)</label>\n    <input name=\"amount\" id=\"amount\" inputmode=\"numeric\" placeholder=\"예) 500,000\" required oninput=\"formatAmount(this)\">\n\n    <label>사유</label>\n    <textarea name=\"reason\" required placeholder=\"전용이 필요한 사유를 적어주세요\"></textarea>\n\n    <div id=\"msg\"></div>\n\n    <div class=\"actions\">\n      <button type=\"button\" onclick=\"google.script.host.close()\">닫기</button>\n      <button type=\"submit\" class=\"primary\" id=\"submitBtn\">신청</button>\n    </div>\n  </form>\n\n  <script>\n    let accounts = [];\n    const $ = id => document.getElementById(id);\n\n    function option(value, text) {\n      const o = document.createElement('option');\n      o.value = value;\n      o.textContent = text;\n      return o;\n    }\n\n    google.script.run.withSuccessHandler(data => {\n      accounts = data.accounts;\n      const req = $('requester');\n      req.appendChild(option('', '선택'));\n      data.members.forEach(n => req.appendChild(option(n, n)));\n      if (data.me) req.value = data.me;\n      (data.months || []).forEach(m => { $('month').appendChild(option(m.value, m.label)); if (m.current) $('month').value = m.value; });\n\n      // 코스트 목록 (빈 코스트는 \"(코스트 없음)\")\n      const costs = accounts.map(a => a.cost).filter((c, i, all) => all.indexOf(c) === i);\n      ['fromCost', 'toCost'].forEach(id => costs.forEach(c => $(id).appendChild(option(c, c || '(코스트 없음)'))));\n      fillAccounts('from');\n      fillAccounts('to');\n    }).withFailureHandler(showError).getBudgetFormData();\n\n    /** 고른 코스트의 계정과목만 보여준다 */\n    function fillAccounts(side) {\n      const cost = $(side + 'Cost').value;\n      const sel = $(side);\n      sel.innerHTML = '';\n      sel.appendChild(option('', '선택'));\n      accounts.filter(a => a.cost === cost).forEach(a => sel.appendChild(option(a.name, [a.code, a.name].filter(Boolean).join(' '))));\n      if (side === 'from') showAvailable();\n    }\n\n    function showAvailable() {\n      const a = accounts.find(x => x.cost === $('fromCost').value && x.name === $('from').value);\n      $('fromHint').textContent = a ? `${a.code ? '계정코드 ' + a.code + ' · ' : ''}현재예산 ${a.current.toLocaleString()}원` : '';\n    }\n\n    function formatAmount(el) {\n      const n = el.value.replace(/[^0-9]/g, '');\n      el.value = n ? Number(n).toLocaleString() : '';\n    }\n\n    function showError(err) {\n      const m = $('msg');\n      m.className = 'err';\n      m.textContent = err.message || err;\n      $('submitBtn').disabled = false;\n    }\n\n    function submitForm(e) {\n      e.preventDefault();\n      $('submitBtn').disabled = true;\n      $('msg').className = '';\n      google.script.run\n        .withSuccessHandler(id => {\n          const m = $('msg');\n          m.className = 'ok';\n          m.textContent = `신청되었습니다. (신청번호 ${id}) 예산에 바로 반영됩니다.`;\n          $('f').querySelectorAll('input, textarea, select').forEach(el => el.disabled = true);\n        })\n        .withFailureHandler(showError)\n        .submitBudgetTransfer(e.target);\n    }\n  </script>\n</body>\n</html>\n";

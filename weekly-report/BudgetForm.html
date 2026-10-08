@@ -105,13 +105,13 @@
       const sel = $(side);
       sel.innerHTML = '';
       sel.appendChild(option('', '선택'));
-      accounts.filter(a => a.cost === cost).forEach(a => sel.appendChild(option(a.name, a.name)));
+      accounts.filter(a => a.cost === cost).forEach(a => sel.appendChild(option(a.name, [a.code, a.name].filter(Boolean).join(' '))));
       if (side === 'from') showAvailable();
     }
 
     function showAvailable() {
       const a = accounts.find(x => x.cost === $('fromCost').value && x.name === $('from').value);
-      $('fromHint').textContent = a ? `현재예산 ${a.current.toLocaleString()}원` : '';
+      $('fromHint').textContent = a ? `${a.code ? '계정코드 ' + a.code + ' · ' : ''}현재예산 ${a.current.toLocaleString()}원` : '';
     }
 
     function formatAmount(el) {

@@ -338,6 +338,24 @@
   .month-sum { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
   .month-sum b { color: var(--ink); }
   .chip.month { background: var(--accent-soft); color: var(--accent); }
+  /* 월별 정리 (복사) */
+  .copy-t { min-width: 940px; }
+  .copy-t th { white-space: nowrap; vertical-align: middle; }
+  .copy-t th, .copy-t td { padding-left: 7px; padding-right: 7px; }
+  .copy-t th.g-out { background: var(--warn-bg); color: var(--warn-ink); }
+  .copy-t th.g-in { background: var(--accent-soft); color: var(--accent); }
+  .copy-t td.c { text-align: center; }
+  .copy-t td.nm { color: var(--ink-2); white-space: nowrap; }
+  .copy-t td.reason { min-width: 140px; color: var(--muted); font-size: 12.5px; }
+  .copy-t small.ph { font-size: 11.5px; }
+  .copy-t tr.row-done td { background: var(--panel-2); color: var(--muted); }
+  .cp { display: inline-flex; align-items: center; gap: 6px; border: 1px dashed var(--line-strong); background: var(--panel); color: var(--ink);
+    border-radius: 6px; padding: 3px 7px; font: inherit; font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; white-space: nowrap; }
+  .cp svg { opacity: .45; }
+  .cp:hover { border-color: var(--accent); color: var(--accent); }
+  .cp:hover svg { opacity: 1; }
+  .cp.done { border-style: solid; border-color: transparent; background: var(--accent-soft); color: var(--accent); }
+  .cp.done svg { opacity: 1; }
   .filters { display: inline-flex; flex-wrap: wrap; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
   .filters button { border: 0; background: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 500; }
   .filters button:hover { color: var(--ink); }
@@ -869,7 +887,7 @@
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
     weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
-    budget: () => ({ list: '신청 내역', status: '예산현황' })[budgetTab],
+    budget: () => ({ list: '신청 내역', copy: '월별 정리', status: '예산현황' })[budgetTab],
     admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', settings: '설정', guide: '접속 안내' })[adminTab],
   };
   /** 위쪽 줄: 현재 위치(경로) · 이번 주 · 내 이름 */
@@ -936,7 +954,7 @@
         <div class="list-row">
           <span class="who">${esc(r.req)}</span>
           <span class="chip plain">${esc(r.date.slice(5, 10))}</span>
-          <span class="meta">${esc(bLabel(r.fromCost, r.from))} → ${esc(bLabel(r.toCost, r.to))} · <b>${won(r.amount)}원</b></span>
+          <span class="meta">${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))} · <b>${won(r.amount)}원</b></span>
         </div>`).join('') || '<div class="empty">신청 내역이 없습니다.</div>';
 
       const boardPreview = D.board.slice(0, 4).map(p => `
@@ -1040,9 +1058,10 @@
     budget() {
       const tabs = `<div class="subtabs" role="tablist">
         <button role="tab" aria-selected="${budgetTab === 'list'}" onclick="setTab('budget','list')">신청 내역</button>
+        <button role="tab" aria-selected="${budgetTab === 'copy'}" onclick="setTab('budget','copy')">월별 정리</button>
         <button role="tab" aria-selected="${budgetTab === 'status'}" onclick="setTab('budget','status')">예산현황</button>
       </div>`;
-      return tabs + (budgetTab === 'list' ? VIEWS.budgetList() : VIEWS.accounts());
+      return tabs + (budgetTab === 'list' ? VIEWS.budgetList() : budgetTab === 'copy' ? VIEWS.budgetCopy() : VIEWS.accounts());
     },
 
     calendar() { return VIEWS.calendar(); },
@@ -1198,27 +1217,14 @@
       const inMonth = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm);
       const list = inMonth.filter(r => !mineOnly || r.req === D.me.name);
       const total = list.reduce((a, r) => a + r.amount, 0);
-      // 고를 수 있는 달 = 신청 가능한 달 + 신청 내역이 있는 달
-      const monthSet = budgetMonths().map(m => m.value);
-      D.budget.requests.forEach(r => { if (monthSet.indexOf(reqMonth(r)) < 0) monthSet.push(reqMonth(r)); });
-      if (bm !== 'all' && monthSet.indexOf(bm) < 0) monthSet.push(bm);
-      monthSet.sort().reverse();
-      const cnt = ym => D.budget.requests.filter(r => reqMonth(r) === ym).length;
-      const monthBar = `<div class="month-bar">
-          <button class="icon-btn" onclick="moveBudgetMonth(-1)" aria-label="이전 달">${ic('chevL')}</button>
-          <select class="field-in month-sel" onchange="setBudgetMonth(this.value)" aria-label="적용월">
-            <option value="all" ${bm === 'all' ? 'selected' : ''}>전체 기간 (${D.budget.requests.length}건)</option>
-            ${monthSet.map(v => `<option value="${v}" ${v === bm ? 'selected' : ''}>${monthName(v, true)}${v === ymNow() ? ' (이번 달)' : ''} · ${cnt(v)}건</option>`).join('')}
-          </select>
-          <button class="icon-btn" onclick="moveBudgetMonth(1)" aria-label="다음 달">${ic('chev')}</button>
-        </div>`;
+      const monthBar = budgetMonthBar(bm);
       const f = (key, label, n) => `<button aria-pressed="${budgetFilter === key}" onclick="setFilter('${key}')">${label} ${n}</button>`;
       const rows = list.map(r => {
         const canCancel = r.req === D.me.name || D.me.isLeader || D.me.isAdmin;
         return `<tr>
           <td class="nowrap c-id"><span class="chip month">${monthName(reqMonth(r))}분</span> ${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">신청 ${esc(r.date)}</span></td>
           <td class="nowrap strong c-who">${esc(r.req)}</td>
-          <td class="c-move"><span class="mv"><b class="tag out">변경전</b>${esc(bLabel(r.fromCost, r.from))}</span><span class="mv"><b class="tag in">변경후</b>${esc(bLabel(r.toCost, r.to))}</span></td>
+          <td class="c-move"><span class="mv"><b class="tag out">변경전</b>${esc(bLabel(r.fromCost, r.fromCode, r.from))}</span><span class="mv"><b class="tag in">변경후</b>${esc(bLabel(r.toCost, r.toCode, r.to))}</span></td>
           <td class="num strong c-amt">${won(r.amount)}<span class="unit">원</span></td>
           <td class="c-full">${esc(r.reason)}</td>
           <td class="nowrap c-act">${canCancel ? `<button class="btn small danger" onclick="cancelBudget(${r.row}, '${esc(r.id)}')">취소</button>` : ''}</td>
@@ -1244,14 +1250,54 @@
         </section>`;
     },
 
+    /** 담당자용: 한 달 신청 내역의 코스트센터·계정코드를 하나씩 눌러 복사 (ERP 입력 등) */
+    budgetCopy() {
+      const bm = curBudgetMonth();
+      const list = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm).slice().reverse(); // 신청 순서대로
+      const doneN = list.filter(r => copied(r.id + ':done')).length;
+      const cell = (r, field, value, cls) => value
+        ? `<td class="${cls || ''}"><button class="cp ${copied(r.id + ':' + field) ? 'done' : ''}" onclick="copyCell(this, '${esc(r.id)}', '${field}')" data-v="${esc(value)}" title="눌러서 복사">${esc(value)}${ic('copy', 'sm')}</button></td>`
+        : '<td class="ph">-</td>';
+      const rows = list.map((r, i) => `
+        <tr class="${copied(r.id + ':done') ? 'row-done' : ''}">
+          <td class="c">${i + 1}</td>
+          <td class="nowrap">${esc(r.id)}<br><small class="ph">${esc(r.req)} · ${monthName(reqMonth(r))}분</small></td>
+          ${cell(r, 'fc', r.fromCost, 'g-out')}${cell(r, 'fa', r.fromCode, 'g-out')}<td class="g-out nm">${esc(r.from)}</td>
+          ${cell(r, 'tc', r.toCost, 'g-in')}${cell(r, 'ta', r.toCode, 'g-in')}<td class="g-in nm">${esc(r.to)}</td>
+          ${cell(r, 'amt', String(r.amount), 'num')}
+          <td class="c"><input type="checkbox" class="check" ${copied(r.id + ':done') ? 'checked' : ''} onchange="markDone('${esc(r.id)}', this.checked)" aria-label="${esc(r.id)} 처리 완료"></td>
+          <td class="reason">${esc(r.reason)}</td>
+        </tr>`).join('') || `<tr><td colspan="11" class="empty">${bm === 'all' ? '' : monthName(bm, true) + ' '}신청 내역이 없습니다.</td></tr>`;
+      return `
+        <div class="head">
+          <div><h1>월별 정리</h1><p>한 달 동안 들어온 신청을 신청 순서대로 모았습니다. 코스트센터·계정코드·금액 칸을 <b>누르면 복사</b>되고, 복사한 칸은 표시가 남습니다. 다 옮긴 줄은 오른쪽 완료에 체크하세요.</p></div>
+          <div class="head-actions"><button class="btn" onclick="copyMonth()" ${list.length ? '' : 'disabled'}>${ic('copy', 'sm')}이 달 전체 복사 (엑셀용)</button></div>
+        </div>
+        <section class="panel">
+          <div class="panel-head budget-head">
+            ${budgetMonthBar(bm)}
+            <span class="month-sum" style="margin:0">완료 <b>${doneN}/${list.length}건</b> · 합계 <b>${won(list.reduce((a, r) => a + r.amount, 0))}원</b></span>
+          </div>
+          <div class="table-wrap">
+            <table class="t copy-t">
+              <thead>
+                <tr><th rowspan="2">No</th><th rowspan="2">신청번호</th><th colspan="3" class="g-out">변경전 (감액)</th><th colspan="3" class="g-in">변경후 (증액)</th><th rowspan="2" class="num">금액</th><th rowspan="2">완료</th><th rowspan="2">사유</th></tr>
+                <tr><th class="g-out">코스트센터</th><th class="g-out">계정코드</th><th class="g-out">계정과목</th><th class="g-in">코스트센터</th><th class="g-in">계정코드</th><th class="g-in">계정과목</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </section>`;
+    },
+
     accounts() {
       const a = D.budget.accounts;
       const sum = k => a.reduce((s, x) => s + x[k], 0);
       const rows = a.map(x => `
-        <tr><td>${esc(x.cost || '-')}</td><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inAmt)}</td><td class="num">${won(x.outAmt)}</td>
+        <tr><td>${esc(x.cost || '-')}</td><td>${esc(x.code || '-')}</td><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inAmt)}</td><td class="num">${won(x.outAmt)}</td>
         <td class="num strong">${won(x.current)}</td></tr>`).join('');
       return `
-        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (취소한 건 제외) · 예산은 [예산과목] 시트에 코스트·계정과목별로 입력합니다</p></div></div>
+        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (취소한 건 제외) · 예산은 [예산과목] 시트에 코스트·계정코드·계정과목별로 입력합니다</p></div></div>
         <section class="panel">
           <div class="panel-head"><h2>코스트·계정과목별 현재예산</h2><span>원</span></div>
           ${budgetBars()}
@@ -1259,9 +1305,9 @@
         <section class="panel">
           <div class="table-wrap">
             <table class="t">
-              <thead><tr><th>코스트</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th></tr></thead>
+              <thead><tr><th>코스트</th><th>계정코드</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th></tr></thead>
               <tbody>${rows}</tbody>
-              <tfoot><tr><td class="strong" colspan="2">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inAmt'))}</td><td class="num">${won(sum('outAmt'))}</td><td class="num strong">${won(sum('current'))}</td></tr></tfoot>
+              <tfoot><tr><td class="strong" colspan="3">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inAmt'))}</td><td class="num">${won(sum('outAmt'))}</td><td class="num strong">${won(sum('current'))}</td></tr></tfoot>
             </table>
           </div>
         </section>`;
@@ -1933,14 +1979,89 @@
     if (a) { e.preventDefault(); toast('예시 화면이라 파일을 열 수 없습니다. 실제로는 구글 드라이브에서 열립니다.'); }
   });
 
+  /** 월 고르기 (◀ 2026년 10월 ▶) — 신청 내역·월별 정리 공용 */
+  function budgetMonthBar(bm) {
+    // 고를 수 있는 달 = 신청 가능한 달 + 신청 내역이 있는 달
+    const monthSet = budgetMonths().map(m => m.value);
+    D.budget.requests.forEach(r => { if (monthSet.indexOf(reqMonth(r)) < 0) monthSet.push(reqMonth(r)); });
+    if (bm !== 'all' && monthSet.indexOf(bm) < 0) monthSet.push(bm);
+    monthSet.sort().reverse();
+    const cnt = ym => D.budget.requests.filter(r => reqMonth(r) === ym).length;
+    return `<div class="month-bar">
+        <button class="icon-btn" onclick="moveBudgetMonth(-1)" aria-label="이전 달">${ic('chevL')}</button>
+        <select class="field-in month-sel" onchange="setBudgetMonth(this.value)" aria-label="적용월">
+          <option value="all" ${bm === 'all' ? 'selected' : ''}>전체 기간 (${D.budget.requests.length}건)</option>
+          ${monthSet.map(v => `<option value="${v}" ${v === bm ? 'selected' : ''}>${monthName(v, true)}${v === ymNow() ? ' (이번 달)' : ''} · ${cnt(v)}건</option>`).join('')}
+        </select>
+        <button class="icon-btn" onclick="moveBudgetMonth(1)" aria-label="다음 달">${ic('chev')}</button>
+      </div>`;
+  }
+
+  /* ----- 복사 (월별 정리) ----- */
+  // 어떤 칸을 복사했는지/완료했는지는 이 브라우저에만 기억한다 (담당자 작업 표시용)
+  const COPY_KEY = 'budgetCopied';
+  let copiedSet = null;
+  function copiedStore() {
+    if (!copiedSet) {
+      copiedSet = new Set();
+      try { JSON.parse(localStorage.getItem(COPY_KEY) || '[]').forEach(k => copiedSet.add(k)); } catch (e) { /* 저장소 없음 */ }
+    }
+    return copiedSet;
+  }
+  function copied(k) { return copiedStore().has(k); }
+  function setCopied(k, on) {
+    const s = copiedStore();
+    if (on) s.add(k); else s.delete(k);
+    try { localStorage.setItem(COPY_KEY, JSON.stringify(Array.from(s).slice(-2000))); } catch (e) { /* 저장소 없음 */ }
+  }
+
+  /** 클립보드 복사: 새 방식이 막혀 있으면(웹앱 iframe) 예전 방식으로 */
+  function toClipboard(text) {
+    const legacy = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      return ok ? Promise.resolve() : Promise.reject(new Error('copy'));
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(legacy);
+    } catch (e) { /* 아래로 */ }
+    return legacy();
+  }
+
+  function copyCell(btn, id, field) {
+    const v = btn.dataset.v;
+    toClipboard(v).then(() => {
+      setCopied(id + ':' + field, true);
+      btn.classList.add('done');
+      toast(`복사: ${v}`);
+    }, () => toast('복사하지 못했습니다. 칸을 길게 눌러 직접 복사하세요.'));
+  }
+
+  function markDone(id, on) { setCopied(id + ':done', on); render(); }
+
+  /** 이 달 내역을 탭으로 구분해 복사 → 엑셀·구글시트에 그대로 붙여넣기 */
+  function copyMonth() {
+    const bm = curBudgetMonth();
+    const list = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm).slice().reverse();
+    const clean = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
+    const lines = [['적용월', '신청번호', '신청일시', '신청자', '변경전 코스트센터', '변경전 계정코드', '변경전 계정과목', '변경후 코스트센터', '변경후 계정코드', '변경후 계정과목', '금액', '사유']]
+      .concat(list.map(r => [reqMonth(r), r.id, r.date, r.req, r.fromCost, r.fromCode, r.from, r.toCost, r.toCode, r.to, r.amount, r.reason]));
+    toClipboard(lines.map(l => l.map(clean).join('\t')).join('\n'))
+      .then(() => toast(`${list.length}건을 복사했습니다. 엑셀에 붙여넣으세요.`), () => toast('복사하지 못했습니다.'));
+  }
+
   function budgetBars() {
     const a = D.budget.accounts;
     if (!a.length) return '<div class="empty">[예산과목] 시트에 코스트·계정과목을 등록하세요.</div>';
     const max = Math.max(...a.map(x => x.current), 1);
     return `<div class="bars" id="bars">${a.map((x, i) => {
       const w = Math.max(x.current, 0) / max * 100;
-      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(bLabel(x.cost, x.name))} 현재예산 ${won(x.current)}원">
-        <span class="nm">${x.cost ? `<small>${esc(x.cost)}</small>` : ''}${esc(x.name)}</span>
+      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(bLabel(x.cost, x.code, x.name))} 현재예산 ${won(x.current)}원">
+        <span class="nm">${x.cost || x.code ? `<small>${esc([x.cost, x.code].filter(Boolean).join(' · '))}</small>` : ''}${esc(x.name)}</span>
         <span class="track">${w ? `<span class="seg avail" style="width:${w}%"></span>` : ''}</span>
         <span class="val">${won(x.current)}</span>
       </div>`;
@@ -2282,8 +2403,8 @@
   function closeModal() { $('#scrim').hidden = true; }
   $('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeModal(); });
 
-  /** "1100 인사운영 / 교육훈련비" (코스트가 없으면 계정과목만) */
-  const bLabel = (cost, name) => cost ? `${cost} / ${name}` : name;
+  /** "1100 / 52500 교육훈련비" (비어 있는 부분은 뺀다) */
+  const bLabel = (cost, code, name) => { const acc = [code, name].filter(Boolean).join(' '); return cost ? `${cost} / ${acc}` : acc; };
   const findAcc = (cost, name) => D.budget.accounts.find(x => (x.cost || '') === cost && x.name === name);
   function budgetCosts() { return D.budget.accounts.map(a => a.cost || '').filter((c, i, all) => all.indexOf(c) === i); }
 
@@ -2318,13 +2439,13 @@
       </form>`);
     const hint = () => {
       const a = findAcc($('#bFromCost').value, $('#bFrom').value);
-      $('#bHint').textContent = a ? `현재예산 ${won(a.current)}원` : '';
+      $('#bHint').textContent = a ? `${a.code ? `계정코드 ${a.code} · ` : ''}현재예산 ${won(a.current)}원` : '';
     };
     // 고른 코스트의 계정과목만 보여준다
     const fill = key => {
       const cost = $(`#b${key}Cost`).value;
       $(`#b${key}`).innerHTML = '<option value="">선택</option>' + D.budget.accounts.filter(a => (a.cost || '') === cost)
-        .map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
+        .map(a => `<option value="${esc(a.name)}">${esc([a.code, a.name].filter(Boolean).join(' '))}</option>`).join('');
       if (key === 'From') hint();
     };
     fill('From'); fill('To');
@@ -2346,7 +2467,7 @@
       let msg = '';
       if (!form.requester || !form.from || !form.to || !form.amount || !form.reason) msg = '모든 항목을 입력해 주세요.';
       else if (form.fromCost === form.toCost && form.from === form.to) msg = '변경전과 변경후가 같습니다.';
-      else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${bLabel(form.fromCost, form.from)} 현재예산 ${won(a.current)}원)`;
+      else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${bLabel(form.fromCost, a.code, form.from)} 현재예산 ${won(a.current)}원)`;
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)
@@ -2358,7 +2479,7 @@
   function cancelBudget(row, id) {
     const r = D.budget.requests.find(x => x.row === row);
     openModal(`<h3>${esc(id)} 신청을 취소할까요?</h3>
-      <p class="sub">${esc(r.req)} · ${esc(bLabel(r.fromCost, r.from))} → ${esc(bLabel(r.toCost, r.to))} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
+      <p class="sub">${esc(r.req)} · ${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
       <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" id="cxOk">신청 취소</button></div>`);
     $('#cxOk').onclick = () => {
       $('#cxOk').disabled = true;
@@ -2387,7 +2508,7 @@
   function showTip(row, x, y) {
     const a = D.budget.accounts[Number(row.dataset.i)];
     const tip = $('#tip');
-    tip.innerHTML = `<b>${esc(bLabel(a.cost, a.name))}</b>
+    tip.innerHTML = `<b>${esc(bLabel(a.cost, a.code, a.name))}</b>
       <div><span>편성액</span>${won(a.budget)}</div>
       <div><span>전입</span>+${won(a.inAmt)}</div>
       <div><span>전출</span>−${won(a.outAmt)}</div>

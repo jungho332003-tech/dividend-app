@@ -174,15 +174,19 @@ function currentMember_(members) {
 }
 
 function readBudget_(ss) {
-  // 예전 양식이면 코스트 + 계정과목 양식으로 바꾼다 (권한이 없으면 관리자가 "권한 한 번에 적용" 때 바뀐다)
+  // 예전 양식이면 코스트 + 계정코드 + 계정과목 양식으로 바꾼다 (권한이 없으면 관리자가 "권한 한 번에 적용" 때 바뀐다)
   try { migrateBudgetSheets_(ss); } catch (e) { /* 권한 없음 */ }
   const reqSh = ss.getSheetByName(BUDGET.SHEET);
   const reqRows = reqSh && reqSh.getLastRow() >= 2
     ? reqSh.getRange(2, 1, reqSh.getLastRow() - 1, BCOL.MONTH).getValues()
     : [];
 
+  const accounts = getAccounts_();
+  // 계정코드가 비어 있는 예전 신청은 [예산과목]의 코드로 보여준다
+  const codeOf = (cost, name, v) => String(v || '').trim()
+    || (accounts.find(a => a.cost === String(cost).trim() && a.name === String(name).trim()) || {}).code || '';
   return {
-    accounts: getAccounts_(),
+    accounts: accounts,
     requests: reqRows
       .map((r, i) => ({ r: r, row: i + 2 }))
       .filter(x => String(x.r[0]).trim() && String(x.r[BCOL.CANCELED - 1]).toUpperCase() !== 'Y')
@@ -192,8 +196,10 @@ function readBudget_(ss) {
         date: x.r[1] instanceof Date ? fmt(x.r[1], 'yyyy-MM-dd HH:mm') : String(x.r[1]),
         req: String(x.r[2]),
         fromCost: String(x.r[BCOL.FROM_COST - 1]).trim(),
+        fromCode: codeOf(x.r[BCOL.FROM_COST - 1], x.r[BCOL.FROM - 1], x.r[BCOL.FROM_CODE - 1]),
         from: String(x.r[BCOL.FROM - 1]).trim(),
         toCost: String(x.r[BCOL.TO_COST - 1]).trim(),
+        toCode: codeOf(x.r[BCOL.TO_COST - 1], x.r[BCOL.TO - 1], x.r[BCOL.TO_CODE - 1]),
         to: String(x.r[BCOL.TO - 1]).trim(),
         amount: Number(x.r[BCOL.AMOUNT - 1]) || 0,
         reason: String(x.r[BCOL.REASON - 1]),
