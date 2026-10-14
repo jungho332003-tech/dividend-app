@@ -272,6 +272,10 @@
   .due-row { display: grid; grid-template-columns: 82px 64px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); align-items: baseline; }
   .due-row:first-child { border-top: 0; padding-top: 2px; }
   .due-row .d { font-weight: 600; }
+  .key-row { grid-template-columns: 52px 60px minmax(0, 1fr) auto; align-items: center; }
+  .key-row .t { font-weight: 700; }
+  .key-row .dd { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+  .key-row .wk { margin-right: 0; }
   .due-row .n { color: var(--muted); }
   .empty { color: var(--muted); padding: 14px 0; }
   .notice { background: var(--pend-bg); color: var(--pend-ink); border: 1px solid color-mix(in srgb, var(--pend-ink) 18%, transparent); border-radius: 10px; padding: 12px 14px; display: flex; gap: 8px; align-items: flex-start; }
@@ -1052,14 +1056,14 @@
       const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
       const monthAmt = s.monthReq.reduce((a, r) => a + r.amount, 0);
 
-      const dues = [];
-      D.members.forEach(m => m.thisWeek.forEach(it => {
-        if (it.dueIso && it.dueIso >= D.week.thisStart && it.dueIso <= D.week.thisEnd) dues.push({ who: m.name, ...it });
-      }));
-      dues.sort((a, b) => a.dueIso.localeCompare(b.dueIso));
-      const dueRows = dues.map(d => `
-        <div class="due-row tap" ${tapAttr(`showMember('${esc(d.who)}')`)}><span class="d">${esc(d.due)}</span><span class="n">${esc(d.who)}</span><span>${esc(d.task)}</span></div>`).join('')
-        || '<div class="empty">이번 주 기한이 있는 업무가 없습니다.</div>';
+      // 이번 주 중요 업무 = 팀장이 팀 주간보고에서 굵게 표시한 업무 (금주 먼저, 그다음 차주)
+      const keyRows = [];
+      ['this', 'next'].forEach(w => D.members.forEach(m => (w === 'this' ? m.thisWeek : m.nextWeek).forEach(it => {
+        if (isMarked(m, w, it.task)) keyRows.push({ who: m.name, w, ...it });
+      })));
+      const dueRows = keyRows.map(d => `
+        <div class="due-row key-row tap" ${tapAttr(`showMember('${esc(d.who)}')`)}><span class="d"><span class="wk ${d.w}">${d.w === 'this' ? '금주' : '차주'}</span></span><span class="n">${esc(d.who)}</span><span class="t">${esc(d.task)}</span><span class="dd">${dueHtml(d, d.w === 'this')}</span></div>`).join('')
+        || `<div class="empty">${D.me.isLeader ? '팀 주간보고에서 업무를 누르면 굵게 표시되고 여기에 모입니다.' : '팀장님이 팀 주간보고에서 굵게 표시한 업무가 여기에 모입니다.'}</div>`;
 
       const boardPreview = D.board.slice(0, 4).map(p => `
         <div class="list-row tap" style="grid-template-columns:72px minmax(0,1fr)" ${tapAttr(`openPost='${esc(p.id)}';go('board')`)}>
@@ -1105,7 +1109,7 @@
             <div class="agenda" id="upcoming">${upcomingHtml()}</div>
           </section>`,
         W && `<section class="panel">
-            <div class="panel-head"><h2>이번 주 기한 업무</h2><span>${esc(D.week.thisLabel)}</span></div>
+            <div class="panel-head"><h2>이번 주 중요 업무</h2><button class="btn small" onclick="setTab('weekly','team', true)">팀 주간보고</button></div>
             <div>${dueRows}</div>
           </section>`,
         (BO || R) && `<div style="display:flex;flex-direction:column;gap:16px">
