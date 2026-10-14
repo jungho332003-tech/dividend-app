@@ -1109,7 +1109,7 @@ function getAccounts_() {
 }
 
 /**
- * 신청 → [예산전용] 시트에 한 줄 추가 + 팀장에게 알림 메일. 신청번호 반환
+ * 신청 → [예산전용] 시트에 한 줄 추가 (알림 메일은 보내지 않는다). 신청번호 반환
  * form: { requester, month, fromCost, from, toCost, to, amount, reason }
  */
 function submitBudgetTransfer(form) {
@@ -1139,7 +1139,7 @@ function submitBudgetTransfer(form) {
     const target = accounts.find(a => a.cost === toCost && a.name === to);
     if (!account) throw new Error(`[${budgetLabel_(fromCost, '', from)}] 예산을 찾을 수 없습니다. [예산과목] 시트를 확인하세요.`);
     if (!target) throw new Error(`[${budgetLabel_(toCost, '', to)}] 예산을 찾을 수 없습니다. [예산과목] 시트를 확인하세요.`);
-    const fromLabel = budgetLabel_(fromCost, account.code, from), toLabel = budgetLabel_(toCost, target.code, to);
+    const fromLabel = budgetLabel_(fromCost, account.code, from);
     if (amount > account.current) {
       throw new Error(`현재예산을 초과합니다. (${fromLabel} 현재예산: ${account.current.toLocaleString()}원)`);
     }
@@ -1155,19 +1155,6 @@ function submitBudgetTransfer(form) {
     SpreadsheetApp.flush();
     try { CacheService.getDocumentCache().remove(CK.budget); } catch (e) { /* 캐시 없음 */ }
 
-    const leaders = getLeaders();
-    if (leaders.length) {
-      MailApp.sendEmail({
-        to: leaders.map(m => m.email).join(','),
-        subject: `[예산전용 신청] ${monthLabel_(month)}분 ${id} ${requester} - ${fromLabel} → ${toLabel} ${amount.toLocaleString()}원`,
-        htmlBody:
-          `<b>${escapeHtml_(requester)}</b>님이 예산전용을 신청했습니다.<br><br>` +
-          `신청번호: ${id}<br>적용월: ${monthLabel_(month)}<br>` +
-          `변경전: ${escapeHtml_(fromLabel)}<br>변경후: ${escapeHtml_(toLabel)}<br>` +
-          `금액: <b>${amount.toLocaleString()}원</b><br>사유: ${escapeHtml_(reason)}<br><br>` +
-          `<a href="${sheetUrl(ss, sh)}">예산전용 시트 열기</a>`,
-      });
-    }
     return id;
   } finally {
     lock.releaseLock();
