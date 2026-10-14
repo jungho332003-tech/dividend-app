@@ -125,6 +125,7 @@ function apiAddLeave(leave) {
     lock.releaseLock();
   }
   ctx._leaves = null;
+  if (eventId) bumpCalendar_();
   return Object.assign(leavePatch_(ctx, me.name), { warning: warning });
 }
 
@@ -144,7 +145,7 @@ function apiDeleteLeave(id) {
   if (eventId) {
     try {
       const ev = getTeamCalendar_().getEventById(eventId);
-      if (ev) ev.deleteEvent();
+      if (ev) { ev.deleteEvent(); bumpCalendar_(); }
     } catch (e) { /* 캘린더 권한이 없으면 시트에서만 지운다 */ }
   }
   ctx._leaves = null;
@@ -164,7 +165,7 @@ function nextLeaveId_(sh) {
 
 /**
  * 캘린더 일정 중 제목에 팀원 이름과 휴가 단어가 있는 것을 [휴가]에 넣고,
- * 캘린더에서 지워진 일정(출처 '캘린더')은 [휴가]에서도 지운다.
+ * 캘린더에서 지워진 일정은 [휴가]에서도 지운다 (캘린더에서 넣은 것, 웹앱에서 넣은 것 모두).
  * events: CalendarEvent[] (from~to 사이를 모두 읽은 것). 바뀐 게 있으면 true.
  */
 function syncLeaveEvents_(ctx, events, from, to) {
@@ -175,7 +176,9 @@ function syncLeaveEvents_(ctx, events, from, to) {
 
   const names = ctx.members.map(m => m.name).filter(Boolean).sort((a, b) => b.length - a.length);
   const found = {};
+  const present = {}; // 캘린더에 아직 있는 일정 (제목을 바꿨어도 지운 것으로 보지 않도록 전부)
   events.forEach(ev => {
+    present[ev.getId()] = true;
     const title = ev.getTitle();
     const word = title.match(LEAVE.WORDS);
     if (!word) return;
@@ -196,10 +199,13 @@ function syncLeaveEvents_(ctx, events, from, to) {
   const add = Object.keys(found).filter(id => !known[id]);
   const gone = [];
   rows.forEach((r, i) => {
-    if (String(r[LCOL.SOURCE - 1]) !== '캘린더' || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y') return;
+    const eid = String(r[LCOL.EVENT - 1] || '');
+    if (!eid || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y') return; // 캘린더 일정이 없는 휴가는 그대로
     const s = r[LCOL.START - 1];
     if (!(s instanceof Date) || s < lo || s >= hi) return; // 이번에 읽은 범위 밖은 건드리지 않는다
-    if (!found[String(r[LCOL.EVENT - 1])]) gone.push(i + 2);
+    const fromCal = String(r[LCOL.SOURCE - 1]) === '캘린더';
+    // 캘린더에서 넣은 것: 휴가 일정이 아니게 됐거나 지워지면 / 웹앱에서 넣은 것: 캘린더에서 지워지면
+    if (fromCal ? !found[eid] : !present[eid]) gone.push(i + 2);
   });
   if (!add.length && !gone.length) return false;
 

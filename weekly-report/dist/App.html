@@ -916,8 +916,8 @@
 
   function load() {
     // 웹앱은 첫 화면 데이터를 페이지에 실어 보낸다 → 바로 그린다
-    if (window.__BOOT__) { D = window.__BOOT__; window.__BOOT__ = null; render(); return Promise.resolve(); }
-    return call('apiBootstrap').then(data => { D = data; render(); }).catch(fail);
+    if (window.__BOOT__) { D = window.__BOOT__; window.__BOOT__ = null; render(); prefetchCalendar(); return Promise.resolve(); }
+    return call('apiBootstrap').then(data => { D = data; render(); prefetchCalendar(); }).catch(fail);
   }
 
   /* ================= 공통 계산 ================= */
@@ -1427,9 +1427,11 @@
   }
   function loadUpcoming() {
     const today = new Date(now().getFullYear(), now().getMonth(), now().getDate());
+    const st = calStored('up');
+    if (st) { upcoming = st; const el = $('#upcoming'); if (el) el.innerHTML = upcomingHtml(); }
     call('apiCalendar', today.toISOString(), addD(today, 7).toISOString())
-      .then(r => { upcoming = r; })
-      .catch(e => { upcoming = { error: e.message || String(e) }; })
+      .then(r => { upcoming = r; calStore('up', r); })
+      .catch(e => { if (!st) upcoming = { error: e.message || String(e) }; })
       .then(() => { const el = $('#upcoming'); if (el) el.innerHTML = upcomingHtml(); });
   }
 
@@ -1438,14 +1440,51 @@
     const start = addD(first, -first.getDay());
     return { start, end: addD(start, 42) };
   }
-  function loadMonth(force) {
-    const k = dkey(calMonth).slice(0, 7);
-    if (calCache[k] && !force) return;
-    const r = monthRange(calMonth);
-    call('apiCalendar', r.start.toISOString(), r.end.toISOString())
-      .then(res => { calCache[k] = res; })
-      .catch(e => { calCache[k] = { error: e.message || String(e), events: [] }; })
-      .then(() => { if (page === 'calendar' && dkey(calMonth).slice(0, 7) === k) $('#main').innerHTML = PAGES.calendar(); });
+  /* 달력: 마지막으로 받은 내용을 이 기기에 저장해 두었다가 바로 보여주고, 뒤에서 새로 받아 바꾼다 */
+  const calKey = k => `cal:${D.me.email}:${k}`;
+  function calStored(k) { try { return JSON.parse(localStorage.getItem(calKey(k)) || 'null'); } catch (e) { return null; } }
+  function calStore(k, v) { try { localStorage.setItem(calKey(k), JSON.stringify(v)); } catch (e) { /* 저장소 없음 */ } }
+  /** 저장해 둔 달력을 지운다 (휴가 삭제처럼 지운 일정이 잠깐이라도 다시 보이면 안 될 때) */
+  function calForget() {
+    try { Object.keys(localStorage).filter(x => x.indexOf(`cal:${D.me.email}:`) === 0).forEach(x => localStorage.removeItem(x)); } catch (e) { /* 저장소 없음 */ }
+  }
+  const calLoading = {}, calSynced = {};
+  // 방금 등록해 서버에서 아직 안 내려온 일정 (불러온 달력에 같은 일정이 생기면 뺀다)
+  let calPending = [];
+  const sameEv = (a, b) => a.title === b.title && String(a.start).slice(0, 10) === String(b.start).slice(0, 10);
+  function loadMonth(force, monthDate) {
+    const m = monthDate || calMonth;
+    const k = dkey(m).slice(0, 7);
+    const redraw = () => { if (page === 'calendar' && dkey(calMonth).slice(0, 7) === k) $('#main').innerHTML = PAGES.calendar(); };
+    if (calLoading[k] || (calCache[k] && !calCache[k].stale && !force)) return;
+    if (!calCache[k]) {
+      const st = calStored(k);
+      if (st) { calCache[k] = Object.assign(st, { stale: true }); redraw(); }
+    }
+    const r = monthRange(m);
+    calLoading[k] = true;
+    call('apiCalendar', r.start.toISOString(), r.end.toISOString(), !!force)
+      .then(res => {
+        calStore(k, res);
+        calPending = calPending.filter(p => !res.events.some(e => sameEv(e, p)));
+        res.events = res.events.concat(calPending);
+        calCache[k] = res;
+      })
+      .catch(e => { if (!calCache[k] || calCache[k].error || !calCache[k].events.length) calCache[k] = { error: e.message || String(e), events: [] }; })
+      .then(() => { calLoading[k] = false; redraw(); syncLeaves(k, r); });
+  }
+  /** 캘린더에 직접 넣은 휴가 → 주간보고 반영. 달력을 그린 뒤 뒤에서 (달마다 한 번) */
+  function syncLeaves(k, r) {
+    if (!D.teamCalendar || calSynced[k]) return;
+    calSynced[k] = true;
+    call('apiSyncLeaves', r.start.toISOString(), r.end.toISOString())
+      .then(x => { if (x && x.changed) { applyData(x); if (page === 'dash' || (page === 'weekly' && weeklyTab !== 'mine' && weeklyTab !== 'pre')) render(); } })
+      .catch(() => { /* 매시간 자동 실행 때 다시 맞춘다 */ });
+  }
+  /** 앱을 열면 이번 달 일정을 미리 받아 둔다 → 일정 메뉴를 누르면 바로 보인다 */
+  function prefetchCalendar() {
+    if (!can('calendar')) return;
+    setTimeout(() => loadMonth(false, new Date(now().getFullYear(), now().getMonth(), 1)), 400);
   }
   function calMove(n) {
     calMonth = n === 0 ? new Date(now().getFullYear(), now().getMonth(), 1) : new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1);
@@ -1596,6 +1635,9 @@
     const tempId = 'tmp-' + Date.now();
     const showNow = (ev, dateIso) => {
       closeModal();
+      calPending.push(ev);
+      const mk = String(dateIso).slice(0, 7);
+      if (!calCache[mk]) calCache[mk] = { stale: true, events: [] }; // 아직 불러오는 중이어도 바로 보이게
       Object.values(calCache).forEach(c => { if (c && c.events) c.events.push(ev); });
       upcoming = null;
       if (page === 'calendar') {
@@ -1606,6 +1648,10 @@
     };
     const undo = e2 => {
       Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(x => x.id !== tempId); });
+      calPending = calPending.filter(x => x.id !== tempId);
+      const mm = mineMember();
+      if (mm) ['leaves', 'preLeaves'].forEach(f => { mm[f] = (mm[f] || []).filter(x => x.id !== tempId); });
+      if (page !== 'calendar') render();
       upcoming = null;
       if (page === 'calendar') render();
       toast(`저장하지 못했습니다. (${e2.message || e2})`);
@@ -1616,6 +1662,15 @@
         const leave = { type: $('#lType').value, start: $('#lStart').value, end: $('#lEnd').value, memo: $('#lMemo').value.trim() };
         if (!leave.start) return err('시작일을 골라 주세요.');
         if (leave.end && leave.end < leave.start) return err('종료일이 시작일보다 빠릅니다.');
+        // 내 주간업무의 휴무 일정에도 바로 보이게
+        const mm = mineMember();
+        if (mm) {
+          const lv = { id: tempId, type: leave.type, start: leave.start, end: leave.end || leave.start, source: '웹앱', text: leaveTextOf(leave) };
+          const hit = (from, n) => lv.end >= from && lv.start <= dkey(addD(parseD(from), n - 1));
+          const mon = D.week.key, nextMon = dkey(addD(parseD(D.week.key), 7));
+          if (hit(mon, 14)) mm.leaves = (mm.leaves || []).concat(lv);
+          if (hit(nextMon, 14)) mm.preLeaves = (mm.preLeaves || []).concat(lv);
+        }
         showNow({ id: tempId, title: `[${leave.type}] ${D.me.name}`, start: leave.start, end: dkey(addD(parseD(leave.end || leave.start), 1)),
           allDay: true, location: '', desc: '', kind: 'leave' }, leave.start);
         call('apiAddLeave', leave)
@@ -1633,7 +1688,7 @@
       showNow({ id: tempId, title: ev.title, allDay: ev.allDay, location: ev.location, desc: ev.desc, kind: target === 'mine' && both ? 'mine' : 'event',
         start: ev.allDay ? ev.date : s0.toISOString(), end: ev.allDay ? dkey(addD(parseD(ev.date), 1)) : e0.toISOString() }, ev.date);
       call('apiAddEvent', ev)
-        .then(() => toast(target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.'))
+        .then(() => { toast(target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.'); })
         .catch(undo);
     };
   }
@@ -2736,6 +2791,14 @@
     </section>`;
   }
 
+  /** "10/2(금) 연차" · "9/30(수)~10/7(수) 정기휴가(메모)" — 서버 leaveText_ 와 같은 모양 */
+  function leaveTextOf(l) {
+    const md = d => `${d.getMonth() + 1}/${d.getDate()}(${DAY[d.getDay()]})`;
+    const s = parseD(l.start), e = parseD(l.end || l.start);
+    const when = +e === +s ? md(s) : `${md(s)}~${e.getMonth() === s.getMonth() && e.getFullYear() === s.getFullYear() ? `${e.getDate()}(${DAY[e.getDay()]})` : md(e)}`;
+    return `${when} ${l.type}${l.memo ? `(${l.memo})` : ''}`;
+  }
+
   /** 휴가 등록 = 일정 추가 창의 [휴가] 탭 */
   function openLeaveForm(dateKey) { openEventForm(dateKey, 'leave'); }
 
@@ -2746,7 +2809,7 @@
       <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="lDel">지우기</button></div>`);
     $('#lDel').onclick = () => {
       $('#lDel').disabled = true;
-      call('apiDeleteLeave', id).then(data => { applyData(data); closeModal(); calCache = {}; upcoming = null; render(); toast('지웠습니다.'); })
+      call('apiDeleteLeave', id).then(data => { applyData(data); closeModal(); calCache = {}; calForget(); upcoming = null; render(); toast('지웠습니다.'); })
         .catch(e => { closeModal(); fail(e); });
     };
   }
