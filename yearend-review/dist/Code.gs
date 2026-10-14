@@ -225,6 +225,17 @@ function getContext() {
   };
 }
 
+/* ---------- 잠금 ---------- */
+
+const LOCK_BUSY_MSG = '다른 담당자의 저장이 몰려 있습니다. 잠시 후 다시 저장해 주세요.';
+
+/** 문서 잠금 안에서 fn을 실행한다 (여러 담당자가 동시에 저장해도 한 번에 한 사람씩) */
+function withLock_(fn) {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
 /* ---------- 연도 마감 ---------- */
 
 function closedYears_(cfg) {
@@ -664,15 +675,19 @@ function cellValue_(col, now, value) {
   return String(value == null ? '' : value).trim();
 }
 
-/** 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게) */
-function apiSavePerson(id, patch) {
+/**
+ * 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게)
+ * base: 화면에서 고치기 전에 보던 값 { 키: 값, __name: 성명 }.
+ *   그 사이 다른 사람이 같은 칸을 먼저 고쳤으면 아무것도 쓰지 않고 { conflicts, personPatch(지금 값) }을 돌려준다.
+ */
+function apiSavePerson(id, patch, base) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
@@ -680,10 +695,15 @@ function apiSavePerson(id, patch) {
     if (!found) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
     const { row, values } = found;
     const cur = rowToPerson_(values, map, row);
+    // 사원번호 없는 대상자(행 번호로 찾음)는 행이 밀렸을 수 있으니 이름까지 확인한다
+    if (base && base.__name != null && String(base.__name) !== cur.name) throw new Error('대상자 정보가 바뀌었습니다. 새로고침한 뒤 다시 저장해 주세요.');
     if (!canSee_(me, cur)) throw new Error('열람 범위 밖의 대상자입니다. 관리자에게 열람 범위를 요청하세요.');
 
     const keys = Object.keys(patch || {}).filter(k => COLS.some(c => c.k === k));
     if (!keys.length) return { personPatch: cur };
+    // 다른 사람이 먼저 고친 칸이 있으면 아무것도 쓰지 않는다 (예: 둘이 동시에 「내가 담당하기」)
+    const conflicts = base ? findConflicts_(cur, patch, base, keys) : [];
+    if (conflicts.length) return { conflicts: conflicts, personPatch: cur, oldId: String(id) };
     keys.forEach(k => {
       const col = COLS.find(c => c.k === k);
       if (!canEdit_(me, cur, col, patch)) {
@@ -717,6 +737,15 @@ function apiSavePerson(id, patch) {
   }
 }
 
+/** 내가 고치려는 칸 중, 내가 화면을 연 뒤 다른 사람이 먼저 다른 값으로 바꾼 칸 */
+function findConflicts_(cur, patch, base, keys) {
+  const norm = (col, v) => col.t === 'bool' ? !!v : String(v == null ? '' : v).trim();
+  return keys.filter(k => k in base).map(k => COLS.find(c => c.k === k)).filter(col => {
+    const now = norm(col, cur[col.k]);
+    return now !== norm(col, base[col.k]) && now !== norm(col, patch[col.k]);
+  }).map(col => ({ k: col.k, l: col.l, now: col.t === 'bool' ? (cur[col.k] ? '체크' : '체크 안 됨') : String(cur[col.k] || '(빈 칸)') }));
+}
+
 /** 총괄·관리자: 대상자 한 명 추가 */
 function apiAddPerson(fields) {
   const ctx = getContext();
@@ -725,8 +754,7 @@ function apiAddPerson(fields) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 추가는 총괄 또는 관리자만 할 수 있습니다.');
   if (!String(fields.name || '').trim()) throw new Error('성명을 입력해 주세요.');
-  apiImportPeople([fields]);
-  return refreshPart_('people');
+  return apiImportPeople([fields]);
 }
 
 /** 총괄·관리자: 대상자 삭제 (행 삭제) */
@@ -737,7 +765,7 @@ function apiDeletePerson(id) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const row = findPersonRow_(sh, colMap_(sh), String(id));
@@ -761,7 +789,7 @@ function apiImportPeople(rows) {
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let added = 0, updated = 0;
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -792,7 +820,6 @@ function apiImportPeople(rows) {
   } finally {
     lock.releaseLock();
   }
-  dropCache_(CK.people);
   return Object.assign(refreshPart_('people'), { added: added, updated: updated });
 }
 
@@ -817,7 +844,7 @@ function apiAssignPeople(ids, patch) {
   });
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -864,10 +891,12 @@ function apiAddLog(id, kind, body) {
   if (!canSee_(me, p)) throw new Error('열람 범위 밖의 대상자입니다.');
   const now = new Date();
   const k = LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타';
-  yearSheet_(ctx.ss, SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
-  // 응대기록 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다
   const entry = { date: fmt(now, 'yyyy-MM-dd HH:mm'), empNo: p.empNo, name: p.name, author: me.name || me.email, kind: k, body: text };
-  patchCache_(CK.logs, list => { list.unshift(entry); });
+  // 기록과 캐시 갱신을 한 번에: 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다 (동시에 남긴 기록이 빠지지 않게 잠금 안에서)
+  withLock_(() => {
+    yearSheet_(ctx.ss, SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
+    patchCache_(CK.logs, list => { list.unshift(entry); });
+  });
   return { logAdded: entry };
 }
 
@@ -1038,7 +1067,7 @@ function apiSaveEvent(ev) {
   const kind = EVENT_KINDS.indexOf(ev.kind) >= 0 ? ev.kind : '기타';
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
     let sh = yearSheet_(ctx.ss, SHEET.EVENTS);
@@ -1185,7 +1214,7 @@ function apiSaveNotice(n) {
   const now = new Date();
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
     const sh = ctx.ss.getSheetByName(NOTICE.SHEET);
@@ -1233,9 +1262,12 @@ function apiAddNoticeComment(id, body) {
   const text = String(body || '').trim();
   if (!text) throw new Error('댓글 내용을 입력해 주세요.');
   const now = new Date();
-  ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), now, me.name || me.email, text]);
   const comment = { date: fmt(now, 'yyyy-MM-dd HH:mm'), author: me.name || me.email, body: text };
-  patchCache_(CK.notices, list => { const n = list.find(x => x.id === String(id)); if (n) n.comments.push(comment); });
+  // 기록과 캐시 갱신을 한 번에 (동시에 단 댓글이 캐시에서 빠지지 않게)
+  withLock_(() => {
+    ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), now, me.name || me.email, text]);
+    patchCache_(CK.notices, list => { const n = list.find(x => x.id === String(id)); if (n) n.comments.push(comment); });
+  });
   return { commentAdded: { id: String(id), comment: comment } };
 }
 
@@ -1374,7 +1406,7 @@ function apiSaveRule(rule) {
   const now = new Date();
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
     const sh = ctx.ss.getSheetByName(RULES.SHEET);
@@ -1502,6 +1534,11 @@ function areaFolder_(areaName, ctx) {
 function registerFiles_(area, ref, refLabel, files, me, memo) {
   const list = (files || []).filter(f => f && f.id);
   if (!list.length) return;
+  // 마지막 행 다음에 쓰므로 동시에 올리면 같은 행을 덮어쓸 수 있다 → 잠금 안에서 기록
+  withLock_(() => registerRows_(area, ref, refLabel, list, me, memo));
+}
+
+function registerRows_(area, ref, refLabel, list, me, memo) {
   const sh = SpreadsheetApp.getActive().getSheetByName(FILES.SHEET);
   const last = sh.getLastRow();
   const have = new Set(last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => String(v)) : []);
@@ -1845,7 +1882,7 @@ function apiStartYear(opts) {
   const from = String(opts.from || ctx.baseYear);
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let carried = 0, copied = 0;
   try {
     migrateLegacySheets_(ctx.ss, ctx.baseYear);
@@ -2012,11 +2049,17 @@ function doGet() {
 /* ---------- 캐시 ----------
  * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 60초간 캐시한다 (담당자 전체가 공유).
  * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
- * 대상자가 많아 100KB를 넘으면 여러 조각으로 나눠 저장한다.
+ *
+ * 여러 사람이 동시에 쓸 때 꼬이지 않게:
+ *  - 저장할 때마다 그 부분의 "버전"을 바꾼다. 시트를 읽어 캐시를 만드는 동안 누가 저장했으면
+ *    그 캐시는 버린다 (저장 전 내용으로 덮어쓰지 않게).
+ *  - 캐시 한 칸은 100KB까지라 바이트 기준으로 나눠 저장한다 (한글은 한 글자가 3바이트).
+ *  - 대상자 목록은 열 이름을 반복하지 않는 배열로 줄여 저장·전송한다 (2천 명 기준 절반 이하).
  */
 
 const CACHE_TTL = 60;
-const CHUNK = 90000;
+const CHUNK_BYTES = 95000;
+const MAX_CHUNKS = 100;
 // 연도별 데이터는 보고 있는 연도를 붙여 따로 캐시한다 (people:2026, people:2027 …)
 const CK = {
   get people() { return 'people:' + viewYear_(); },
@@ -2029,58 +2072,124 @@ const CK = {
   ctx: 'ctx',
 };
 
+/* 대상자 목록 압축: { k: [열 키…], r: [[행, 최종수정, 수정자, 값…]] } — 빈 칸·체크 안 됨은 0, 체크는 1 */
+function encodePeople_(list) {
+  const keys = COLS.map(c => c.k);
+  return {
+    k: keys,
+    r: list.map(p => {
+      const r = [p.row || 0, p.updated || 0, p.editor || 0];
+      COLS.forEach(c => { const v = p[c.k]; r.push(c.t === 'bool' ? (v ? 1 : 0) : (v === '' || v == null ? 0 : v)); });
+      while (r.length > 1 && r[r.length - 1] === 0) r.pop();
+      return r;
+    }),
+  };
+}
+
+function decodePeople_(obj) {
+  if (!obj || !obj.k || obj.k.join(',') !== COLS.map(c => c.k).join(',')) return null; // 열 구성이 바뀌었으면 새로 읽는다
+  return obj.r.map(r => {
+    const p = { row: r[0] || 0, updated: r[1] ? String(r[1]) : '', editor: r[2] ? String(r[2]) : '' };
+    COLS.forEach((c, i) => { const v = r[i + 3]; p[c.k] = c.t === 'bool' ? v === 1 : (v === 0 || v == null ? '' : String(v)); });
+    p.id = p.empNo || 'r' + p.row;
+    return p;
+  });
+}
+
+const CODECS_ = { people: { enc: encodePeople_, dec: decodePeople_ } };
+const codec_ = key => CODECS_[String(key).split(':')[0]];
+
+/** 문자열을 UTF-8 바이트 기준으로 자른다 */
+function splitBytes_(s, max) {
+  const parts = [];
+  let start = 0, bytes = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const b = c < 0x80 ? 1 : c < 0x800 ? 2 : c >= 0xD800 && c <= 0xDBFF ? 4 : c >= 0xDC00 && c <= 0xDFFF ? 0 : 3;
+    if (bytes + b > max) { parts.push(s.slice(start, i)); start = i; bytes = 0; }
+    bytes += b;
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+
 /** 캐시에 있으면 값, 없으면 null (새로 만들지 않는다) */
 function peekCache_(key) {
   try {
     const cache = CacheService.getDocumentCache();
     const hit = cache.get(key);
+    let value = null;
     if (hit && hit.indexOf('CHUNKS:') === 0) {
       const n = Number(hit.slice(7));
       const keys = Array.from({ length: n }, (_, i) => `${key}#${i}`);
       const parts = cache.getAll(keys);
-      if (keys.every(k => parts[k] != null)) return JSON.parse(keys.map(k => parts[k]).join(''));
+      if (keys.every(k => parts[k] != null)) value = JSON.parse(keys.map(k => parts[k]).join(''));
     } else if (hit) {
-      return JSON.parse(hit);
+      value = JSON.parse(hit);
     }
+    const cd = codec_(key);
+    return value !== null && cd ? cd.dec(value) : value;
   } catch (e) { /* 캐시 오류는 없는 것으로 본다 */ }
   return null;
+}
+
+/** 저장(쓰기) 버전: 쓸 때마다 새 값. 캐시를 만드는 동안 바뀌었는지 확인하는 데 쓴다 */
+function verOf_(key) {
+  try { return CacheService.getDocumentCache().get('v:' + key) || ''; } catch (e) { return ''; }
+}
+function bumpVer_(key) {
+  try { CacheService.getDocumentCache().put('v:' + key, Utilities.getUuid(), 21600); } catch (e) { /* 캐시 없음 */ }
 }
 
 function cached_(key, build, ttl) {
   const hit = peekCache_(key);
   if (hit !== null) return hit;
+  const v0 = verOf_(key);
   const value = build();
   putCache_(key, value, ttl);
+  // 읽는 동안 누가 저장했으면 방금 넣은 (저장 전) 캐시는 버린다
+  if (verOf_(key) !== v0) removeCache_(key);
   return value;
 }
 
 function putCache_(key, value, ttl) {
   try {
     const cache = CacheService.getDocumentCache();
-    const s = JSON.stringify(value);
-    if (s.length <= CHUNK) {
+    const cd = codec_(key);
+    const s = JSON.stringify(cd ? cd.enc(value) : value);
+    const parts = splitBytes_(s, CHUNK_BYTES);
+    if (parts.length === 1) {
       cache.put(key, s, ttl || CACHE_TTL);
-      return;
+      return true;
     }
-    const parts = {};
-    let n = 0;
-    for (let i = 0; i < s.length; i += CHUNK) parts[`${key}#${n++}`] = s.slice(i, i + CHUNK);
-    if (n > 40) return; // 너무 크면 캐시하지 않는다
-    cache.putAll(parts, ttl || CACHE_TTL);
-    cache.put(key, 'CHUNKS:' + n, ttl || CACHE_TTL);
-  } catch (e) { /* 캐시할 수 없으면 건너뛴다 */ }
+    if (parts.length > MAX_CHUNKS) return false; // 너무 크면 캐시하지 않는다
+    const map = {};
+    parts.forEach((x, i) => { map[`${key}#${i}`] = x; });
+    cache.putAll(map, ttl || CACHE_TTL);
+    cache.put(key, 'CHUNKS:' + parts.length, ttl || CACHE_TTL);
+    return true;
+  } catch (e) { return false; /* 캐시할 수 없으면 건너뛴다 */ }
 }
 
-/** 캐시된 목록이 있으면 그 자리에서 고친다. 없으면 다음 조회 때 시트에서 새로 읽으므로 그냥 둔다 */
+/**
+ * 저장한 뒤 캐시를 그 자리에서 고친다 (없으면 다음 조회 때 시트에서 새로 읽으므로 그냥 둔다).
+ * 같은 캐시를 동시에 고치면 한쪽이 사라질 수 있으므로 문서 잠금 안에서 부른다.
+ */
 function patchCache_(key, fn) {
+  bumpVer_(key);
   const list = peekCache_(key);
   if (list === null) return;
   fn(list);
-  putCache_(key, list);
+  if (!putCache_(key, list)) removeCache_(key);
+}
+
+function removeCache_(key) {
+  try { CacheService.getDocumentCache().remove(key); } catch (e) { /* 캐시 없음 */ }
 }
 
 function dropCache_(key) {
-  try { CacheService.getDocumentCache().remove(key); } catch (e) { /* 캐시 없음 */ }
+  bumpVer_(key);
+  removeCache_(key);
 }
 
 function clearCaches_() {
@@ -2096,8 +2205,12 @@ const READERS = { people: readPeople_, logs: readLogs_, notices: readNotices_, r
 
 /** 저장 후 바뀐 부분만 새로 읽어 캐시에 넣고 화면에 돌려준다 */
 function refreshPart_(part) {
+  const key = CK[part];
+  bumpVer_(key);
+  const v0 = verOf_(key);
   const value = READERS[part](SpreadsheetApp.getActive());
-  putCache_(CK[part], value);
+  putCache_(key, value);
+  if (verOf_(key) !== v0) removeCache_(key); // 읽는 사이 다른 저장이 있었으면 캐시는 버린다
   const out = {};
   out[part] = forMe_(part, value, currentMember_(getContext().members));
   return out;
@@ -2109,7 +2222,7 @@ function refreshPart_(part) {
  *  - 첨부: 메뉴 권한이 있는 구분만
  */
 function forMe_(part, value, me) {
-  if (part === 'people') return value.filter(p => canSee_(me, p)).map(packPerson_);
+  if (part === 'people') return encodePeople_(value.filter(p => canSee_(me, p)));
   if (part === 'logs' || part === 'files') {
     const list = part === 'files' ? visibleFiles_(value, me) : value;
     const seen = visibleEmpNos_(me);
@@ -2120,14 +2233,6 @@ function forMe_(part, value, me) {
   return value;
 }
 
-/**
- * 보낼 때 빈 칸·체크 안 된 칸은 뺀다 (화면에서 기본값으로 채움). 대상자가 많을 때 응답 크기가 절반 이하로 준다.
- */
-function packPerson_(p) {
-  const out = {};
-  Object.keys(p).forEach(k => { const v = p[k]; if (v !== '' && v !== false && v != null) out[k] = v; });
-  return out;
-}
 
 /** 열람범위로 볼 수 있는 대상자인가 */
 function canSee_(me, p) {
@@ -2154,6 +2259,47 @@ function visibleFiles_(files, me) {
 
 /* ---------- 조회 ---------- */
 
+/* ---------- 자동 새로고침 ----------
+ * 화면은 1~2분마다 apiPoll(내가 가진 버전)을 부른다. 그 사이 누가 저장해 버전이 바뀐 부분만 다시 보낸다.
+ * 바뀐 게 없으면 캐시에서 버전 몇 개만 읽고 끝나므로 가볍다.
+ */
+const POLL_PARTS_ = ['people', 'logs', 'notices', 'events', 'files'];
+
+function partsFor_(me) {
+  const can = k => me.menus.indexOf(k) >= 0;
+  return {
+    people: can('review') || can('dash'),
+    logs: can('review'),
+    notices: can('notice') || can('dash'),
+    events: can('dash'),
+    files: can('files') || can('review'),
+  };
+}
+
+/** 버전은 자료를 읽기 전에 잰다 (읽는 사이 저장이 있으면 다음 번에 다시 받게) */
+function stampOf_(year) {
+  const keys = POLL_PARTS_.map(p => `v:${p}:${year}`);
+  let got = {};
+  try { got = CacheService.getDocumentCache().getAll(keys); } catch (e) { /* 캐시 없음 */ }
+  const out = { year: year };
+  POLL_PARTS_.forEach((p, i) => { out[p] = got[keys[i]] || ''; });
+  return out;
+}
+
+function apiPoll(stamp) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  const want = partsFor_(me);
+  const now = stampOf_(ctx.year);
+  const out = { stamp: now, year: ctx.year };
+  if (!stamp || stamp.year !== ctx.year) return out; // 다른 연도를 보고 있으면 화면이 알아서 다시 불러온다
+  POLL_PARTS_.forEach(part => {
+    if (!want[part] || stamp[part] === now[part]) return;
+    out[part] = forMe_(part, cached_(CK[part], () => READERS[part](ctx.ss)), me);
+  });
+  return out;
+}
+
 /** 화면 전체 데이터. 권한 없는 메뉴의 데이터는 아예 보내지 않는다 */
 function apiBootstrap() {
   const ctx = getContext();
@@ -2161,7 +2307,9 @@ function apiBootstrap() {
   const me = currentMember_(ctx.members);
   const can = k => me.menus.indexOf(k) >= 0;
   const seesPeople = can('review') || can('dash');
+  const stamp = stampOf_(ctx.year);
   return {
+    stamp: stamp,
     team: String(ctx.cfg[CFG.TEAM] || '연말정산 검토'),
     year: ctx.year,
     baseYear: ctx.baseYear,

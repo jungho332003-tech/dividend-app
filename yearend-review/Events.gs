@@ -65,7 +65,7 @@ function apiSaveEvent(ev) {
   const kind = EVENT_KINDS.indexOf(ev.kind) >= 0 ? ev.kind : '기타';
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
     let sh = yearSheet_(ctx.ss, SHEET.EVENTS);

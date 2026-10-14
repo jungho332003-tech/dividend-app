@@ -102,7 +102,7 @@ function apiSaveRule(rule) {
   const now = new Date();
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
     const sh = ctx.ss.getSheetByName(RULES.SHEET);

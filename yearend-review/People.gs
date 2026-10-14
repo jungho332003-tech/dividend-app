@@ -167,15 +167,19 @@ function cellValue_(col, now, value) {
   return String(value == null ? '' : value).trim();
 }
 
-/** 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게) */
-function apiSavePerson(id, patch) {
+/**
+ * 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게)
+ * base: 화면에서 고치기 전에 보던 값 { 키: 값, __name: 성명 }.
+ *   그 사이 다른 사람이 같은 칸을 먼저 고쳤으면 아무것도 쓰지 않고 { conflicts, personPatch(지금 값) }을 돌려준다.
+ */
+function apiSavePerson(id, patch, base) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const map = colMap_(sh);
@@ -183,10 +187,15 @@ function apiSavePerson(id, patch) {
     if (!found) throw new Error('대상자를 찾을 수 없습니다. 시트에서 사원번호가 바뀌었을 수 있으니 새로고침해 주세요.');
     const { row, values } = found;
     const cur = rowToPerson_(values, map, row);
+    // 사원번호 없는 대상자(행 번호로 찾음)는 행이 밀렸을 수 있으니 이름까지 확인한다
+    if (base && base.__name != null && String(base.__name) !== cur.name) throw new Error('대상자 정보가 바뀌었습니다. 새로고침한 뒤 다시 저장해 주세요.');
     if (!canSee_(me, cur)) throw new Error('열람 범위 밖의 대상자입니다. 관리자에게 열람 범위를 요청하세요.');
 
     const keys = Object.keys(patch || {}).filter(k => COLS.some(c => c.k === k));
     if (!keys.length) return { personPatch: cur };
+    // 다른 사람이 먼저 고친 칸이 있으면 아무것도 쓰지 않는다 (예: 둘이 동시에 「내가 담당하기」)
+    const conflicts = base ? findConflicts_(cur, patch, base, keys) : [];
+    if (conflicts.length) return { conflicts: conflicts, personPatch: cur, oldId: String(id) };
     keys.forEach(k => {
       const col = COLS.find(c => c.k === k);
       if (!canEdit_(me, cur, col, patch)) {
@@ -220,6 +229,15 @@ function apiSavePerson(id, patch) {
   }
 }
 
+/** 내가 고치려는 칸 중, 내가 화면을 연 뒤 다른 사람이 먼저 다른 값으로 바꾼 칸 */
+function findConflicts_(cur, patch, base, keys) {
+  const norm = (col, v) => col.t === 'bool' ? !!v : String(v == null ? '' : v).trim();
+  return keys.filter(k => k in base).map(k => COLS.find(c => c.k === k)).filter(col => {
+    const now = norm(col, cur[col.k]);
+    return now !== norm(col, base[col.k]) && now !== norm(col, patch[col.k]);
+  }).map(col => ({ k: col.k, l: col.l, now: col.t === 'bool' ? (cur[col.k] ? '체크' : '체크 안 됨') : String(cur[col.k] || '(빈 칸)') }));
+}
+
 /** 총괄·관리자: 대상자 한 명 추가 */
 function apiAddPerson(fields) {
   const ctx = getContext();
@@ -228,8 +246,7 @@ function apiAddPerson(fields) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 추가는 총괄 또는 관리자만 할 수 있습니다.');
   if (!String(fields.name || '').trim()) throw new Error('성명을 입력해 주세요.');
-  apiImportPeople([fields]);
-  return refreshPart_('people');
+  return apiImportPeople([fields]);
 }
 
 /** 총괄·관리자: 대상자 삭제 (행 삭제) */
@@ -240,7 +257,7 @@ function apiDeletePerson(id) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const row = findPersonRow_(sh, colMap_(sh), String(id));
@@ -264,7 +281,7 @@ function apiImportPeople(rows) {
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let added = 0, updated = 0;
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -295,7 +312,6 @@ function apiImportPeople(rows) {
   } finally {
     lock.releaseLock();
   }
-  dropCache_(CK.people);
   return Object.assign(refreshPart_('people'), { added: added, updated: updated });
 }
 
@@ -320,7 +336,7 @@ function apiAssignPeople(ids, patch) {
   });
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -367,10 +383,12 @@ function apiAddLog(id, kind, body) {
   if (!canSee_(me, p)) throw new Error('열람 범위 밖의 대상자입니다.');
   const now = new Date();
   const k = LOG_KINDS.indexOf(kind) >= 0 ? kind : '기타';
-  yearSheet_(ctx.ss, SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
-  // 응대기록 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다
   const entry = { date: fmt(now, 'yyyy-MM-dd HH:mm'), empNo: p.empNo, name: p.name, author: me.name || me.email, kind: k, body: text };
-  patchCache_(CK.logs, list => { list.unshift(entry); });
+  // 기록과 캐시 갱신을 한 번에: 시트 전체를 다시 읽지 않고 캐시 맨 앞에 넣는다 (동시에 남긴 기록이 빠지지 않게 잠금 안에서)
+  withLock_(() => {
+    yearSheet_(ctx.ss, SHEET.LOGS).appendRow([now, p.empNo, p.name, me.name || me.email, k, text]);
+    patchCache_(CK.logs, list => { list.unshift(entry); });
+  });
   return { logAdded: entry };
 }
 

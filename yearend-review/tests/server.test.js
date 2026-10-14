@@ -5,13 +5,12 @@ const ok = (name, fn) => { try { fn(); pass++; console.log('✓', name); } catch
 const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } assert(err, 'expected error'); assert(re.test(err.message), 'wrong error: ' + err.message); };
 
 
-// 서버는 빈 칸·체크 안 된 칸을 빼고 보낸다 (packPerson_). 화면(unpackPeople)처럼 기본값을 채워 비교한다
+// 서버는 대상자 목록을 압축해서 보낸다 ({ k, r }). 화면(unpackPeople)처럼 풀어서 비교한다
 function withDefaults(api) {
-  const blank = {};
-  api.COLS.forEach(c => { blank[c.k] = c.t === 'bool' ? false : ''; });
-  ['apiBootstrap', 'apiImportPeople', 'apiAddPerson', 'apiDeletePerson', 'apiSetYear'].forEach(name => {
+  ['apiBootstrap', 'apiImportPeople', 'apiAddPerson', 'apiDeletePerson', 'apiSetYear', 'apiAssignPeople', 'apiPoll'].forEach(name => {
     const fn = api[name];
-    api[name] = (...args) => { const r = fn(...args); if (r && r.people) r.people = r.people.map(p => Object.assign({ updated: '', editor: '' }, blank, p)); return r; };
+    if (!fn) return;
+    api[name] = (...args) => { const r = fn(...args); if (r && r.people && !Array.isArray(r.people)) r.people = api.decodePeople_(r.people); return r; };
   });
   return api;
 }
@@ -420,4 +419,114 @@ function withDefaults(api) {
     assert.strictEqual(ps.find(p => p.empNo === '7001').retired, false);
   });
 }
+/* ---------- 3. 담당자 8명 · 대상자 2천 명이 동시에 쓰는 경우 ---------- */
+{
+  const { api, ss, state, cacheStore } = makeEnv();
+  withDefaults(api);
+  const as = u => { state.user = u; };
+  as('owner@x.com');
+  api.initialize();
+  const Y = String(ss.getSheetByName('설정').get(3, 2));
+  const staff = ['김도현', '이수민', '박지호', '오세훈', '강민지', '최유나', '한서준', '정해린'];
+  const roles = ['응대담당', '응대담당', '응대담당', '응대담당', '응대담당', '2차검토', '2차검토', '총괄'];
+  const mem = ss.getSheetByName('담당자');
+  mem.getRange(2, 1, 5, 6).clearContent();
+  mem.getRange(2, 1, 8, 6).setValues(staff.map((n, i) => [i + 1, n, `u${i}@x.com`, roles[i], 'N', '']));
+  as('u7@x.com');
+  const N = 2000;
+  const note = '부양가족 중복공제 확인 필요 — 모친을 형과 함께 공제하려 해서 형에게 확인 요청, 회신 오면 정정 예정. 의료비 영수증 재발급 안내함.';
+  api.apiImportPeople(Array.from({ length: N }, (_, i) => ({ no: String(i + 1), empNo: String(30000 + i), name: '직원' + i, dept: '부서' + (i % 9), phone: '010-0000-' + String(1000 + i).slice(-4), email: `e${i}@example.com`,
+    owner: i < N - 5 ? staff[i % 5] : '', owner2: staff[5 + (i % 2)], ehr: i % 2 ? 'O' : '', note1: note, missing: i % 7 ? '' : '의료비 영수증, 기부금 영수증' })));
+  const key = 'people:' + Y;
+
+  ok('2천 명: 한글이 많아도 캐시가 100KB 조각으로 나뉘어 저장된다', () => {
+    Object.keys(cacheStore).forEach(k => delete cacheStore[k]);
+    as('u0@x.com');
+    const b = api.apiBootstrap();
+    assert.strictEqual(b.people.length, N);
+    assert(/^CHUNKS:\d+$/.test(cacheStore[key]), '조각 캐시가 있어야 함');
+    Object.keys(cacheStore).filter(k => k.startsWith(key + '#')).forEach(k => assert(Buffer.byteLength(cacheStore[k]) <= 100000));
+    const back = api.peekCache_(key);
+    assert.strictEqual(back.length, N); assert.strictEqual(back[5].note1, note); assert.strictEqual(back[1].ehr, true); assert.strictEqual(back[0].ehr, false);
+  });
+
+  ok('같은 칸을 동시에 고치면 나중 사람은 덮어쓰지 않고 알림을 받는다', () => {
+    const id = '30000'; // 김도현 담당, 2차 최유나
+    as('u7@x.com');
+    const r1 = api.apiSavePerson(id, { missing: '총괄이 먼저' }, { __name: '직원0', missing: '의료비 영수증, 기부금 영수증' });
+    assert(!r1.conflicts);
+    as('u0@x.com');
+    const r2 = api.apiSavePerson(id, { missing: '' }, { __name: '직원0', missing: '의료비 영수증, 기부금 영수증' });
+    assert.strictEqual(r2.conflicts.length, 1); assert.strictEqual(r2.conflicts[0].k, 'missing');
+    assert.strictEqual(r2.personPatch.missing, '총괄이 먼저', '지금 값을 돌려준다');
+    assert.strictEqual(api.peekCache_(key).find(p => p.id === id).missing, '총괄이 먼저');
+    // 지금 값을 보고 다시 저장하면 된다
+    assert(!api.apiSavePerson(id, { missing: '' }, { __name: '직원0', missing: '총괄이 먼저' }).conflicts);
+  });
+
+  ok('다른 칸·같은 값은 충돌이 아니다 (1차·2차 담당자가 동시에)', () => {
+    const id = '30005'; // 김도현 담당, 2차 한서준(u6)
+    as('u6@x.com');
+    assert(!api.apiSavePerson(id, { note2: '2차 확인' }, { __name: '직원5', note2: '' }).conflicts);
+    as('u0@x.com');
+    const r = api.apiSavePerson(id, { verified: true, note1: '1차 수정' }, { __name: '직원5', verified: false, note1: note });
+    assert(!r.conflicts); assert.strictEqual(r.personPatch.note2, '2차 확인'); assert.strictEqual(r.personPatch.verified, true);
+    as('u7@x.com');
+    assert(!api.apiSavePerson(id, { arrived: true }, { __name: '직원5', arrived: false }).conflicts);
+    as('u0@x.com');
+    assert(!api.apiSavePerson(id, { arrived: true }, { __name: '직원5', arrived: false }).conflicts, '이미 같은 값');
+  });
+
+  ok('둘이 동시에 「내가 담당하기」: 먼저 누른 사람만 맡는다', () => {
+    const id = String(30000 + N - 1); // 담당자 없음
+    as('u1@x.com');
+    assert.strictEqual(api.apiSavePerson(id, { owner: '이수민', ehr: true }, { __name: '직원' + (N - 1), owner: '', ehr: false }).personPatch.owner, '이수민');
+    as('u2@x.com');
+    const r = api.apiSavePerson(id, { owner: '박지호', arrived: true }, { __name: '직원' + (N - 1), owner: '', arrived: false });
+    assert.strictEqual(r.conflicts[0].k, 'owner'); assert.strictEqual(r.conflicts[0].now, '이수민');
+    assert.strictEqual(api.peekCache_(key).find(p => p.id === id).arrived, false, '아무것도 쓰지 않음');
+  });
+
+  ok('행이 밀려 다른 사람을 가리키면 저장하지 않는다', () => {
+    as('u0@x.com');
+    throwsMsg(() => api.apiSavePerson('30000', { note1: 'x' }, { __name: '다른사람', note1: '' }), /정보가 바뀌었습니다/);
+  });
+
+  ok('캐시를 만드는 사이 누가 저장하면 그 캐시는 버린다 (저장 전 내용으로 덮어쓰지 않음)', () => {
+    Object.keys(cacheStore).forEach(k => delete cacheStore[k]);
+    as('u0@x.com');
+    api.cached_(key, () => { api.apiSavePerson('30010', { verified: true }); return [{ id: 'stale' }]; });
+    assert(!(key in cacheStore), '오래된 캐시를 남기면 안 됨');
+    const b = api.apiBootstrap();
+    assert.strictEqual(b.people.find(p => p.id === '30010').verified, true);
+  });
+
+  ok('자동 새로고침: 바뀐 부분만 받는다', () => {
+    as('u1@x.com');
+    const b = api.apiBootstrap();
+    let r = api.apiPoll(b.stamp);
+    assert(r.people === undefined && r.logs === undefined, '바뀐 게 없으면 자료를 보내지 않음');
+    as('u0@x.com');
+    api.apiSavePerson('30000', { note1: '방금 수정' }, { __name: '직원0', note1: note });
+    as('u1@x.com');
+    r = api.apiPoll(r.stamp);
+    assert(r.people, '대상자가 바뀌었으니 받음'); assert(r.logs === undefined, '응대기록은 그대로');
+    assert.strictEqual(r.people.find(p => p.id === '30000').note1, '방금 수정');
+    r = api.apiPoll(r.stamp);
+    assert(r.people === undefined);
+    as('u2@x.com'); api.apiAddLog('30002', '전화', '통화함');
+    as('u1@x.com'); r = api.apiPoll(r.stamp);
+    assert(r.logs && r.logs.some(l => l.body === '통화함')); assert(r.people === undefined);
+    assert.strictEqual(api.apiPoll({ year: '1999' }).people, undefined, '다른 연도 기준이면 보내지 않음');
+  });
+
+  ok('응대기록을 연달아 남겨도 캐시에서 빠지지 않는다', () => {
+    as('u0@x.com'); api.apiBootstrap();
+    for (let i = 0; i < 20; i++) { as(`u${i % 5}@x.com`); api.apiAddLog(String(30000 + (i % 5)), '전화', '연속 ' + i); }
+    as('u7@x.com');
+    const logs = api.apiBootstrap().logs;
+    for (let i = 0; i < 20; i++) assert(logs.some(l => l.body === '연속 ' + i), '연속 ' + i);
+  });
+}
+
 console.log(`\n${pass} passed${process.exitCode ? ' (with failures)' : ''}`);

@@ -733,17 +733,32 @@
    * 실패하면 undo()로 화면을 되돌리고 retry()로 작성하던 화면을 다시 띄운다.
    */
   let pending = 0;
+  const saveQueues = {};
   function saveInBackground(fn, args, opts) {
     pending++;
     showSaving();
-    return call(fn, ...args)
-      .then(data => { applyData(data); if (opts.done) opts.done(data); return data; })
+    let saved = false;
+    const run = () => call(fn, ...args);
+    // 같은 대상자의 저장은 누른 순서대로 하나씩 보낸다 (나중 저장이 먼저 도착해 꼬이지 않게)
+    const q = opts.queue;
+    const req = q ? (saveQueues[q] = (saveQueues[q] || Promise.resolve()).catch(() => {}).then(run)) : run();
+    return req
+      .then(data => {
+        // 다른 담당자가 같은 칸을 먼저 고쳤으면 서버가 저장하지 않고 지금 값을 돌려준다
+        if (data && data.conflicts && data.conflicts.length) { const e = new Error(conflictMsg(data.conflicts)); e.data = data; throw e; }
+        applyData(data); saved = true; if (opts.done) opts.done(data); return data;
+      })
       .catch(err => {
         if (opts.undo) opts.undo();
+        if (err.data && err.data.personPatch) applyData({ personPatch: err.data.personPatch, oldId: err.data.oldId });
         render();
-        if (opts.retry) opts.retry(err.message || String(err)); else fail(err);
+        if (opts.retry) opts.retry(err.message || String(err), err.data); else fail(err);
       })
-      .then(() => { pending--; showSaving(); if (!pending && opts.ok) toast(opts.ok); });
+      // 실패했으면 "저장했습니다"를 띄우지 않는다
+      .then(() => { pending--; showSaving(); if (!pending && saved && opts.ok) toast(opts.ok); });
+  }
+  function conflictMsg(list) {
+    return `다른 담당자가 먼저 고친 칸이 있어 저장하지 않았습니다 — ${list.map(c => `${c.l}(지금: ${c.now})`).join(', ')}. 지금 값을 확인하고 다시 저장해 주세요.`;
   }
   function showSaving() {
     const el = $('#saving');
@@ -768,6 +783,17 @@
 
   /** 서버는 빈 칸·체크 안 된 칸을 빼고 보내므로 기본값으로 채운다 */
   function unpackPeople(list) {
+    // 서버는 열 이름을 반복하지 않는 배열로 보낸다: { k: [열 키…], r: [[행, 최종수정, 수정자, 값…]] }
+    if (list && list.k && list.r) {
+      const cols = list.k.map(k => D.cols.find(c => c.k === k) || { k, t: '' });
+      return list.r.map(r => {
+        const p = { row: r[0] || 0, updated: r[1] ? String(r[1]) : '', editor: r[2] ? String(r[2]) : '' };
+        cols.forEach((c, i) => { const v = r[i + 3]; p[c.k] = c.t === 'bool' ? v === 1 : (v === 0 || v == null ? '' : String(v)); });
+        D.cols.forEach(c => { if (!(c.k in p)) p[c.k] = c.t === 'bool' ? false : ''; });
+        p.id = p.empNo || 'r' + p.row;
+        return p;
+      });
+    }
     const blank = {};
     D.cols.forEach(c => { blank[c.k] = c.t === 'bool' ? false : ''; });
     return (list || []).map(p => Object.assign({ updated: '', editor: '' }, blank, p));
@@ -784,8 +810,47 @@
       // 담당으로 지정된 대상자가 없으면 서류 검토를 전체 목록으로 연다
       if (first && !D.people.some(isMine)) reviewTab = 'all';
       render();
+      schedulePoll(POLL_MS);
     }).catch(fail);
   }
+
+  /* ---------- 자동 새로고침: 다른 담당자가 저장한 내용을 1분 30초마다 받아 온다 ----------
+   * 바뀐 부분만 받는다. 입력 창이 열려 있거나 저장 중·입력 중이면 미뤘다가 다시 시도한다. */
+  const POLL_MS = 90000;
+  const POLL_PARTS = ['people', 'logs', 'notices', 'events', 'files'];
+  let pollTimer = null, polling = false, lastPoll = Date.now();
+  function schedulePoll(ms) { clearTimeout(pollTimer); pollTimer = setTimeout(poll, ms); }
+  function uiBusy() {
+    if (pending || !$('#scrim').hidden) return true;
+    const a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox');
+  }
+  function poll() {
+    if (!D || !D.stamp || polling) return;
+    if (document.hidden) return; // 다시 보이면 visibilitychange에서 부른다
+    if (uiBusy()) return schedulePoll(15000);
+    polling = true;
+    const year = D.year;
+    call('apiPoll', D.stamp).then(res => {
+      polling = false;
+      lastPoll = Date.now();
+      if (!D || D.year !== year || res.year !== year) return schedulePoll(POLL_MS);
+      // 기다리는 사이 입력 창을 열었거나 저장을 시작했으면 이번 결과는 버리고 곧 다시 받는다 (버전도 그대로)
+      if (uiBusy()) return schedulePoll(15000);
+      const parts = POLL_PARTS.filter(k => res[k] !== undefined);
+      D.stamp = res.stamp;
+      if (parts.length) {
+        const data = {};
+        parts.forEach(k => { data[k] = res[k]; });
+        applyData(data);
+        if (page !== 'admin' && page !== 'none') { const y = window.scrollY; render(); window.scrollTo(0, y); }
+      }
+      schedulePoll(POLL_MS);
+    }).catch(() => { polling = false; schedulePoll(POLL_MS); });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && D && D.stamp) schedulePoll(Date.now() - lastPoll > 30000 ? 300 : POLL_MS);
+  });
 
   /* ================= 공통 계산 ================= */
   const STATUS = {
@@ -1095,7 +1160,8 @@
   let reviewSort = { k: null, dir: 1 };
   const EMP_ORDER = { 재직: 0, 휴직: 1, 퇴사: 2 };
   const sortVal = (p, k) => k === 'leave' ? String(EMP_ORDER[empState(p)]) : String(p[k] == null ? '' : p[k]).trim();
-  const cmpText = (a, b) => a.localeCompare(b, 'ko', { numeric: true });
+  const KO = new Intl.Collator('ko', { numeric: true });
+  const cmpText = (a, b) => KO.compare(a, b);
   function reviewCompare(a, b) {
     const { k, dir } = reviewSort;
     const x = k ? sortVal(a, k) : '', y = k ? sortVal(b, k) : '';
@@ -1156,13 +1222,13 @@
     if (!Object.keys(patch).length) return toast('담당자나 2차검토 담당자를 골라 주세요.');
     const label = [patch.owner !== undefined ? `담당자 ${patch.owner || '비움'}` : '', patch.owner2 !== undefined ? `2차검토 ${patch.owner2 || '비움'}` : ''].filter(Boolean).join(' · ');
     // 화면에 먼저 반영하고 뒤에서 저장
-    const before = targets.map(p => [p, p.owner, p.owner2, p.updated, p.editor]);
+    const before = targets.map(p => ({ id: p.id, owner: p.owner, owner2: p.owner2, updated: p.updated, editor: p.editor }));
     targets.forEach(p => Object.assign(p, patch, { editor: D.me.name }));
     picked.clear(); bulkOwner = bulkOwner2 = KEEP;
     render();
     saveInBackground('apiAssignPeople', [targets.map(p => p.id), patch], {
       ok: `${targets.length}명 지정 완료 — ${label}`,
-      undo: () => { before.forEach(([p, o, o2, u, e]) => Object.assign(p, { owner: o, owner2: o2, updated: u, editor: e })); targets.forEach(p => picked.add(p.id)); },
+      undo: () => { before.forEach(b => { const p = D.people.find(x => x.id === b.id); if (p) Object.assign(p, b); picked.add(b.id); }); },
     });
   }
 
@@ -1331,20 +1397,26 @@
     if (uploadsBusy('person')) { $('#pErr').textContent = BUSY_MSG; $('#pErr').hidden = false; return; }
     // 화면에 바로 반영
     const before = Object.assign({}, p);
-    const idx = D.people.indexOf(p);
+    // 고치기 전에 보던 값: 그 사이 다른 사람이 같은 칸을 고쳤는지 서버가 확인한다
+    const base = { __name: before.name };
+    Object.keys(patch).forEach(k => { base[k] = before[k]; });
     Object.assign(p, patch);
     if (patch.empNo !== undefined) p.id = patch.empNo || before.id;
     closeModal();
     render();
-    saveInBackground('apiSavePerson', [before.id, patch], {
+    saveInBackground('apiSavePerson', [before.id, patch, base], {
+      queue: 'p:' + before.id,
       ok: `${before.name}님 검토 내용을 저장했습니다.`,
-      undo: () => { if (idx >= 0) D.people[idx] = Object.assign(p, before); },
-      // 실패하면 고치던 내용을 그대로 다시 띄운다
-      retry: msg => {
-        openPerson(before.id);
+      undo: () => {
+        const i = D.people.findIndex(x => x === p || x.id === p.id || x.id === before.id);
+        if (i >= 0) D.people[i] = Object.assign({}, before);
+      },
+      // 실패하면 고치던 내용을 그대로 다시 띄운다 (다른 사람이 고친 경우엔 지금 값 위에 내 입력을 다시 채운다)
+      retry: (msg, data) => {
+        openPerson(data && data.personPatch ? data.personPatch.id : before.id);
         Object.keys(patch).forEach(k => { const el = $('#pf_' + k); if (!el) return; if (el.type === 'checkbox') el.checked = !!patch[k]; else el.value = patch[k]; });
         if (patch.owner && !before.owner) { draftOwner = patch.owner; }
-        $('#pErr').textContent = `저장하지 못했습니다: ${msg}`; $('#pErr').hidden = false;
+        $('#pErr').textContent = data && data.conflicts ? msg : `저장하지 못했습니다: ${msg}`; $('#pErr').hidden = false;
       },
     });
   }

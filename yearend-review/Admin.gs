@@ -267,7 +267,7 @@ function apiStartYear(opts) {
   const from = String(opts.from || ctx.baseYear);
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let carried = 0, copied = 0;
   try {
     migrateLegacySheets_(ctx.ss, ctx.baseYear);

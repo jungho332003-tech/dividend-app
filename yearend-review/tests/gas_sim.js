@@ -99,15 +99,16 @@ function makeEnv() {
     },
     Session: { getActiveUser: () => ({ getEmail: () => state.user }), getEffectiveUser: () => ({ getEmail: () => state.user }) },
     CacheService: { getDocumentCache: () => ({
-      get: k => cacheStore[k] ?? null, put: (k, v) => { assert(v.length <= 100000, 'cache value too big'); cacheStore[k] = v; },
+      get: k => cacheStore[k] ?? null, put: (k, v) => { assert(Buffer.byteLength(v) <= 100000, 'cache value too big'); cacheStore[k] = v; },
       getAll: ks => Object.fromEntries(ks.filter(k => k in cacheStore).map(k => [k, cacheStore[k]])),
-      putAll: o => Object.entries(o).forEach(([k, v]) => { assert(v.length <= 100000); cacheStore[k] = v; }),
+      putAll: o => Object.entries(o).forEach(([k, v]) => { assert(Buffer.byteLength(v) <= 100000, 'cache value too big'); cacheStore[k] = v; }),
       remove: k => { delete cacheStore[k]; }, removeAll: ks => ks.forEach(k => delete cacheStore[k]),
     }) },
     PropertiesService: { getUserProperties: () => ({ getProperty: k => (userProps[state.user] || {})[k] ?? null, setProperty: (k, v) => { (userProps[state.user] = userProps[state.user] || {})[k] = v; } }) },
-    LockService: { getDocumentLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    LockService: { getDocumentLock: () => ({ waitLock() {}, tryLock() { return true; }, releaseLock() {} }) },
     Utilities: {
       formatDate: (d, tz, p) => { const k = new Date(d.getTime() + 9 * 3600e3); const pad = n => String(n).padStart(2, '0'); return p.replace('yyyy', k.getUTCFullYear()).replace('MM', pad(k.getUTCMonth() + 1)).replace('dd', pad(k.getUTCDate())).replace('HH', pad(k.getUTCHours())).replace('mm', pad(k.getUTCMinutes())); },
+      getUuid: () => 'u' + Math.random().toString(36).slice(2) + Date.now().toString(36),
       base64Decode: s => Array.from(Buffer.from(s, 'base64')), newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
     },
     DriveApp: { getFolderById: id => { if (id !== 'FOLDER') throw new Error('no folder'); return root; }, getFileById: id => books[id] ? { isTrashed: () => false } : id === 'SSID' ? { getOwner: () => ({ getEmail: () => 'owner@x.com' }), getEditors: () => [], getViewers: () => [], addEditor(e) { state.editors[e] = 1; }, removeEditor() {}, removeViewer() {} } : (state.files[id] || (() => { throw new Error('nf'); })()) },
@@ -115,7 +116,7 @@ function makeEnv() {
     HtmlService: { createHtmlOutputFromFile: () => chain, createHtmlOutput: () => chain },
   };
   vm.createContext(g);
-  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAssignPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiCloseYear, apiSetYear, CtxDate: Date };', g);
+  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAssignPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, peekCache_, decodePeople_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiCloseYear, apiSetYear, apiPoll, CtxDate: Date };', g);
   return { api: g.__api, ss, state, cacheStore, books };
 }
 

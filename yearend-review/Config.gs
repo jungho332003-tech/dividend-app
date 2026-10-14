@@ -216,6 +216,17 @@ function getContext() {
   };
 }
 
+/* ---------- 잠금 ---------- */
+
+const LOCK_BUSY_MSG = '다른 담당자의 저장이 몰려 있습니다. 잠시 후 다시 저장해 주세요.';
+
+/** 문서 잠금 안에서 fn을 실행한다 (여러 담당자가 동시에 저장해도 한 번에 한 사람씩) */
+function withLock_(fn) {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
 /* ---------- 연도 마감 ---------- */
 
 function closedYears_(cfg) {

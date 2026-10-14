@@ -104,7 +104,7 @@ function apiSaveNotice(n) {
   const now = new Date();
 
   const lock = LockService.getDocumentLock();
-  lock.waitLock(30000);
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
     const sh = ctx.ss.getSheetByName(NOTICE.SHEET);
@@ -152,9 +152,12 @@ function apiAddNoticeComment(id, body) {
   const text = String(body || '').trim();
   if (!text) throw new Error('댓글 내용을 입력해 주세요.');
   const now = new Date();
-  ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), now, me.name || me.email, text]);
   const comment = { date: fmt(now, 'yyyy-MM-dd HH:mm'), author: me.name || me.email, body: text };
-  patchCache_(CK.notices, list => { const n = list.find(x => x.id === String(id)); if (n) n.comments.push(comment); });
+  // 기록과 캐시 갱신을 한 번에 (동시에 단 댓글이 캐시에서 빠지지 않게)
+  withLock_(() => {
+    ctx.ss.getSheetByName(NOTICE.COMMENTS).appendRow([String(id), now, me.name || me.email, text]);
+    patchCache_(CK.notices, list => { const n = list.find(x => x.id === String(id)); if (n) n.comments.push(comment); });
+  });
   return { commentAdded: { id: String(id), comment: comment } };
 }
 

@@ -80,6 +80,11 @@ function areaFolder_(areaName, ctx) {
 function registerFiles_(area, ref, refLabel, files, me, memo) {
   const list = (files || []).filter(f => f && f.id);
   if (!list.length) return;
+  // 마지막 행 다음에 쓰므로 동시에 올리면 같은 행을 덮어쓸 수 있다 → 잠금 안에서 기록
+  withLock_(() => registerRows_(area, ref, refLabel, list, me, memo));
+}
+
+function registerRows_(area, ref, refLabel, list, me, memo) {
   const sh = SpreadsheetApp.getActive().getSheetByName(FILES.SHEET);
   const last = sh.getLastRow();
   const have = new Set(last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => String(v)) : []);

@@ -242,7 +242,7 @@ window.MockApi = (function () {
       const m = meInfo();
       const can = k => m.menus.indexOf(k) >= 0;
       return {
-        team: settings.team, year: curYear(), baseYear: settings.year, years: years(), closedYears: closed.slice(), closed: closed.indexOf(curYear()) >= 0, eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
+        stamp: { year: curYear() }, team: settings.team, year: curYear(), baseYear: settings.year, years: years(), closedYears: closed.slice(), closed: closed.indexOf(curYear()) >= 0, eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
         staff: staff.map(s => ({ name: s.name, role: s.role })), cols: COLS,
         logKinds: ['전화', '메일', '메신저', '방문', '보완요청', '기타'],
         noticeCategories: ['공지', '응대지침', '자료', '질문'], noticeLeaderOnly: ['공지', '응대지침'],
@@ -254,11 +254,19 @@ window.MockApi = (function () {
       };
     },
 
-    apiSavePerson(id, patch) {
+    apiSavePerson(id, patch, base) {
       const m = meInfo(); need(m, 'review');
       const cur = people.find(p => p.id === id);
       if (!cur) throw new Error('대상자를 찾을 수 없습니다.');
       if (!canSee(m, cur)) throw new Error('열람 범위 밖의 대상자입니다.');
+      // 실제 서버와 같은 규칙: 화면을 연 뒤 다른 사람이 같은 칸을 먼저 고쳤으면 저장하지 않는다
+      if (base) {
+        const norm = (c, v) => c.t === 'bool' ? !!v : String(v == null ? '' : v).trim();
+        const conflicts = Object.keys(patch).filter(k => k in base).map(k => COLS.find(c => c.k === k))
+          .filter(c => norm(c, cur[c.k]) !== norm(c, base[c.k]) && norm(c, cur[c.k]) !== norm(c, patch[c.k]))
+          .map(c => ({ k: c.k, l: c.l, now: c.t === 'bool' ? (cur[c.k] ? '체크' : '체크 안 됨') : String(cur[c.k] || '(빈 칸)') }));
+        if (conflicts.length) return { conflicts, personPatch: cur, oldId: id };
+      }
       Object.keys(patch).forEach(k => {
         const c = COLS.find(x => x.k === k);
         if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'lead' ? '총괄·관리자' : c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
@@ -295,6 +303,8 @@ window.MockApi = (function () {
       people.forEach(p => { if (ids.indexOf(p.id) < 0) return; assigned++; ['owner', 'owner2'].forEach(k => { if (k in patch) p[k] = patch[k]; }); p.updated = stamp(); p.editor = m.name; });
       return { people: myPeople(m), assigned };
     },
+    // 예시 화면은 혼자 쓰므로 자동 새로고침으로 받을 변경이 없다
+    apiPoll(st) { return { stamp: st, year: curYear() }; },
     apiTemplateLink() { return { demo: true }; },
     apiSetYear(y) { if (!stores[y]) throw new Error(`${y}년 자료가 없습니다.`); viewYears[me] = y; return this.apiBootstrap(); },
     apiSaveEvent(ev) {
