@@ -287,12 +287,12 @@
   .t td.nowrap { white-space: nowrap; }
   .t td.strong { font-weight: 700; }
 
-  table.report { border-collapse: collapse; min-width: 980px; font-size: 13.5px; border: 2px solid var(--grid); }
-  .report thead tr:last-child th { border-bottom: 2px solid var(--grid); }
+  table.report { border-collapse: collapse; min-width: 980px; font-size: 13.5px; border: 1.5px solid var(--grid); }
+  .report thead tr:last-child th { border-bottom: 1.5px solid var(--grid); }
   .report th, .report td { border: 1px solid var(--grid); padding: 8px 10px; vertical-align: middle; }
   .report th { background: var(--panel-2); text-align: center; font-weight: 800; white-space: nowrap; color: var(--ink); font-size: 13.5px; }
   .report td.c { text-align: center; white-space: nowrap; color: var(--ink-2); }
-  .report tr.top td { border-top: 2px solid var(--grid); }
+  .report tr.top td { border-top: 1.5px solid var(--grid); }
   .report td.nm { text-align: center; font-weight: 600; white-space: nowrap; }
   .report td.nm.pending { background: var(--warn-bg); color: var(--warn-ink); }
   .report td.cm { background: var(--comment-bg); min-width: 220px; white-space: pre-wrap; }
@@ -304,11 +304,11 @@
   table.report.team { font-size: 14.5px; line-height: 1.5; width: 100%; }
   .report.team th, .report.team td { padding: 10px 12px; }
   .report.team tr.alt td:not(.cm) { background: var(--row-alt); }
-  .report.team td.nm { vertical-align: top; padding-top: 12px; }
-  .report.team td.nm b { display: block; font-size: 15.5px; margin-bottom: 4px; }
-  .report.team td.nm.pending b { color: var(--warn-ink); }
+  .report.team td.nm { vertical-align: middle; text-align: center; }
+  .report.team td.nm b { display: block; font-size: 15.5px; }
+  .report.team td.nm .dot { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--warn-ink); margin: 6px auto 0; }
   .report.team td.note { color: var(--ink); font-weight: 500; }
-  .report.team td.nm.pending { background: var(--warn-bg) !important; }
+  .dot-inline { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-ink); vertical-align: 1px; }
   .due-late { color: var(--warn-ink); font-weight: 700; }
   .due-soon { color: var(--ink); font-weight: 700; }
   /* 회의 모드 */
@@ -364,7 +364,7 @@
   .wk { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11.5px; font-weight: 700; margin-right: 6px; vertical-align: 1px; letter-spacing: 0; }
   .wk.this { background: var(--accent); color: var(--accent-ink); }
   .wk.next { background: var(--next); color: #fff; }
-  .report th.split, .report td.split { border-left: 2px solid var(--grid); }
+  .report th.split, .report td.split { border-left: 1px solid var(--grid); }
   .report td.cat { text-align: center; font-weight: 800; white-space: nowrap; background: var(--panel-2); }
   .report td.hr-in.editable { cursor: pointer; }
   .report td.hr-in.editable:hover { background: var(--accent-soft); }
@@ -1243,7 +1243,7 @@
           const a = m.thisWeek[i] || {};
           const b = m.nextWeek[i] || {};
           rows += `<tr class="${i === 0 ? 'top' : ''} ${mi % 2 ? 'alt' : ''}">`;
-          if (i === 0) rows += `<td class="nm ${m.done ? '' : 'pending'}" rowspan="${n}"><b>${esc(m.name)}</b>${m.done ? '<span class="chip ok">완료</span>' : '<span class="chip no">미작성</span>'}</td>`;
+          if (i === 0) rows += `<td class="nm" rowspan="${n}"><b>${esc(m.name)}</b>${m.done ? '' : '<span class="dot" title="작성완료 미체크" aria-label="미작성"></span>'}</td>`;
           rows += `<td class="task">${esc(a.task)}</td><td class="c">${dueHtml(a, true)}</td><td class="split task">${esc(b.task)}</td><td class="c">${dueHtml(b, false)}</td>`;
           if (i === 0) {
             rows += `<td rowspan="${n}" class="split note">${esc(noteOf(m))}</td>`;
@@ -1254,7 +1254,7 @@
       });
       return `
         <div class="head">
-          <div><h1>팀 주간보고</h1><p>작성완료 ${s.done}/${s.total}명 · 이름 칸이 붉으면 작성완료 미체크</p></div>
+          <div><h1>팀 주간보고</h1><p>작성완료 ${s.done}/${s.total}명 · 이름 아래 <span class="dot-inline"></span> 표시는 작성완료 미체크</p></div>
           <div class="head-actions">
             ${(D.me.isLeader || D.me.isAdmin) && s.total - s.done ? `<button class="btn" onclick="remind()">${ic('bell', 'sm')}미작성자 알림</button>` : ''}
             <a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">${ic('ext', 'sm')}시트에서 열기</a>
