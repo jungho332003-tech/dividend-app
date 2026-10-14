@@ -1170,7 +1170,7 @@
       draft = draftMine;
       return `
         <div class="head">
-          <div><h1>내 주간업무</h1><p>월요일에 지난주 차주 계획이 금주로 자동 이월됩니다. "지속" 업무는 차주에도 남습니다. 업무 칸에서 <kbd>Alt</kbd>+<kbd>Enter</kbd>를 누르면 아래에 새 줄이 생깁니다.</p></div>
+          <div><h1>내 주간업무</h1><p>월요일에 지난주 차주 계획이 금주로 자동 이월됩니다. "지속" 업무는 차주에도 남습니다. 업무 칸에서 <kbd>Enter</kbd>는 아래 줄로, <kbd>Alt</kbd>+<kbd>Enter</kbd>는 바로 아래에 새 줄을 끼워 넣습니다.</p></div>
         </div>
         <div class="edit-cols">
           <section class="panel">
@@ -2261,20 +2261,33 @@
       if (t.id === 'noteIn') draft.note = t.value;
     };
     main.onchange = e => { if (e.target.id === 'doneIn') draft.done = e.target.checked; };
-    // Alt+Enter: 지금 줄 바로 아래에 새 줄을 만들고 커서를 옮긴다 (엑셀처럼)
+    // Enter: 아래 줄로 이동 (마지막 줄이면 새 줄을 만든다)
+    // Alt+Enter: 지금 줄 바로 아래에 새 줄을 끼워 넣는다
+    let lastEnter = 0;
     main.onkeydown = e => {
       const t = e.target;
-      if (e.key !== 'Enter' || !e.altKey || !t.dataset.k) return;
+      if (e.key !== 'Enter' || !t.dataset.k || e.shiftKey || e.ctrlKey || e.metaKey) return;
+      if (!e.altKey && t.dataset.f !== 'task') return; // Enter 이동은 업무 칸에서만
       e.preventDefault();
-      const k = t.dataset.k, i = Number(t.dataset.i);
-      // 한글 입력 중이면 글자가 확정된 뒤에 처리한다
-      setTimeout(() => {
+      // 한글 입력 중 Enter는 브라우저에 따라 (입력 중 1번 + 확정 후 1번) 두 번 들어와서, 바로 뒤따르는 1번은 건너뛴다
+      const now = Date.now();
+      const composing = e.isComposing || e.keyCode === 229;
+      if (!composing && now - lastEnter < 60) return;
+      lastEnter = composing ? now : 0;
+      const k = t.dataset.k, i = Number(t.dataset.i), insert = e.altKey;
+      const go = () => {
         if (t.dataset.f === 'task') draft[k][i].task = t.value;
+        const focusRow = r => {
+          const el = document.querySelector(`#list-${k} input[data-f="task"][data-i="${r}"]`);
+          if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+        };
+        if (!insert && i + 1 < draft[k].length) { focusRow(i + 1); return; }
         draft[k].splice(i + 1, 0, blank());
         $(`#list-${k}`).innerHTML = itemsHtml(k);
-        const next = document.querySelector(`#list-${k} input[data-f="task"][data-i="${i + 1}"]`);
-        if (next) next.focus();
-      }, 0);
+        focusRow(i + 1);
+      };
+      // 한글 입력 중이면 글자가 확정된 뒤에, 아니면 바로 처리한다 (빠르게 여러 번 눌러도 한 줄씩)
+      if (composing) setTimeout(go, 0); else go();
     };
     main.onclick = e => {
       const t = e.target.closest('button');
