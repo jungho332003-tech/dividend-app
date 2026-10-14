@@ -755,7 +755,7 @@
     $('#main').innerHTML = `<div class="loading">${esc(y)}년 자료를 불러오는 중…</div>`;
     call('apiSetYear', y).then(data => {
       setData(data);
-      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; reviewEmp = ''; picked.clear(); reviewSort = { k: 'no', dir: 1 }; calMonth = null; calSel = null;
+      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; reviewEmp = ''; picked.clear(); reviewSort = { k: null, dir: 1 }; calMonth = null; calSel = null;
       reviewTab = D.people.some(isMine) ? 'mine' : 'all';
       render();
       toast(`${y}년 귀속 자료로 바꿨습니다.`);
@@ -1082,19 +1082,19 @@
       .filter(p => !q || [p.empNo, p.name, p.dept, p.phone, p.email, p.missing, p.note1, p.note2].join(' ').toLowerCase().includes(q))
       .sort(reviewCompare);
   }
-  // 열 제목을 누르면 오름차순 ↔ 내림차순. 빈 칸은 방향과 관계없이 맨 아래
-  let reviewSort = { k: 'no', dir: 1 };
+  // 열 제목을 누르면 오름차순 → 내림차순 → 원래 순서(No.). 빈 칸은 방향과 관계없이 맨 아래
+  let reviewSort = { k: null, dir: 1 };
   const EMP_ORDER = { 재직: 0, 휴직: 1, 퇴사: 2 };
   const sortVal = (p, k) => k === 'leave' ? String(EMP_ORDER[empState(p)]) : String(p[k] == null ? '' : p[k]).trim();
   const cmpText = (a, b) => a.localeCompare(b, 'ko', { numeric: true });
   function reviewCompare(a, b) {
     const { k, dir } = reviewSort;
-    const x = sortVal(a, k), y = sortVal(b, k);
+    const x = k ? sortVal(a, k) : '', y = k ? sortVal(b, k) : '';
     if (x !== y) { if (!x) return 1; if (!y) return -1; return cmpText(x, y) * dir; }
     return cmpText(String(a.no), String(b.no)) || cmpText(String(a.empNo), String(b.empNo));
   }
   function sortReview(k) {
-    reviewSort = reviewSort.k === k ? { k, dir: -reviewSort.dir } : { k, dir: 1 };
+    reviewSort = reviewSort.k !== k ? { k, dir: 1 } : reviewSort.dir > 0 ? { k, dir: -1 } : { k: null, dir: 1 };
     refreshList();
   }
   const mini = (p, items) => `<span class="mini">${items.map(([k, l]) => `<span class="${p[k] ? 'on' : ''}" title="${esc(col(k).l)}">${l}</span>`).join('')}</span>`;
@@ -1112,7 +1112,7 @@
         ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? empChip(p) : esc(p[k])}</td>`).join('')}
       </tr>`).join('');
     return rows
-      ? `${pick ? bulkBarHtml() : ''}<div class="table-wrap"><table class="sheet-grid"><thead><tr>${pick ? `<th class="pick"><label><input type="checkbox" class="check" ${list.length && list.every(p => picked.has(p.id)) ? 'checked' : ''} onchange="pickAll(this.checked)" aria-label="목록 전체 선택" title="검색·필터된 ${list.length}명 전체 선택"></label></th>` : ''}${BASIC.map(k => { const on = reviewSort.k === k; return `<th class="sortable ${on ? 'sorted' : ''}" aria-sort="${on ? (reviewSort.dir > 0 ? 'ascending' : 'descending') : 'none'}" onclick="sortReview('${k}')" title="눌러서 ${on && reviewSort.dir > 0 ? '내림차순' : '오름차순'} 정렬">${k === 'leave' ? '휴직·퇴사' : esc(col(k).l)}<span class="sort-ic">${on ? (reviewSort.dir > 0 ? '▲' : '▼') : '↕'}</span></th>`; }).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ? `${pick ? bulkBarHtml() : ''}<div class="table-wrap"><table class="sheet-grid"><thead><tr>${pick ? `<th class="pick"><label><input type="checkbox" class="check" ${list.length && list.every(p => picked.has(p.id)) ? 'checked' : ''} onchange="pickAll(this.checked)" aria-label="목록 전체 선택" title="검색·필터된 ${list.length}명 전체 선택"></label></th>` : ''}${BASIC.map(k => { const on = reviewSort.k === k; return `<th class="sortable ${on ? 'sorted' : ''}" aria-sort="${on ? (reviewSort.dir > 0 ? 'ascending' : 'descending') : 'none'}" onclick="sortReview('${k}')" title="${!on ? '눌러서 오름차순 정렬' : reviewSort.dir > 0 ? '눌러서 내림차순 정렬' : '눌러서 원래 순서로'}">${k === 'leave' ? '휴직·퇴사' : esc(col(k).l)}<span class="sort-ic">${on ? (reviewSort.dir > 0 ? '▲' : '▼') : '↕'}</span></th>`; }).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
         ${list.length > shown.length ? `<button class="btn small more-rows" onclick="reviewLimit+=${PAGE_ROWS};$('#reviewList').innerHTML=reviewListHtml()">${PAGE_ROWS}명 더 보기 (남은 ${list.length - shown.length}명)</button>` : ''}
         <p class="hint" style="margin-top:8px">${list.length > shown.length ? `${list.length}명 중 ${shown.length}명 표시` : `${list.length}명`} · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
       : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
