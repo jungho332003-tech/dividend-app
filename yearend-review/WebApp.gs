@@ -174,6 +174,8 @@ function apiBootstrap() {
     year: ctx.year,
     baseYear: ctx.baseYear,
     years: ctx.years,
+    closedYears: ctx.closed,
+    closed: ctx.closed.indexOf(ctx.year) >= 0,
     eventKinds: EVENT_KINDS,
     events: can('dash') ? cached_(CK.events, () => readEvents_(ss)) : [],
     sheetUrl: ss.getUrl(),

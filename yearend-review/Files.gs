@@ -37,6 +37,7 @@ function setupFileSheet_(ss) {
 function apiUploadFile(file) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 파일을 올릴 수 있습니다.');
   const area = FILES.AREAS[file.area] ? file.area : 'etc';
   requireMenu_(me, FILES.MENU[area]);
@@ -118,6 +119,7 @@ function readFiles_(ss) {
 function apiDeleteFile(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'files');
   const sh = ctx.ss.getSheetByName(FILES.SHEET);
   const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 3).getValues();

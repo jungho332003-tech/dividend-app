@@ -29,6 +29,7 @@ const CFG = {
   TEAM: '업무명',
   YEAR: '귀속연도',
   DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
+  CLOSED: '마감 연도',   // 예) 2024,2025 — 마감된 연도는 관리자만 고칠 수 있다
 };
 
 /**
@@ -220,7 +221,21 @@ function getContext() {
     years: yearsWith_(base.years, baseYear), // 관리하는 연도 목록 (최근 연도 먼저)
     year: viewYear_(),                      // 지금 접속자가 보고 있는 연도
     members: base.members,
+    closed: closedYears_(base.cfg),         // 마감된 연도 목록
   };
+}
+
+/* ---------- 연도 마감 ---------- */
+
+function closedYears_(cfg) {
+  return String(cfg[CFG.CLOSED] || '').split(/[,\s]+/).filter(y => /^\d{4}$/.test(y));
+}
+
+/** 보고 있는 연도가 마감되었으면 관리자 말고는 아무것도 고칠 수 없다 */
+function requireOpen_(ctx, me) {
+  if (!me.isAdmin && ctx.closed.indexOf(ctx.year) >= 0) {
+    throw new Error(`${ctx.year}년 귀속은 마감되어 조회만 할 수 있습니다.`);
+  }
 }
 
 /* ---------- 귀속연도 ---------- */
@@ -399,9 +414,12 @@ function applyProtections_(ctx) {
     if (sh) warnOnlyProtect_(sh);
   });
   // 연도별 시트(대상자_2026, 응대기록_2026, 일정_2026 …): 대상자·응대기록은 경고만, 일정은 총괄·관리자만
+  // 마감된 연도의 시트는 관리자만 고칠 수 있게 잠근다
+  const closed = new RegExp(`^(${YEAR_SHEETS.join('|')})_(${(ctx.closed || []).join('|') || 'x'})$`);
   ss.getSheets().forEach(sh => {
     const n = sh.getName();
-    if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
+    if (closed.test(n)) protectSheet_(sh, admins);
+    else if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
     else if (new RegExp(`^${SHEET.EVENTS}_\\d{4}$`).test(n)) protectSheet_(sh, leaders.concat(admins));
   });
 }
@@ -650,6 +668,7 @@ function cellValue_(col, now, value) {
 function apiSavePerson(id, patch) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
   const lock = LockService.getDocumentLock();
@@ -702,6 +721,7 @@ function apiSavePerson(id, patch) {
 function apiAddPerson(fields) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 추가는 총괄 또는 관리자만 할 수 있습니다.');
   if (!String(fields.name || '').trim()) throw new Error('성명을 입력해 주세요.');
@@ -713,6 +733,7 @@ function apiAddPerson(fields) {
 function apiDeletePerson(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
   const lock = LockService.getDocumentLock();
@@ -735,6 +756,7 @@ function apiDeletePerson(id) {
 function apiImportPeople(rows) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
@@ -781,6 +803,7 @@ function apiImportPeople(rows) {
 function apiAssignPeople(ids, patch) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('담당자 일괄 지정은 총괄 또는 관리자만 할 수 있습니다.');
   const keys = ['owner', 'owner2'].filter(k => patch && k in patch);
@@ -828,6 +851,7 @@ function apiAssignPeople(ids, patch) {
 function apiAddLog(id, kind, body) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 응대기록을 남길 수 있습니다.');
   const text = String(body || '').trim();
@@ -1003,6 +1027,7 @@ function readEvents_(ss) {
 function apiSaveEvent(ev) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'dash');
   if (!me.isLeader && !me.isAdmin) throw new Error('일정은 총괄 또는 관리자만 등록·수정할 수 있습니다.');
   const title = String(ev.title || '').trim();
@@ -1038,6 +1063,7 @@ function apiSaveEvent(ev) {
 function apiDeleteEvent(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'dash');
   if (!me.isLeader && !me.isAdmin) throw new Error('일정은 총괄 또는 관리자만 삭제할 수 있습니다.');
   const sh = yearSheet_(ctx.ss, SHEET.EVENTS);
@@ -1142,6 +1168,7 @@ function readNotices_(ss) {
 function apiSaveNotice(n) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'notice');
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 글을 쓸 수 있습니다.');
   const lead = me.isLeader || me.isAdmin;
@@ -1186,6 +1213,7 @@ function apiSaveNotice(n) {
 function apiDeleteNotice(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'notice');
   const sh = ctx.ss.getSheetByName(NOTICE.SHEET);
   const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 3).getValues();
@@ -1199,6 +1227,7 @@ function apiDeleteNotice(id) {
 function apiAddNoticeComment(id, body) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'notice');
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 댓글을 쓸 수 있습니다.');
   const text = String(body || '').trim();
@@ -1333,6 +1362,7 @@ function readRules_(ss) {
 function apiSaveRule(rule) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'rules');
   if (!me.isLeader && !me.isAdmin) throw new Error('연말정산 기준은 총괄 또는 관리자만 등록·수정할 수 있습니다.');
 
@@ -1374,6 +1404,7 @@ function apiSaveRule(rule) {
 function apiDeleteRule(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'rules');
   if (!me.isLeader && !me.isAdmin) throw new Error('총괄 또는 관리자만 삭제할 수 있습니다.');
   const sh = ctx.ss.getSheetByName(RULES.SHEET);
@@ -1428,6 +1459,7 @@ function setupFileSheet_(ss) {
 function apiUploadFile(file) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 파일을 올릴 수 있습니다.');
   const area = FILES.AREAS[file.area] ? file.area : 'etc';
   requireMenu_(me, FILES.MENU[area]);
@@ -1509,6 +1541,7 @@ function readFiles_(ss) {
 function apiDeleteFile(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'files');
   const sh = ctx.ss.getSheetByName(FILES.SHEET);
   const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 3).getValues();
@@ -1645,6 +1678,7 @@ function adminData_(ctx, useCache) {
       team: String(cfg[CFG.TEAM] || ''),
       year: ctx.baseYear,
       years: ctx.years,
+      closed: ctx.closed,
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -1772,6 +1806,28 @@ function apiSaveSettings(s) {
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_();
   return adminData_(getContext(), false);
+}
+
+/* ---------- 연도 마감 ---------- */
+
+/**
+ * 마감(close=true) / 마감 풀기(false). 마감된 연도는 관리자 말고는 조회만 할 수 있고,
+ * 그 연도의 대상자·응대기록·일정 시트도 관리자만 고칠 수 있게 잠근다.
+ */
+function apiCloseYear(year, close) {
+  const ctx = getContext();
+  requireAdmin_(ctx);
+  year = String(year || '').trim();
+  if (ctx.years.indexOf(year) < 0) throw new Error(`${year}년 자료가 없습니다.`);
+  const list = ctx.closed.filter(y => y !== year);
+  if (close) list.push(year);
+  list.sort();
+  setConfigValue(CFG.CLOSED, list.join(','));
+  dropCache_(CK.ctx);
+  const fresh = getContext();
+  let warn = '';
+  try { applyProtections_(fresh); } catch (e) { warn = '시트 잠금은 걸지 못했습니다. 「권한 한 번에 적용」을 눌러 다시 걸어 주세요.'; }
+  return { data: adminData_(fresh, false), warn: warn };
 }
 
 /* ---------- 새 연도 시작 ---------- */
@@ -2110,6 +2166,8 @@ function apiBootstrap() {
     year: ctx.year,
     baseYear: ctx.baseYear,
     years: ctx.years,
+    closedYears: ctx.closed,
+    closed: ctx.closed.indexOf(ctx.year) >= 0,
     eventKinds: EVENT_KINDS,
     events: can('dash') ? cached_(CK.events, () => readEvents_(ss)) : [],
     sheetUrl: ss.getUrl(),

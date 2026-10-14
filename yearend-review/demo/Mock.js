@@ -176,6 +176,7 @@ window.MockApi = (function () {
   const curYear = () => viewYears[me] || settings.year;
   const applyYear = () => { const st = stores[curYear()]; people = st.people; logs = st.logs; events = st.events; };
   const years = () => Object.keys(stores).sort((a, b) => b - a);
+  let closed = ['2025']; // 예시: 지난 연도는 마감된 상태
   const yNotices = () => sortNotices().filter(n => !n.year || n.year === curYear());
   const yRules = () => rules.filter(r => !r.year || r.year === curYear());
 
@@ -225,13 +226,13 @@ window.MockApi = (function () {
       members: staff.map((p, i) => ({ order: i + 1, name: p.name, email: p.email, role: p.role, admin: !!p.admin, scope: p.scope || '전체' })),
       owners: people.reduce((o, p) => { const k = p.owner || '(미배정)'; o[k] = (o[k] || 0) + 1; return o; }, {}),
       assign: people.map(p => [p.owner, p.owner2]),
-      menus: MENUS, roles: ROLES, menuAccess: JSON.parse(JSON.stringify(menuAccess)), settings: Object.assign({ years: years() }, settings),
+      menus: MENUS, roles: ROLES, menuAccess: JSON.parse(JSON.stringify(menuAccess)), settings: Object.assign({ years: years(), closed: closed.slice() }, settings),
       webAppUrl: 'https://script.google.com/macros/s/AKfy...예시.../exec',
       status: { resources: { sheet: { ok: true, name: '2026 귀속 연말정산 검토 (스프레드시트)' }, folder: { ok: true, name: '연말정산 증빙 (담당자 전용)' } }, people: st },
     };
   }
 
-  return {
+  const api = {
     delay: { apiAssignPeople: 800, apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
@@ -241,7 +242,7 @@ window.MockApi = (function () {
       const m = meInfo();
       const can = k => m.menus.indexOf(k) >= 0;
       return {
-        team: settings.team, year: curYear(), baseYear: settings.year, years: years(), eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
+        team: settings.team, year: curYear(), baseYear: settings.year, years: years(), closedYears: closed.slice(), closed: closed.indexOf(curYear()) >= 0, eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
         staff: staff.map(s => ({ name: s.name, role: s.role })), cols: COLS,
         logKinds: ['전화', '메일', '메신저', '방문', '보완요청', '기타'],
         noticeCategories: ['공지', '응대지침', '자료', '질문'], noticeLeaderOnly: ['공지', '응대지침'],
@@ -382,6 +383,20 @@ window.MockApi = (function () {
     apiApplyPermissions() {
       return { log: [{ ok: true, text: '한서준: 첨부 폴더 편집 권한을 줬습니다.' }, { ok: true, text: '시트 보호를 적용했습니다. (설정·담당자: 관리자만 / 기준: 총괄·관리자만)' }], data: (() => { const d = adminData(); d.status.people['한서준'].folder = 'editor'; return d; })() };
     },
+    apiCloseYear(y, c) {
+      if (!meInfo().isAdmin) throw new Error('관리자만 사용할 수 있습니다.');
+      closed = closed.filter(x => x !== y); if (c) closed.push(y); closed.sort();
+      return { data: adminData(), warn: '' };
+    },
     apiRevokeAccess() { return { log: [{ ok: true, text: '스프레드시트 접근을 해제했습니다.' }, { ok: true, text: '첨부 폴더 접근을 해제했습니다.' }], data: adminData() }; },
   };
+  // 마감된 연도: 관리자 말고는 쓰기 막기 (실제 서버의 requireOpen_과 같은 규칙)
+  ['apiSavePerson', 'apiAddPerson', 'apiDeletePerson', 'apiImportPeople', 'apiAssignPeople', 'apiAddLog', 'apiSaveEvent', 'apiDeleteEvent', 'apiSaveNotice', 'apiDeleteNotice', 'apiAddNoticeComment', 'apiSaveRule', 'apiDeleteRule', 'apiUploadFile', 'apiDeleteFile'].forEach(fn => {
+    const orig = api[fn];
+    api[fn] = function () {
+      if (closed.indexOf(curYear()) >= 0 && !meInfo().isAdmin) throw new Error(`${curYear()}년 귀속은 마감되어 조회만 할 수 있습니다.`);
+      return orig.apply(this, arguments);
+    };
+  });
+  return api;
 })();

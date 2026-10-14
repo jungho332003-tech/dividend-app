@@ -100,6 +100,7 @@ function adminData_(ctx, useCache) {
       team: String(cfg[CFG.TEAM] || ''),
       year: ctx.baseYear,
       years: ctx.years,
+      closed: ctx.closed,
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -227,6 +228,28 @@ function apiSaveSettings(s) {
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_();
   return adminData_(getContext(), false);
+}
+
+/* ---------- 연도 마감 ---------- */
+
+/**
+ * 마감(close=true) / 마감 풀기(false). 마감된 연도는 관리자 말고는 조회만 할 수 있고,
+ * 그 연도의 대상자·응대기록·일정 시트도 관리자만 고칠 수 있게 잠근다.
+ */
+function apiCloseYear(year, close) {
+  const ctx = getContext();
+  requireAdmin_(ctx);
+  year = String(year || '').trim();
+  if (ctx.years.indexOf(year) < 0) throw new Error(`${year}년 자료가 없습니다.`);
+  const list = ctx.closed.filter(y => y !== year);
+  if (close) list.push(year);
+  list.sort();
+  setConfigValue(CFG.CLOSED, list.join(','));
+  dropCache_(CK.ctx);
+  const fresh = getContext();
+  let warn = '';
+  try { applyProtections_(fresh); } catch (e) { warn = '시트 잠금은 걸지 못했습니다. 「권한 한 번에 적용」을 눌러 다시 걸어 주세요.'; }
+  return { data: adminData_(fresh, false), warn: warn };
 }
 
 /* ---------- 새 연도 시작 ---------- */

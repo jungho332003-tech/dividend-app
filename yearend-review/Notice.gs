@@ -87,6 +87,7 @@ function readNotices_(ss) {
 function apiSaveNotice(n) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'notice');
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 글을 쓸 수 있습니다.');
   const lead = me.isLeader || me.isAdmin;
@@ -131,6 +132,7 @@ function apiSaveNotice(n) {
 function apiDeleteNotice(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'notice');
   const sh = ctx.ss.getSheetByName(NOTICE.SHEET);
   const rows = sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 3).getValues();
@@ -144,6 +146,7 @@ function apiDeleteNotice(id) {
 function apiAddNoticeComment(id, body) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'notice');
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 댓글을 쓸 수 있습니다.');
   const text = String(body || '').trim();

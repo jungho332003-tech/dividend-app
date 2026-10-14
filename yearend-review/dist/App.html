@@ -458,6 +458,9 @@
   .ag button.tt { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; text-align: left; cursor: pointer; color: inherit; }
   .ag button.tt:hover { text-decoration: underline; }
   .year-sel { margin-top: 6px; width: 100%; border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 5px 8px; font-weight: 600; }
+  .year-note.closed { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
+  .year-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .year-row:first-child { border-top: 0; }
   .year-note { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; background: var(--pend-bg); color: var(--pend-ink); border-radius: 8px; padding: 9px 12px; font-size: 13px; }
   @media (max-width: 1080px) { .cal-layout { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 760px) {
@@ -807,9 +810,13 @@
   const col = k => D.cols.find(c => c.k === k);
   const hasNote = p => ['note1', 'fix1', 'note2', 'fix2'].some(k => String(p[k] || '').trim());
   const isLead = () => D.me.isLeader || D.me.isAdmin;
+  // 마감된 연도: 관리자 말고는 조회만
+  const ro = () => !!(D.closed && !D.me.isAdmin);
+  const isClosedYear = y => (D.closedYears || []).indexOf(y) >= 0;
 
   /** 서버의 canEdit_와 같은 규칙 (화면에서 막고, 서버에서도 다시 막는다) */
   function canEdit(p, c, draftOwner) {
+    if (ro()) return false;
     if (c.who === 'lead') return isLead();
     if (isLead()) return true;
     if (!D.me.name) return false;
@@ -830,11 +837,11 @@
     document.title = D.team;
     $('#brandTeam').textContent = D.team;
     const yearSel = D.years.length > 1
-      ? `<select class="year-sel" id="yearSel" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${y === D.baseYear ? '' : ' (지난 연도)'}</option>`).join('')}</select>`
+      ? `<select class="year-sel" id="yearSel" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${isClosedYear(y) ? ' (마감)' : y === D.baseYear ? '' : ' (지난 연도)'}</option>`).join('')}</select>`
       : `${esc(D.year)}년 귀속`;
     $('#brandYear').innerHTML = yearSel;
     const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
-    $('#mtop').innerHTML = `<div><b>${esc(D.team)}</b><span>${D.years.length > 1 ? `<select id="yearSelM" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속</option>`).join('')}</select>` : `${esc(D.year)}년 귀속 연말정산`}</span></div>
+    $('#mtop').innerHTML = `<div><b>${esc(D.team)}</b><span>${D.years.length > 1 ? `<select id="yearSelM" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${isClosedYear(y) ? ' (마감)' : ''}</option>`).join('')}</select>` : `${esc(D.year)}년 귀속 연말정산${D.closed ? ' (마감)' : ''}`}</span></div>
       <span class="avatar" title="${esc(D.me.email || '')}">${esc(D.me.name ? D.me.name.slice(-2) : '?')}</span>`;
     $('#meBox').innerHTML = D.me.name
       ? `<b>${esc(D.me.name)} · ${esc(role)}</b><span>${esc(D.me.email)}</span>`
@@ -857,7 +864,9 @@
     // 지난 연도를 보고 있으면 모든 화면 위에 알린다
     const note = D.year !== D.baseYear
       ? `<div class="year-note"><span><b>${esc(D.year)}년 귀속</b> 자료를 보고 있습니다. 지금 진행 중인 연도는 ${esc(D.baseYear)}년입니다.</span><button class="btn small" onclick="switchYear('${esc(D.baseYear)}')">${esc(D.baseYear)}년으로 돌아가기</button></div>` : '';
-    $('#main').innerHTML = note + PAGES[page]();
+    const lockNote = D.closed
+      ? `<div class="year-note closed"><span>🔒 <b>${esc(D.year)}년 귀속은 마감되었습니다.</b> ${D.me.isAdmin ? '관리자만 고칠 수 있고, 다른 사람은 조회만 합니다.' : '모든 자료를 조회만 할 수 있습니다.'}</span></div>` : '';
+    $('#main').innerHTML = lockNote + note + PAGES[page]();
     if (page === 'admin' && !A) loadAdmin(false);
     renderDemoBar();
   }
@@ -981,7 +990,7 @@
       const list = D.events.filter(e => e.end >= today && e.start <= until);
       side = list.map(agRow).join('') || '<div class="empty">30일 안에 잡힌 일정이 없습니다.</div>';
     }
-    const lead = isLead();
+    const lead = isLead() && !ro();
     return `
       <section class="panel">
         <div class="panel-head">
@@ -991,7 +1000,7 @@
             <button class="btn small" onclick="calMove(1)" aria-label="다음 달">›</button>
             <button class="btn small" onclick="calMonth=null;calSel=null;render()">오늘</button>
           </div>
-          ${lead ? `<button class="btn small primary" onclick="openEventForm(null, calSel)">+ 일정</button>` : '<span>일정은 총괄이 등록합니다</span>'}
+          ${lead ? `<button class="btn small primary" onclick="openEventForm(null, calSel)">+ 일정</button>` : `<span>${ro() ? '마감된 연도입니다' : '일정은 총괄이 등록합니다'}</span>`}
         </div>
         <div class="cal-layout">
           <div class="cal-grid">${cells}</div>
@@ -1013,7 +1022,7 @@
   function openEvent(id) {
     const e = D.events.find(x => x.id === id);
     if (!e) return;
-    if (isLead()) return openEventForm(id);
+    if (isLead() && !ro()) return openEventForm(id);
     openModal(`<h3>${esc(e.title)}</h3>
       <p class="sub">${esc(evRange(e))} · ${esc(e.kind)}${e.author ? ` · 등록 ${esc(e.author)}` : ''}</p>
       ${e.memo ? `<div class="post-text" style="margin-bottom:14px">${esc(e.memo)}</div>` : ''}
@@ -1105,7 +1114,7 @@
     // 대상자가 많으면 처음에는 앞 200명만 그리고 「더 보기」로 늘린다 (검색·필터는 전체 대상)
     const BASIC = ['no', 'dept', 'empNo', 'name', 'subgroup', 'payArea', 'rank', 'phone', 'email', 'leave'];
     const shown = list.slice(0, reviewLimit);
-    const pick = isLead();
+    const pick = isLead() && !ro();
     const rows = shown.map(p => `
       <tr class="${p.retired ? 'gone' : ''} ${pick && picked.has(p.id) ? 'picked' : ''}" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
         ${pick ? `<td class="pick" onclick="event.stopPropagation()"><label><input type="checkbox" class="check" ${picked.has(p.id) ? 'checked' : ''} onchange="pickPerson('${esc(p.id)}',this.checked)" aria-label="${esc(p.name)} 선택"></label></td>` : ''}
@@ -1173,7 +1182,7 @@
         <div><h1>서류 검토</h1></div>
         <div class="head-actions">
           <a class="btn small" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
-          ${isLead() ? `<details class="menu"><summary class="btn small primary">명단 관리 ▾</summary><div class="menu-pop">
+          ${isLead() && !ro() ? `<details class="menu"><summary class="btn small primary">명단 관리 ▾</summary><div class="menu-pop">
             <button onclick="this.closest('details').open=false;openImport()">대상자 업로드</button>
             <button onclick="this.closest('details').open=false;openTemplate()">양식 다운로드</button>
             <button onclick="this.closest('details').open=false;openAddPerson()">대상자 한 명 추가</button>
@@ -1238,7 +1247,7 @@
       const opts = [''].concat(D.staff.map(s => s.name));
       if (p[c.k] && opts.indexOf(p[c.k]) < 0) opts.push(p[c.k]);
       const v = c.k === 'owner' && draftOwner ? draftOwner : p[c.k];
-      return `<div class="fld"><label for="${id}">${esc(c.l)}</label><select class="field-in" id="${id}" ${isLead() ? '' : 'disabled'}>${opts.map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o || '(없음)')}</option>`).join('')}</select></div>`;
+      return `<div class="fld"><label for="${id}">${esc(c.l)}</label><select class="field-in" id="${id}" ${isLead() && !ro() ? '' : 'disabled'}>${opts.map(o => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(o || '(없음)')}</option>`).join('')}</select></div>`;
     }
     return `<div class="fld"><label for="${id}">${esc(c.l)}</label><input class="field-in" id="${id}" value="${esc(p[c.k])}" ${off ? 'disabled' : ''}></div>`;
   }
@@ -1268,8 +1277,8 @@
 
   function drawPerson() {
     const p = curPerson;
-    const editable = D.cols.some(c => canEdit(p, c, draftOwner) && c.who !== 'assign') || isLead();
-    const canTake = !p.owner && D.me.name && !isLead() && !draftOwner;
+    const editable = D.cols.some(c => canEdit(p, c, draftOwner) && c.who !== 'assign') || (isLead() && !ro());
+    const canTake = !p.owner && D.me.name && !isLead() && !draftOwner && !ro();
     const groups = GROUP_ORDER.filter(g => D.cols.some(c => c.g === g));
     const logs = D.logs.filter(l => l.empNo === p.empNo);
     const files = personFiles(p);
@@ -1279,24 +1288,25 @@
       <p class="sub">${p.phone ? `☎ ${esc(p.phone)} · ` : ''}${p.email ? `${esc(p.email)} · ` : ''}최종 수정 ${esc(p.updated || '-')}${p.editor ? ` (${esc(p.editor)})` : ''}</p>
       <form class="form" id="personForm" novalidate>
         ${canTake ? `<div class="notice take"><span>아직 1차 담당자가 없습니다. 맡으면 검토 내용을 입력할 수 있습니다.</span><button type="button" class="btn small primary" onclick="draftOwner=D.me.name;drawPerson()">내가 담당하기</button></div>` : ''}
-        ${!editable && !canTake ? `<div class="notice">보기만 할 수 있습니다. 1차 담당자(${esc(p.owner || '미지정')})·2차 검토 담당자(${esc(p.owner2 || '미지정')})·총괄이 입력합니다. 응대기록은 누구나 남길 수 있습니다.</div>` : ''}
+        ${ro() ? `<div class="notice">🔒 ${esc(D.year)}년 귀속은 마감되어 조회만 할 수 있습니다.</div>` : ''}
+        ${!ro() && !editable && !canTake ? `<div class="notice">보기만 할 수 있습니다. 1차 담당자(${esc(p.owner || '미지정')})·2차 검토 담당자(${esc(p.owner2 || '미지정')})·총괄이 입력합니다. 응대기록은 누구나 남길 수 있습니다.</div>` : ''}
         ${groupHtml(p, '기본 정보')}
         ${groups.map(g => groupHtml(p, g)).join('')}
 
         <div class="sec">증빙 첨부<span>${files.length}개</span></div>
         <div id="pFiles">${filesView(files) || '<div class="hint">올린 파일이 없습니다.</div>'}</div>
-        ${(editable || canTake || D.me.name) ? uploaderHtml('person', '파일 올리기 (올리는 즉시 저장됩니다)') : ''}
+        ${!ro() && (editable || canTake || D.me.name) ? uploaderHtml('person', '파일 올리기 (올리는 즉시 저장됩니다)') : ''}
 
         <div class="msg err" id="pErr" hidden></div>
         <div class="modal-actions">
-          ${isLead() ? '<button type="button" class="btn danger" style="margin-right:auto" onclick="deletePerson()">대상자 삭제</button>' : ''}
+          ${isLead() && !ro() ? '<button type="button" class="btn danger" style="margin-right:auto" onclick="deletePerson()">대상자 삭제</button>' : ''}
           <button type="button" class="btn" onclick="closeModal()">닫기</button>
           ${editable || draftOwner ? '<button type="submit" class="btn primary" id="pOk">저장</button>' : ''}
         </div>
       </form>
       <div class="sec" style="margin-top:18px">응대기록<span>${logs.length}건 · 누구나 작성</span></div>
       <div class="logs" id="pLogs">${logs.map(l => logRow(l, true)).join('') || '<div class="hint" style="padding:6px 0">아직 응대기록이 없습니다.</div>'}</div>
-      ${D.me.name || D.me.isAdmin ? `<form class="log-form" id="logForm">
+      ${!ro() && (D.me.name || D.me.isAdmin) ? `<form class="log-form" id="logForm">
         <select class="field-in" id="logKind" aria-label="응대 구분">${D.logKinds.map(k => `<option>${esc(k)}</option>`).join('')}</select>
         <input class="field-in" id="logBody" placeholder="예) 의료비 영수증 재제출 요청, 2/5까지 받기로 함" aria-label="응대 내용">
         <button class="btn primary">기록</button>
@@ -1610,7 +1620,7 @@
     const list = pick(noticeFilter);
     const rows = list.map(n => {
       const open = openNotice === n.id;
-      const canEditN = n.author === D.me.name || isLead();
+      const canEditN = !ro() && (n.author === D.me.name || isLead());
       return `<article class="post">
         <button class="post-head" onclick="toggleNotice('${esc(n.id)}')" aria-expanded="${open}">
           <span class="chip cat-${esc(n.category)}">${esc(n.category)}</span>
@@ -1623,10 +1633,10 @@
           ${filesView(n.files)}
           <div class="comments">
             ${n.comments.map(c => `<div class="cmt"><b>${esc(c.author)}<span>${esc(c.date)}</span></b><p>${esc(c.body)}</p></div>`).join('')}
-            <form class="cmt-form" onsubmit="addNoticeComment(event, '${esc(n.id)}')">
+            ${ro() ? '' : `<form class="cmt-form" onsubmit="addNoticeComment(event, '${esc(n.id)}')">
               <input class="field-in" id="cmtIn" placeholder="${n.category === '질문' ? '답변 달기' : '댓글·질문 달기'}" aria-label="댓글">
               <button class="btn small primary">등록</button>
-            </form>
+            </form>`}
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn small" onclick="markUnread('${esc(n.id)}')">안 읽음으로</button>
@@ -1639,7 +1649,7 @@
     return `
       <div class="head">
         <div><h1>공지사항</h1></div>
-        <div class="head-actions"><button class="btn primary" onclick="openNoticeForm()">글쓰기</button></div>
+        <div class="head-actions">${ro() ? '' : '<button class="btn primary" onclick="openNoticeForm()">글쓰기</button>'}</div>
       </div>
       <section class="panel">
         <div class="panel-head">
@@ -1775,7 +1785,7 @@
           ${r.files && r.files.length ? `<div class="sub-label">첨부 파일</div>${filesView(r.files)}` : ''}
           ${r.link ? `<a class="post-link" href="${esc(r.link)}" target="_blank" rel="noopener">📄 원문 보기</a>` : ''}
           ${r.history.length ? `<details class="hist"><summary>개정 이력 ${r.history.length}건</summary><ol>${r.history.map(h => `<li><span>${esc(h.date)} · ${esc(h.editor)}</span>${esc(h.note)}</li>`).join('')}</ol></details>` : ''}
-          ${isLead() ? `<div style="display:flex;gap:6px"><button class="btn small" onclick="openRuleForm('${esc(r.id)}')">수정</button><button class="btn small danger" onclick="deleteRule('${esc(r.id)}')">삭제</button></div>` : ''}
+          ${isLead() && !ro() ? `<div style="display:flex;gap:6px"><button class="btn small" onclick="openRuleForm('${esc(r.id)}')">수정</button><button class="btn small danger" onclick="deleteRule('${esc(r.id)}')">삭제</button></div>` : ''}
         </div>` : ''}
       </article>`;
     }).join('') || `<div class="empty">${ruleQuery ? `"${esc(ruleQuery)}"에 해당하는 기준이 없습니다.` : '등록된 기준이 없습니다.'}</div>`;
@@ -1787,7 +1797,7 @@
     return `
       <div class="head">
         <div><h1>연말정산 기준</h1></div>
-        <div class="head-actions">${isLead() ? '<button class="btn primary" onclick="openRuleForm()">기준 등록</button>' : ''}</div>
+        <div class="head-actions">${isLead() && !ro() ? '<button class="btn primary" onclick="openRuleForm()">기준 등록</button>' : ''}</div>
       </div>
       <div class="rules-layout">
         <section class="panel" style="padding:10px">
@@ -1880,7 +1890,7 @@
         <td data-label="대상 · 메모">${refCell(f)}</td>
         <td data-label="올린 사람">${esc(f.uploader)}</td>
         <td data-label="올린 일시" class="nowrap">${esc(f.date.slice(2, 16))}</td>
-        <td class="c-act" data-label="">${f.uploader === D.me.name || isLead() ? `<button class="btn small danger" onclick="deleteFile('${esc(f.id)}')">삭제</button>` : ''}</td>
+        <td class="c-act" data-label="">${!ro() && (f.uploader === D.me.name || isLead()) ? `<button class="btn small danger" onclick="deleteFile('${esc(f.id)}')">삭제</button>` : ''}</td>
       </tr>`).join('');
     return rows ? `<div class="table-wrap"><table class="t cards"><thead><tr><th>파일</th><th>구분</th><th>대상 · 메모</th><th>올린 사람</th><th>올린 일시</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="empty">${fileQuery ? '검색 결과가 없습니다.' : '올린 파일이 없습니다.'}</div>`;
@@ -1891,7 +1901,7 @@
     return `
       <div class="head">
         <div><h1>첨부파일</h1></div>
-        <div class="head-actions">${D.me.name || D.me.isAdmin ? '<button class="btn primary" onclick="openEtcUpload()">자료 올리기</button>' : ''}</div>
+        <div class="head-actions">${!ro() && (D.me.name || D.me.isAdmin) ? '<button class="btn primary" onclick="openEtcUpload()">자료 올리기</button>' : ''}</div>
       </div>
       <section class="panel">
         <div class="filters" style="margin-bottom:12px">${areas.map(a => `<button aria-pressed="${fileArea === a}" onclick="fileArea='${a}';render()">${a === 'all' ? '전체' : esc(D.fileAreas[a])} ${cnt(a)}</button>`).join('')}</div>
@@ -2170,7 +2180,13 @@
         </form>
       </section>
       <section class="panel" style="max-width:640px">
-        <div class="panel-head"><h2>연도 관리</h2><span>관리 중인 연도: ${st.years.map(esc).join(', ')}</span></div>
+        <div class="panel-head"><h2>연도 관리</h2><span>관리 중인 연도 ${st.years.length}개</span></div>
+        <div style="margin-bottom:14px">${st.years.map(y => {
+          const shut = (st.closed || []).indexOf(y) >= 0;
+          return `<div class="year-row"><b>${esc(y)}년 귀속</b>
+            <span>${shut ? '<span class="chip plain">🔒 마감</span> 관리자만 수정 · 다른 사람은 조회만' : `<span class="chip ok">진행 중</span>${y === st.year ? ' 기본 연도' : ''}`}</span>
+            <button class="btn small ${shut ? '' : 'danger'}" onclick="confirmCloseYear('${esc(y)}', ${!shut})">${shut ? '마감 풀기' : '마감하기'}</button></div>`;
+        }).join('')}</div>
         <p class="hint" style="margin:0 0 12px">새 귀속연도를 시작하면 [대상자_연도]·[응대기록_연도]·[일정_연도] 시트를 새로 만듭니다. 지난 연도 자료는 그대로 남고, 왼쪽 위 연도 선택으로 언제든 볼 수 있습니다. 공지·기준·첨부도 연도별로 나뉘어 보입니다.</p>
         <form class="form" id="yForm" novalidate>
           <div class="fld"><label for="yYear">새 귀속연도</label><input class="field-in" id="yYear" inputmode="numeric" value="${Number(st.years[0]) + 1}" style="max-width:160px"></div>
@@ -2181,6 +2197,20 @@
           <div><button class="btn primary" id="yOk">새 연도 시작</button></div>
         </form>
       </section>`;
+  }
+  function confirmCloseYear(y, close) {
+    openModal(close
+      ? `<h3>${esc(y)}년 귀속을 마감할까요?</h3><p class="sub">마감하면 관리자를 뺀 모든 사람(총괄 포함)이 ${esc(y)}년 자료를 <b>조회만</b> 할 수 있습니다. 대상자·응대기록·일정·공지·기준·첨부 모두 해당됩니다. 시트의 [대상자_${esc(y)}]·[응대기록_${esc(y)}]·[일정_${esc(y)}]도 관리자만 고칠 수 있게 잠급니다.<br><br>언제든 「마감 풀기」로 되돌릴 수 있습니다.</p>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="ycOk">마감하기</button></div>`
+      : `<h3>${esc(y)}년 마감을 풀까요?</h3><p class="sub">담당자들이 다시 ${esc(y)}년 자료를 입력·수정할 수 있고, 시트 잠금도 원래대로 돌아갑니다.</p>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="ycOk">마감 풀기</button></div>`);
+    $('#ycOk').onclick = () => {
+      $('#ycOk').disabled = true; $('#ycOk').textContent = '처리 중…';
+      call('apiCloseYear', y, close).then(res => {
+        setAdmin(res.data); closeModal(); load();
+        toast(`${y}년 귀속을 ${close ? '마감했습니다' : '다시 열었습니다'}.${res.warn ? ' ' + res.warn : ''}`);
+      }).catch(e => { closeModal(); fail(e); });
+    };
   }
   document.addEventListener('submit', e => {
     if (e.target.id !== 'yForm') return;

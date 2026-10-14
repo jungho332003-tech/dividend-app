@@ -171,6 +171,7 @@ function cellValue_(col, now, value) {
 function apiSavePerson(id, patch) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
   const lock = LockService.getDocumentLock();
@@ -223,6 +224,7 @@ function apiSavePerson(id, patch) {
 function apiAddPerson(fields) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 추가는 총괄 또는 관리자만 할 수 있습니다.');
   if (!String(fields.name || '').trim()) throw new Error('성명을 입력해 주세요.');
@@ -234,6 +236,7 @@ function apiAddPerson(fields) {
 function apiDeletePerson(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
   const lock = LockService.getDocumentLock();
@@ -256,6 +259,7 @@ function apiDeletePerson(id) {
 function apiImportPeople(rows) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
@@ -302,6 +306,7 @@ function apiImportPeople(rows) {
 function apiAssignPeople(ids, patch) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('담당자 일괄 지정은 총괄 또는 관리자만 할 수 있습니다.');
   const keys = ['owner', 'owner2'].filter(k => patch && k in patch);
@@ -349,6 +354,7 @@ function apiAssignPeople(ids, patch) {
 function apiAddLog(id, kind, body) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.name && !me.isAdmin) throw new Error('[담당자] 시트에 등록된 사람만 응대기록을 남길 수 있습니다.');
   const text = String(body || '').trim();

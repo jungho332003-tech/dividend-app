@@ -54,6 +54,7 @@ function readEvents_(ss) {
 function apiSaveEvent(ev) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'dash');
   if (!me.isLeader && !me.isAdmin) throw new Error('일정은 총괄 또는 관리자만 등록·수정할 수 있습니다.');
   const title = String(ev.title || '').trim();
@@ -89,6 +90,7 @@ function apiSaveEvent(ev) {
 function apiDeleteEvent(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'dash');
   if (!me.isLeader && !me.isAdmin) throw new Error('일정은 총괄 또는 관리자만 삭제할 수 있습니다.');
   const sh = yearSheet_(ctx.ss, SHEET.EVENTS);

@@ -90,6 +90,7 @@ function readRules_(ss) {
 function apiSaveRule(rule) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'rules');
   if (!me.isLeader && !me.isAdmin) throw new Error('연말정산 기준은 총괄 또는 관리자만 등록·수정할 수 있습니다.');
 
@@ -131,6 +132,7 @@ function apiSaveRule(rule) {
 function apiDeleteRule(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
   requireMenu_(me, 'rules');
   if (!me.isLeader && !me.isAdmin) throw new Error('총괄 또는 관리자만 삭제할 수 있습니다.');
   const sh = ctx.ss.getSheetByName(RULES.SHEET);

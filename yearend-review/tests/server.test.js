@@ -306,6 +306,38 @@ function withDefaults(api) {
     as('owner@x.com'); api.apiSetYear(oldYear);
   });
 
+  ok('연도 마감: 관리자 말고는 조회만, 풀면 다시 입력', () => {
+    as('owner@x.com');
+    const y = api.apiBootstrap().year;
+    as('kim@x.com'); api.apiSetYear(y);
+    as('lead@x.com'); api.apiSetYear(y);
+    as('kim@x.com'); throwsMsg(() => api.apiCloseYear(y, true), /관리자만/);
+    as('owner@x.com');
+    const r = api.apiCloseYear(y, true);
+    assert.deepStrictEqual(Array.from(r.data.settings.closed), [y]);
+    assert.strictEqual(String(ss.getSheetByName('설정').getDataRange().getValues().find(x => x[0] === '마감 연도')[1]), y);
+    const p = ss.getSheetByName('대상자_' + y).getProtections();
+    assert(p.length === 1 && !p[0].isWarningOnly(), '마감 연도 시트는 잠김');
+    as('kim@x.com');
+    const b = api.apiBootstrap();
+    assert.strictEqual(b.closed, true); assert(b.people.length > 0, '조회는 됨');
+    throwsMsg(() => api.apiSavePerson('1001', { ehr: false }), /마감되어 조회만/);
+    throwsMsg(() => api.apiAddLog('1001', '전화', 'x'), /마감되어/);
+    throwsMsg(() => api.apiSaveNotice({ title: 't', body: 'b', category: '질문' }), /마감되어/);
+    api.apiMarkRead(b.notices[0] ? b.notices[0].id : '1'); // 읽음 표시는 개인 기록이라 된다
+    as('lead@x.com');
+    throwsMsg(() => api.apiSavePerson('1001', { note1: 'x' }), /마감되어/);
+    throwsMsg(() => api.apiAssignPeople(['1001'], { owner: '김도현' }), /마감되어/);
+    throwsMsg(() => api.apiSaveEvent({ title: 't', start: '2027-01-02', kind: '일정' }), /마감되어/);
+    as('owner@x.com');
+    assert.strictEqual(api.apiSavePerson('1001', { note1: '관리자 수정' }).personPatch.note1, '관리자 수정');
+    api.apiCloseYear(y, false);
+    assert(ss.getSheetByName('대상자_' + y).getProtections()[0].isWarningOnly(), '풀면 원래 보호로');
+    as('kim@x.com');
+    assert.strictEqual(api.apiBootstrap().closed, false);
+    api.apiSavePerson('1001', { note1: '' });
+  });
+
   ok('admin save members / settings / apply', () => {
     as('owner@x.com');
     throwsMsg(() => api.apiSaveMembers([{ name: 'A', email: 'a@x.com' }, { name: 'A', email: 'b@x.com' }]), /겹칩니다/);

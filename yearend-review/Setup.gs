@@ -99,9 +99,12 @@ function applyProtections_(ctx) {
     if (sh) warnOnlyProtect_(sh);
   });
   // 연도별 시트(대상자_2026, 응대기록_2026, 일정_2026 …): 대상자·응대기록은 경고만, 일정은 총괄·관리자만
+  // 마감된 연도의 시트는 관리자만 고칠 수 있게 잠근다
+  const closed = new RegExp(`^(${YEAR_SHEETS.join('|')})_(${(ctx.closed || []).join('|') || 'x'})$`);
   ss.getSheets().forEach(sh => {
     const n = sh.getName();
-    if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
+    if (closed.test(n)) protectSheet_(sh, admins);
+    else if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
     else if (new RegExp(`^${SHEET.EVENTS}_\\d{4}$`).test(n)) protectSheet_(sh, leaders.concat(admins));
   });
 }
