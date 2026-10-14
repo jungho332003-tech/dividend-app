@@ -216,6 +216,31 @@
   .kpi .value small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 2px; }
   .kpi .sub { color: var(--ink-2); font-size: 13px; }
   .kpi.alert .value { color: var(--warn-ink); }
+  .tap { cursor: pointer; }
+  .kpi.tap { transition: border-color .15s, box-shadow .15s; }
+  .kpi.tap:hover, .kpi.tap:focus-visible { border-color: var(--line-strong); box-shadow: 0 4px 14px rgba(16, 26, 22, .08); outline: none; }
+  .list-row.tap:hover, .due-row.tap:hover { background: var(--panel-2); }
+  .dd-h { margin: 14px 0 6px; font-size: 13px; color: var(--ink-2); }
+  .dd-h span, .dd-count { color: var(--muted); font-weight: 500; font-size: .85em; margin-left: 4px; }
+  .dd-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .dd-row { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; text-align: left; border: 0; border-top: 1px solid var(--line); background: var(--panel); padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; }
+  .dd-row:first-child { border-top: 0; }
+  .dd-row:hover { background: var(--panel-2); }
+  .dd-row span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-row em { font-style: normal; font-weight: 700; white-space: nowrap; }
+  .dd-row svg { color: var(--muted); }
+  .dd-empty { color: var(--muted); font-size: 13px; margin: 4px 0; }
+  .dd-table td.nm { font-weight: 700; white-space: nowrap; vertical-align: top; }
+  .linkish { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+  .dd-items { list-style: none; margin: 0; padding: 0; }
+  .dd-items li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid rgba(127, 127, 127, .18); font-size: 14px; }
+  .dd-items li:first-child { border-top: 0; }
+  .dd-items em { font-style: normal; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+  .dd-cm { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 14px; white-space: pre-wrap; }
+  .dd-cm b { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .dd-dl { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px 12px; margin: 8px 0 0; font-size: 14px; }
+  .dd-dl dt { color: var(--muted); }
+  .dd-dl dd { margin: 0; }
   .kpi-ico {
     position: absolute; top: 16px; right: 16px; width: 36px; height: 36px; border-radius: 10px;
     background: var(--accent-soft); color: var(--accent-2); display: inline-flex; align-items: center; justify-content: center;
@@ -1022,7 +1047,7 @@
       const monthAmt = s.monthReq.reduce((a, r) => a + r.amount, 0);
 
       const memberRows = D.members.map(m => `
-        <div class="list-row">
+        <div class="list-row tap" ${tapAttr(`showMember('${esc(m.name)}')`)}>
           <span class="who">${esc(m.name)}</span>
           ${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
           <span class="meta">금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건${noteOf(m) ? ` · ${esc(noteOf(m))}` : ''}${m.pre && m.pre.exists ? ' · 다음 주 미리 작성' : ''}</span>
@@ -1034,11 +1059,11 @@
       }));
       dues.sort((a, b) => a.dueIso.localeCompare(b.dueIso));
       const dueRows = dues.map(d => `
-        <div class="due-row"><span class="d">${esc(d.due)}</span><span class="n">${esc(d.who)}</span><span>${esc(d.task)}</span></div>`).join('')
+        <div class="due-row tap" ${tapAttr(`showMember('${esc(d.who)}')`)}><span class="d">${esc(d.due)}</span><span class="n">${esc(d.who)}</span><span>${esc(d.task)}</span></div>`).join('')
         || '<div class="empty">이번 주 기한이 있는 업무가 없습니다.</div>';
 
       const recent = D.budget.requests.slice(0, 4).map(r => `
-        <div class="list-row">
+        <div class="list-row tap" ${tapAttr(`showBudgetReq('${esc(r.id)}')`)}>
           <span class="who">${esc(r.req)}</span>
           <span class="chip plain">${esc(r.date.slice(5, 10))}</span>
           <span class="meta">${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))} · <b>${won(r.amount)}원</b></span>
@@ -1060,22 +1085,22 @@
 
       const W = can('weekly'), B = can('budget'), C = can('calendar'), BO = can('board'), R = can('rules');
       const kpis = [
-        W && `<div class="kpi ${s.overdue && s.done < s.total ? 'alert' : ''}">
+        W && `<div class="kpi tap ${s.overdue && s.done < s.total ? 'alert' : ''}" ${tapAttr("showDash('deadline')")}>
             <span class="kpi-ico">${ic('clock')}</span><span class="label">주간보고 마감</span>
             <span class="value">${s.left.big}</span>
             <span class="sub">${esc(s.left.sub)}</span>
           </div>`,
-        W && `<div class="kpi">
+        W && `<div class="kpi tap" ${tapAttr("showDash('done')")}>
             <span class="kpi-ico">${ic('userCheck')}</span><span class="label">작성완료</span>
             <span class="value">${s.done}<small> / ${s.total}명</small></span>
             <div class="meter" role="img" aria-label="작성률 ${pct}%"><i style="width:${pct}%"></i></div>
           </div>`,
-        B && `<div class="kpi">
+        B && `<div class="kpi tap" ${tapAttr("showDash('budget')")}>
             <span class="kpi-ico">${ic('budget')}</span><span class="label">이번 달 예산전용</span>
             <span class="value">${s.monthReq.length}<small>건</small></span>
             <span class="sub">${s.monthReq.length ? `${won(monthAmt)}원 · ${esc(s.monthReq.map(r => r.req).filter((v, i, a) => a.indexOf(v) === i).join(', '))}` : '신청 없음'}</span>
           </div>`,
-        W && `<div class="kpi">
+        W && `<div class="kpi tap" ${tapAttr("showDash('off')")}>
             <span class="kpi-ico">${ic('leave')}</span><span class="label">휴무·특이사항</span>
             <span class="value">${s.off.length}<small>명</small></span>
             <span class="sub">${s.off.map(m => esc(m.name)).join(', ') || '없음'}</span>
@@ -2461,6 +2486,99 @@
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); meetGo(meetIdx - 1); }
     else if (e.key === 'Escape') closeMeeting();
   });
+
+  /* ================= 대시보드: 눌러서 자세히 ================= */
+  /** 누를 수 있는 카드/줄 (키보드 Enter로도) */
+  function tapAttr(js) { return `role="button" tabindex="0" onclick="${js}" onkeydown="if(event.key==='Enter'){${js}}"`; }
+
+  function nameList(list, empty) {
+    return list.length ? `<div class="dd-list">${list.map(m => `<button type="button" class="dd-row" onclick="showMember('${esc(m.name)}')">
+      <b>${esc(m.name)}</b><span>금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건</span>${ic('chev', 'sm')}</button>`).join('')}</div>`
+      : `<p class="dd-empty">${empty}</p>`;
+  }
+
+  function showDash(kind) {
+    const s = stats();
+    const done = D.members.filter(m => m.done), pend = D.members.filter(m => !m.done);
+    const canRemind = (D.me.isLeader || D.me.isAdmin) && pend.length;
+    const close = '<div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button>';
+    if (kind === 'done' || kind === 'deadline') {
+      const mineOpen = D.me.writer && mineMember() && !mineMember().done;
+      openModal(`
+        <h3>${kind === 'deadline' ? '주간보고 마감' : '작성 현황'}</h3>
+        <p class="sub">${kind === 'deadline' ? `${esc(D.week.deadlineText)}까지 · ${esc(s.left.big)}` : `${esc(D.week.thisLabel)} · 작성완료 ${s.done}/${s.total}명`}</p>
+        <h4 class="dd-h">미작성 <span>${pend.length}명</span></h4>
+        ${nameList(pend, '모두 작성했습니다.')}
+        <h4 class="dd-h">작성완료 <span>${done.length}명</span></h4>
+        ${nameList(done, '아직 작성완료한 사람이 없습니다.')}
+        ${close}
+          ${canRemind ? `<button type="button" class="btn" onclick="closeModal();remind()">${ic('bell', 'sm')}미작성자 알림</button>` : ''}
+          ${mineOpen ? `<button type="button" class="btn primary" onclick="closeModal();setTab('weekly','mine',true)">내 주간업무 작성</button>` : `<button type="button" class="btn primary" onclick="closeModal();setTab('weekly','team',true)">팀 주간보고 보기</button>`}
+        </div>`);
+    } else if (kind === 'off') {
+      // 휴가는 날짜순, 그 밖의 특이사항은 뒤에
+      const rows = s.off.map(m => {
+        const leaves = m.leaves || [];
+        return { m, first: leaves.length ? leaves[0].start : '9999', leaves, note: String(m.note || '').trim() };
+      }).sort((a, b) => a.first.localeCompare(b.first) || a.m.name.localeCompare(b.m.name, 'ko'));
+      openModal(`
+        <h3>휴무·특이사항 <span class="dd-count">${rows.length}명</span></h3>
+        <p class="sub">${esc(D.week.thisLabel)} ~ ${esc(D.week.nextLabel)}</p>
+        ${rows.length ? `<table class="t dd-table"><thead><tr><th>이름</th><th>날짜</th><th>내용</th></tr></thead><tbody>
+          ${rows.map(r => {
+            // "10/1(목)~6(화) 정기휴가" → 날짜 / 내용
+            const lines = r.leaves.map(l => { const i = l.text.indexOf(' '); return { when: i > 0 ? l.text.slice(0, i) : '', what: i > 0 ? l.text.slice(i + 1) : l.text }; });
+            if (r.note) lines.push({ when: '', what: r.note });
+            return lines.map((x, i) => `<tr>${i === 0 ? `<td rowspan="${lines.length}" class="nm"><button type="button" class="linkish" onclick="showMember('${esc(r.m.name)}')">${esc(r.m.name)}</button></td>` : ''}<td class="nowrap">${esc(x.when) || '<span class="ph">-</span>'}</td><td>${esc(x.what)}</td></tr>`).join('');
+          }).join('')}
+        </tbody></table>` : '<p class="dd-empty">이번 주·다음 주 휴무나 특이사항이 없습니다.</p>'}
+        ${close}<button type="button" class="btn primary" onclick="closeModal();go('calendar')">일정에서 보기</button></div>`);
+    } else if (kind === 'budget') {
+      const list = s.monthReq.slice().reverse();
+      const total = list.reduce((a, r) => a + r.amount, 0);
+      openModal(`
+        <h3>이번 달 예산전용 <span class="dd-count">${list.length}건</span></h3>
+        <p class="sub">${monthName(ymNow(), true)}분 · 합계 <b>${won(total)}원</b></p>
+        ${list.length ? `<div class="dd-list">${list.map(r => `<button type="button" class="dd-row" onclick="showBudgetReq('${esc(r.id)}')">
+          <b>${esc(r.req)}</b><span>${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))}</span><em>${won(r.amount)}원</em>${ic('chev', 'sm')}</button>`).join('')}</div>`
+          : '<p class="dd-empty">이번 달 신청이 없습니다.</p>'}
+        ${close}<button type="button" class="btn primary" onclick="closeModal();budgetMonth=null;setTab('budget','list',true)">신청 내역 보기</button></div>`);
+    }
+  }
+
+  /** 한 사람의 이번 주 보고 */
+  function showMember(name) {
+    const m = D.members.find(x => x.name === name);
+    if (!m) return;
+    const list = (items, isThis) => items.length
+      ? `<ul class="dd-items">${items.map(it => `<li><span>${esc(it.task)}</span><em>${dueHtml(it, isThis)}</em></li>`).join('')}</ul>`
+      : '<p class="dd-empty">작성한 업무가 없습니다.</p>';
+    const note = noteOf(m);
+    openModal(`
+      <h3>${esc(m.name)} ${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}</h3>
+      ${note ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(note)}</span></p>` : ''}
+      <div class="msec wk-this" style="margin-top:12px"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek, true)}</div>
+      <div class="msec wk-next" style="margin-top:10px"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek, false)}</div>
+      ${m.comment ? `<div class="dd-cm"><b>팀장 코멘트</b>${esc(m.comment)}</div>` : ''}
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button>
+        <button type="button" class="btn primary" onclick="closeModal();openMeeting(${D.members.indexOf(m)})">크게 보기</button></div>`);
+  }
+
+  function showBudgetReq(id) {
+    const r = D.budget.requests.find(x => x.id === id);
+    if (!r) return;
+    openModal(`
+      <h3>${esc(r.id)} <span class="chip month">${monthName(reqMonth(r))}분</span></h3>
+      <p class="sub">${esc(r.req)} · 신청 ${esc(r.date)}</p>
+      <dl class="dd-dl">
+        <dt>변경전</dt><dd>${esc(bLabel(r.fromCost, r.fromCode, r.from))}</dd>
+        <dt>변경후</dt><dd>${esc(bLabel(r.toCost, r.toCode, r.to))}</dd>
+        <dt>금액</dt><dd><b>${won(r.amount)}원</b></dd>
+        <dt>사유</dt><dd>${esc(r.reason)}</dd>
+      </dl>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button>
+        <button type="button" class="btn primary" onclick="closeModal();budgetMonth='${esc(reqMonth(r))}';setTab('budget','list',true)">신청 내역에서 보기</button></div>`);
+  }
 
   /* ================= 인사현황 ================= */
   function hrData() { return D.hr || { thisWeek: [], nextWeek: [] }; }
