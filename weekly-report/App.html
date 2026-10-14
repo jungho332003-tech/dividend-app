@@ -145,6 +145,11 @@
     border: 1px solid var(--line); border-radius: 99px; background: var(--panel-2); color: var(--ink-2); font-size: 12.5px; white-space: nowrap;
   }
   .week-pill svg { color: var(--muted); }
+  .sheet-link {
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 99px;
+    border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap;
+  }
+  .sheet-link:hover, .sheet-link:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
   .top-user { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .top-user b { font-weight: 600; }
 
@@ -679,6 +684,8 @@
     /* 위: 앱 이름 + 내 이름 */
     .topbar { height: 56px; padding: 0 16px; top: env(safe-area-inset-top, 0px); }
     .crumb, .week-pill, .top-user b { display: none; }
+    .sheet-link { padding: 0; width: 34px; justify-content: center; }
+    .sheet-link span { display: none; }
     .mbrand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .mbrand .logo { width: 30px; height: 30px; font-size: 13px; border-radius: 8px; }
     .mbrand div { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
@@ -1005,6 +1012,7 @@
       <div class="mbrand"><span class="logo">HR</span><div><b>${esc(D.team)} 업무관리</b><span>${esc(D.week.thisLabel)}</span></div></div>
       <div class="top-right">
         <span class="week-pill">${ic('calendar', 'sm')}${esc(D.week.thisLabel)}</span>
+        ${D.me.isAdmin && D.sheetUrl ? `<a class="sheet-link" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener" title="구글 스프레드시트 열기 (관리자)">${ic('ext', 'sm')}<span>스프레드시트</span></a>` : ''}
         <span class="top-user" title="${esc(D.me.email || '')}"><span class="avatar">${initials}</span><b>${esc(D.me.name || '')}</b></span>
       </div>`;
   }
@@ -1248,7 +1256,7 @@
           <div><h1>팀 주간보고</h1><p>작성완료 ${s.done}/${s.total}명 · <span class="dot-inline"></span> 미작성</p></div>
           <div class="head-actions">
             ${(D.me.isLeader || D.me.isAdmin) && s.total - s.done ? `<button class="btn" onclick="remind()">${ic('bell', 'sm')}미작성자 알림</button>` : ''}
-            <a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">${ic('ext', 'sm')}시트에서 열기</a>
+            ${D.me.isAdmin && D.sheetUrl ? `<a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">${ic('ext', 'sm')}시트에서 열기</a>` : ''}
             <button class="btn primary" onclick="openMeeting()">${ic('users', 'sm')}회의 모드</button>
           </div>
         </div>

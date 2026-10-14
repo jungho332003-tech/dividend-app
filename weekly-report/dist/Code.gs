@@ -2669,10 +2669,12 @@ function apiBootstrap() {
 
 /** 매번 계산해도 가벼운 부분 (접속자, 주차) */
 function baseData_(ctx) {
+  const me = currentMember_(ctx.members);
   return {
     team: ctx.cfg[CFG.TEAM] || '',
-    sheetUrl: ctx.ss.getUrl(),
-    me: currentMember_(ctx.members),
+    // 스프레드시트 바로가기는 관리자에게만
+    sheetUrl: me.isAdmin ? ctx.ss.getUrl() : '',
+    me: me,
     week: {
       key: ctx.thisWeek.key,
       thisLabel: ctx.thisWeek.label,
