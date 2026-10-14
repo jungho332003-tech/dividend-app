@@ -303,7 +303,8 @@
   /* 팀 주간보고: 회의 때 같이 보기 좋게 */
   table.report.team { font-size: 14.5px; line-height: 1.5; width: 100%; }
   .report.team th, .report.team td { padding: 10px 12px; }
-  .report.team tr.alt td:not(.cm) { background: var(--row-alt); }
+  .report.team td.cm { background: none; }
+  .report.team tr.alt td { background: var(--row-alt); }
   .report.team td.nm { vertical-align: middle; text-align: center; }
   .report.team td.nm b { display: block; font-size: 15.5px; }
   .report.team td.nm .dot { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--warn-ink); margin: 6px auto 0; }
