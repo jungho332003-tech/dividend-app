@@ -1212,7 +1212,7 @@ function getTeamCalendar_() {
   return cal;
 }
 
-/** startIso ~ endIso 사이 일정 + 공휴일 + 주간보고 마감 */
+/** startIso ~ endIso 사이 일정 + 공휴일 */
 function apiCalendar(startIso, endIso) {
   requireMenu_(currentMember_(getMembers()), 'calendar');
   const start = new Date(startIso);
@@ -1273,9 +1273,6 @@ function apiCalendar(startIso, endIso) {
     } catch (e) { /* 개인 캘린더를 못 읽으면 팀 일정만 보여준다 */ }
   }
 
-  if (ctx.deadline >= start && ctx.deadline < end) {
-    events.push({ id: 'deadline', title: '주간보고 마감', start: ctx.deadline.toISOString(), end: ctx.deadline.toISOString(), allDay: false, location: '', desc: '', kind: 'deadline' });
-  }
 
   return { calendarName: cal.getName(), myCalendarName: myName, events: events };
 }

@@ -522,9 +522,9 @@
   .leave-empty { color: var(--muted); font-size: 13px; margin: 0; }
   .more { font-size: 11px; color: var(--muted); padding-left: 4px; }
   .agenda { display: flex; flex-direction: column; }
-  .ag { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .ag { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
   .ag:first-child { border-top: 0; }
-  .ag .tm { color: var(--muted); font-size: 12.5px; white-space: nowrap; padding-top: 1px; }
+  .ag .tm { color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
   .ag .tt { font-weight: 600; overflow-wrap: anywhere; }
   .ag .tt.holiday { color: var(--warn-ink); }
   .ag .tt.deadline { color: var(--accent); }
@@ -1443,7 +1443,8 @@
     return ev.kind === 'deadline' || +s === +e ? hm(s) : `${hm(s)}–${hm(e)}`;
   }
   function agRow(ev) {
-    return `<div class="ag"><span class="tm">${timeText(ev)}</span><div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
+    // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
+    return `<div class="ag"><div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
   }
   function dayLabel(k) { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAY[d.getDay()]})`; }
 
@@ -1506,14 +1507,14 @@
       const cls = ['cal-day', d.getMonth() !== calMonth.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', dk === todayK ? 'today' : '', dk === calSel ? 'sel' : '', evs.some(e => e.kind === 'holiday') ? 'holi' : ''].join(' ');
       cells += `<button class="${cls}" onclick="calPick('${dk}')" aria-label="${dayLabel(dk)} 일정 ${evs.length}건">
         <span class="dn">${d.getDate()}</span>
-        ${evs.slice(0, 3).map(e => `<span class="ev ${e.kind}">${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : hm(parseD(e.start)) + ' '}${esc(e.title)}</span>`).join('')}
+        ${evs.slice(0, 3).map(e => `<span class="ev ${e.kind}">${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}</span>`).join('')}
         ${evs.length > 3 ? `<span class="more">+${evs.length - 3}건</span>` : ''}
       </button>`;
     }
     const selEvents = map[calSel] || [];
     return `
       <div class="head">
-        <div><h1>일정</h1><p class="one-line">${data && data.calendarName ? esc(data.calendarName) : '구글 캘린더'}${data && data.myCalendarName ? ' + 내 캘린더' : ''} · 공휴일·주간보고 마감 포함</p></div>
+        <div><h1>일정</h1><p class="one-line">${data && data.calendarName ? esc(data.calendarName) : '구글 캘린더'}${data && data.myCalendarName ? ' + 내 캘린더' : ''} · 공휴일 포함</p></div>
         <div class="head-actions">
           <button class="btn" onclick="loadMonth(true)">${ic('refresh', 'sm')}새로고침</button>
           <button class="btn primary" onclick="openEventForm()">${ic('plus', 'sm')}일정·휴가 추가</button>
@@ -1535,7 +1536,7 @@
           <div class="cal-legend">
             <span><i class="lg event"></i>${D.teamCalendar ? '팀 일정' : '일정'}</span>
             ${D.teamCalendar ? '<span><i class="lg mine"></i>내 일정 (나만 보기)</span>' : ''}
-            <span><i class="lg leave"></i>휴가</span><span><i class="lg deadline"></i>주간보고 마감</span>
+            <span><i class="lg leave"></i>휴가</span>
           </div>
         </section>
         <section class="panel">
