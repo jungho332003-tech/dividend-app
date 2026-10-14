@@ -53,6 +53,7 @@ const REPORT = {
 
 const PROP = {
   REPORT_WEEK: 'REPORT_WEEK',
+  REPORT_HASH: 'REPORT_HASH', // 지난 보고서 내용 요약값 (바뀐 게 없으면 매시간 새로고침을 건너뛴다)
   REMINDED: 'REMINDED_WEEK',
   CLOSED: 'CLOSED_WEEK',
 };
@@ -219,7 +220,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function sheetBase_() {
   try {
-    const hit = CacheService.getDocumentCache().get(CTX_KEY);
+    const hit = cacheGet_(CTX_KEY);
     if (hit) return JSON.parse(hit, (k, v) => (typeof v === 'string' && ISO_DATE.test(v) ? new Date(v) : v));
   } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
   const base = { cfg: getConfig(), holidays: Array.from(getHolidaySet()), members: getMembers() };

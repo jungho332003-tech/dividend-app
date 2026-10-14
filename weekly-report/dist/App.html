@@ -283,11 +283,6 @@
   .notice { background: var(--pend-bg); color: var(--pend-ink); border: 1px solid color-mix(in srgb, var(--pend-ink) 18%, transparent); border-radius: 10px; padding: 12px 14px; display: flex; gap: 8px; align-items: flex-start; }
   .loading { color: var(--muted); padding: 48px 0; text-align: center; }
 
-  /* 예산 막대 */
-  .bars { display: flex; flex-direction: column; gap: 12px; }
-  .bar-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 100px; gap: 12px; align-items: center; cursor: default; }
-  .bar-row .nm { font-size: 13px; color: var(--ink-2); line-height: 1.3; }
-  .bar-row .nm small { display: block; font-size: 11px; color: var(--muted); }
   .c-move .mv { display: flex; align-items: center; gap: 6px; white-space: nowrap; line-height: 1.8; }
   .c-move .tag { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; line-height: 18px; }
   .c-move .tag.out { background: var(--panel-2); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
@@ -296,17 +291,6 @@
   fieldset.b-side legend { padding: 0 6px; }
   .wk.out { background: var(--next); color: #fff; }
   .wk.in { background: var(--accent); color: var(--accent-ink); }
-  .bar-row .val { text-align: right; font-size: 13px; font-weight: 600; }
-  .track { height: 10px; display: flex; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
-  .seg { height: 100%; }
-  .seg.avail { background: var(--accent); border-radius: 99px; }
-  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12px; margin-top: 12px; }
-  .sw { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; margin-right: 4px; border-radius: 3px; }
-  .sw.avail { background: var(--accent); }
-  .tip { position: fixed; z-index: 60; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 10px; padding: 10px 12px; font-size: 12px; min-width: 180px; }
-  .tip b { display: block; margin-bottom: 6px; font-size: 13px; }
-  .tip div { display: flex; justify-content: space-between; gap: 12px; }
-  .tip span { color: var(--muted); }
 
   /* ===== 표 ===== */
   .table-wrap { overflow-x: auto; }
@@ -486,7 +470,6 @@
   .cal-day.today .dn { background: var(--accent); color: var(--accent-ink); }
   .ev { font-size: 11.5px; line-height: 1.4; padding: 1px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel-2); color: var(--ink-2); }
   .ev.holiday { background: none; color: var(--warn-ink); font-weight: 600; }
-  .ev.deadline { background: none; color: var(--accent); font-weight: 700; }
   .ev.leave { background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; }
   .ev.mine { background: var(--panel); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .tt.mine { color: var(--ink-2); }
@@ -510,7 +493,6 @@
   .lg.mine { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .lg.leave { background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn-ink); }
   .lg.holiday { background: var(--warn-ink); height: 3px; }
-  .lg.deadline { background: var(--accent); height: 3px; }
   .tt.leave { color: var(--warn-ink); font-weight: 600; }
   .leave-strip { padding: 14px 18px; }
   .leave-strip .panel-head { margin-bottom: 8px; }
@@ -527,7 +509,6 @@
   .ag .tm { color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
   .ag .tt { font-weight: 600; overflow-wrap: anywhere; }
   .ag .tt.holiday { color: var(--warn-ink); }
-  .ag .tt.deadline { color: var(--accent); }
   .ag .ds { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
   .ag-day { font-size: 12px; font-weight: 700; color: var(--muted); padding: 12px 0 2px; letter-spacing: .02em; }
   .ag-day:first-child { padding-top: 0; }
@@ -660,7 +641,6 @@
     .form .two { grid-template-columns: 1fr; }
     .list-row { grid-template-columns: 60px auto; }
     .list-row .meta { grid-column: 1 / -1; }
-    .bar-row { grid-template-columns: 70px minmax(0, 1fr) 84px; }
     .cal-day { min-height: 58px; padding: 3px 2px; }
     .ev { font-size: 0; height: 6px; padding: 0; border-radius: 3px; }
     .more { display: none; }
@@ -822,7 +802,6 @@
 <div class="meet" id="meet" hidden role="dialog" aria-label="회의 모드"></div>
 <div class="scrim" id="scrim" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
-<div class="tip" id="tip" hidden></div>
 
 <script>window.__BOOT__ = /*BOOT*/null;</script>
 <!-- MOCK -->
@@ -1068,7 +1047,7 @@
       })));
       const dueRows = keyRows.map(d => `
         <div class="due-row key-row tap" ${tapAttr(`showMember('${esc(d.who)}')`)}><span class="d"><span class="wk ${d.w}">${d.w === 'this' ? '금주' : '차주'}</span></span><span class="n">${esc(d.who)}</span><span class="t">${esc(d.task)}</span><span class="dd">${dueHtml(d, d.w === 'this')}</span></div>`).join('')
-        || `<div class="empty">${D.me.isLeader ? '팀 주간보고에서 업무를 누르면 굵게 표시되고 여기에 모입니다.' : '팀장님이 팀 주간보고에서 굵게 표시한 업무가 여기에 모입니다.'}</div>`;
+        || `<div class="empty">${D.me.isLeader ? '팀 주간보고에서 업무를 눌러 강조하세요.' : '팀장 강조 업무가 없습니다.'}</div>`;
 
       const boardPreview = D.board.slice(0, 4).map(p => `
         <div class="list-row tap" style="grid-template-columns:72px minmax(0,1fr)" ${tapAttr(`openPost='${esc(p.id)}';go('board')`)}>
@@ -1094,12 +1073,12 @@
         B && `<div class="kpi tap" ${tapAttr("showDash('budget')")}>
             <span class="kpi-ico">${ic('budget')}</span><span class="label">이번 달 예산전용</span>
             <span class="value">${s.monthReq.length}<small>건</small></span>
-            <span class="sub">${s.monthReq.length ? `${won(monthAmt)}원 · ${esc(s.monthReq.map(r => r.req).filter((v, i, a) => a.indexOf(v) === i).join(', '))}` : '신청 없음'}</span>
+            <span class="sub">${s.monthReq.length ? `${won(monthAmt)}원 · ${esc(nameShort(s.monthReq.map(r => r.req).filter((v, i, a) => a.indexOf(v) === i)))}` : '신청 없음'}</span>
           </div>`,
         W && `<div class="kpi tap" ${tapAttr("showDash('off')")}>
             <span class="kpi-ico">${ic('leave')}</span><span class="label">휴무·특이사항</span>
             <span class="value">${s.off.length}<small>명</small></span>
-            <span class="sub">${s.off.map(m => esc(m.name)).join(', ') || '없음'}</span>
+            <span class="sub">${esc(nameShort(s.off.map(m => m.name))) || '없음'}</span>
           </div>`,
       ].filter(Boolean);
 
@@ -1129,7 +1108,7 @@
 
       return `
         <div class="head">
-          <div><h1>대시보드</h1><p>${esc(D.week.thisLabel)} · ${esc(D.team)}</p></div>
+          <div><h1>대시보드</h1></div>
           <div class="head-actions">
             ${W && (D.me.isLeader || D.me.isAdmin) && s.total - s.done ? `<button class="btn" onclick="remind()">${ic('bell', 'sm')}미작성자 알림</button>` : ''}
             ${B ? `<button class="btn primary" onclick="openBudgetForm()">${ic('plus', 'sm')}예산전용 신청</button>` : ''}
@@ -1180,7 +1159,7 @@
       draft = draftMine;
       return `
         <div class="head">
-          <div><h1>내 주간업무</h1><p>월요일에 지난주 차주 계획이 금주로 자동 이월됩니다. "지속" 업무는 차주에도 남습니다. 업무 칸에서 <kbd>Enter</kbd>는 칸 안에서 줄바꿈, <kbd>Alt</kbd>+<kbd>Enter</kbd>는 바로 아래에 새 업무 줄을 끼워 넣습니다.</p></div>
+          <div><h1>내 주간업무</h1><p><kbd>Enter</kbd> 줄바꿈 · <kbd>Alt</kbd>+<kbd>Enter</kbd> 새 업무 줄 · 월요일에 차주→금주 자동 이월</p></div>
         </div>
         <div class="edit-cols">
           <section class="panel">
@@ -1197,7 +1176,7 @@
         ${leaveStrip(m.leaves, '이번 주·다음 주')}
         <div class="save-bar">
           <div class="left">
-            <input class="field-in note-in" id="noteIn" placeholder="${(m.leaves || []).length ? '그 밖의 특이사항 (휴가는 위에서 자동으로 들어갑니다)' : '휴무계획/특이사항 (예: 10/2(금) 연차)'}" value="${esc(draft.note)}">
+            <input class="field-in note-in" id="noteIn" placeholder="${(m.leaves || []).length ? '그 밖의 특이사항' : '휴무계획/특이사항'}" value="${esc(draft.note)}">
             <label><input type="checkbox" class="check" id="doneIn" ${draft.done ? 'checked' : ''}> 작성완료</label>
           </div>
           <button class="btn primary" id="saveMine">저장</button>
@@ -1221,7 +1200,7 @@
           <div><h1>다음 주 미리 쓰기 ${p.exists ? '<span class="chip ok">✓ 미리 써둠</span>' : ''}</h1>
 </div>
         </div>
-        ${p.exists ? '' : '<div class="notice">아직 미리 쓴 내용이 없습니다. 이번 주에 적은 "차주 주요업무"를 불러왔으니 고쳐서 저장하세요.</div>'}
+        ${p.exists ? '' : '<div class="notice">이번 주 차주 업무를 불러왔습니다. 고쳐서 저장하세요.</div>'}
         <div class="edit-cols">
           <section class="panel">
             <div class="panel-head"><h2><span class="wk this">금주</span>주요업무</h2><span>${esc(D.week.nextLabel)}</span></div>
@@ -1237,7 +1216,7 @@
         ${leaveStrip(m.preLeaves, '다음 주·다다음 주')}
         <div class="save-bar">
           <div class="left">
-            <input class="field-in note-in" id="noteIn" placeholder="다음 주 휴무계획/특이사항 (예: 10/8(목)~10/9(금) 연차)" value="${esc(draft.note)}">
+            <input class="field-in note-in" id="noteIn" placeholder="다음 주 휴무계획/특이사항" value="${esc(draft.note)}">
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             ${p.exists ? '<button class="btn danger" id="clearPre">미리 쓴 내용 지우기</button>' : ''}
@@ -1266,7 +1245,7 @@
       });
       return `
         <div class="head">
-          <div><h1>팀 주간보고</h1><p>작성완료 ${s.done}/${s.total}명 · 이름 아래 <span class="dot-inline"></span> 표시는 작성완료 미체크</p></div>
+          <div><h1>팀 주간보고</h1><p>작성완료 ${s.done}/${s.total}명 · <span class="dot-inline"></span> 미작성</p></div>
           <div class="head-actions">
             ${(D.me.isLeader || D.me.isAdmin) && s.total - s.done ? `<button class="btn" onclick="remind()">${ic('bell', 'sm')}미작성자 알림</button>` : ''}
             <a class="btn" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">${ic('ext', 'sm')}시트에서 열기</a>
@@ -1275,7 +1254,7 @@
         </div>
         <section class="panel">
           <p class="report-title">■ ${esc(D.week.title)}</p>
-          <p class="report-note">${D.me.isLeader ? '업무를 누르면 굵게 표시되고(다시 누르면 해제), 팀장 코멘트 칸을 누르면 바로 작성할 수 있습니다.' : '굵은 글씨는 팀장님이 강조한 업무입니다.'}</p>
+          <p class="report-note">${D.me.isLeader ? '업무 클릭: 굵게 표시/해제 · 코멘트 칸 클릭: 작성' : '굵은 글씨: 팀장 강조 업무'}</p>
           <div class="mcards">${reportCards()}</div>
           <div class="table-wrap desk">
             <table class="report team">
@@ -1303,7 +1282,7 @@
           <div class="head-actions">${canEdit ? `<button class="btn primary" onclick="openHrForm()">${ic('plus', 'sm')}인사현황 등록</button>` : ''}</div>
         </div>
         <section class="panel">
-          <p class="report-note">${canEdit ? '항목을 누르면 고치거나 지울 수 있습니다. (본인이 등록한 항목 · 팀장/관리자는 전체)' : '[팀원] 시트에 등록된 사람만 등록할 수 있습니다.'}</p>
+          <p class="report-note">${canEdit ? '항목 클릭: 수정·삭제 (본인 등록분, 팀장·관리자는 전체)' : '[팀원] 시트에 등록된 사람만 등록할 수 있습니다.'}</p>
           <div class="mcards">${hrCards(true)}</div>
           <div class="table-wrap desk">${hrTableHtml(true)}</div>
         </section>
@@ -1369,7 +1348,7 @@
         </tr>`).join('') || `<tr><td colspan="11" class="empty">${bm === 'all' ? '' : monthName(bm, true) + ' '}신청 내역이 없습니다.</td></tr>`;
       return `
         <div class="head">
-          <div><h1>월별 정리</h1><p>한 달 동안 들어온 신청을 신청 순서대로 모았습니다. 코스트센터·계정코드·금액 칸을 <b>누르면 복사</b>되고, 복사한 칸은 표시가 남습니다. 다 옮긴 줄은 오른쪽 완료에 체크하세요.</p></div>
+          <div><h1>월별 정리</h1><p>칸 클릭: 복사 · 다 옮긴 줄은 완료 체크</p></div>
           <div class="head-actions"><button class="btn" onclick="copyMonth()" ${list.length ? '' : 'disabled'}>${ic('copy', 'sm')}이 달 전체 복사 (엑셀용)</button></div>
         </div>
         <section class="panel">
@@ -1384,29 +1363,6 @@
                 <tr><th class="g-out">코스트센터</th><th class="g-out">계정코드</th><th class="g-out">계정과목</th><th class="g-in">코스트센터</th><th class="g-in">계정코드</th><th class="g-in">계정과목</th></tr>
               </thead>
               <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </section>`;
-    },
-
-    accounts() {
-      const a = D.budget.accounts;
-      const sum = k => a.reduce((s, x) => s + x[k], 0);
-      const rows = a.map(x => `
-        <tr><td>${esc(x.cost || '-')}</td><td>${esc(x.code || '-')}</td><td>${esc(x.name)}</td><td class="num">${won(x.budget)}</td><td class="num">${won(x.inAmt)}</td><td class="num">${won(x.outAmt)}</td>
-        <td class="num strong">${won(x.current)}</td></tr>`).join('');
-      return `
-        <div class="head"><div><h1>예산현황</h1><p>현재예산 = 편성액 + 전입 − 전출 (취소한 건 제외) · 예산은 [예산과목] 시트에 코스트·계정코드·계정과목별로 입력합니다</p></div></div>
-        <section class="panel">
-          <div class="panel-head"><h2>코스트·계정과목별 현재예산</h2><span>원</span></div>
-          ${budgetBars()}
-        </section>
-        <section class="panel">
-          <div class="table-wrap">
-            <table class="t">
-              <thead><tr><th>코스트</th><th>계정코드</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th></tr></thead>
-              <tbody>${rows}</tbody>
-              <tfoot><tr><td class="strong" colspan="3">합계</td><td class="num strong">${won(sum('budget'))}</td><td class="num">${won(sum('inAmt'))}</td><td class="num">${won(sum('outAmt'))}</td><td class="num strong">${won(sum('current'))}</td></tr></tfoot>
             </table>
           </div>
         </section>`;
@@ -1440,7 +1396,7 @@
   function timeText(ev) {
     if (ev.allDay) return '종일';
     const s = parseD(ev.start), e = parseD(ev.end);
-    return ev.kind === 'deadline' || +s === +e ? hm(s) : `${hm(s)}–${hm(e)}`;
+    return +s === +e ? hm(s) : `${hm(s)}–${hm(e)}`;
   }
   function agRow(ev) {
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
@@ -1603,8 +1559,8 @@
     const where = () => {
       const text = kind === 'leave' ? ''
         : !both ? '내 구글 캘린더에 등록됩니다.'
-        : target === 'mine' ? '내 구글 캘린더에 비공개로 등록되어 나만 봅니다. 팀원에게는 보이지 않습니다.'
-        : '팀 캘린더에 등록되어 팀원 모두에게 보입니다.';
+        : target === 'mine' ? '나만 보는 비공개 일정으로 등록됩니다.'
+        : '팀원 모두에게 보입니다.';
       $('#eWhere').textContent = text;
       $('#eWhere').hidden = !text;
     };
@@ -1647,7 +1603,7 @@
         if (leave.end && leave.end < leave.start) return err('종료일이 시작일보다 빠릅니다.');
         $('#eOk').disabled = true;
         call('apiAddLeave', leave)
-          .then(data => { applyData(data); after(leave.start, data && data.warning ? data.warning : `${leave.type} 등록 완료. 주간보고 휴무계획에 자동으로 들어갑니다.`); })
+          .then(data => { applyData(data); after(leave.start, data && data.warning ? data.warning : `${leave.type} 등록 완료`); })
           .catch(e2 => { $('#eOk').disabled = false; err(e2.message || String(e2)); });
         return;
       }
@@ -1689,7 +1645,7 @@
     }).join('') || '<div class="empty">게시글이 없습니다.</div>';
     return `
       <div class="head">
-        <div><h1>공유게시판</h1><p>공지, 서식·자료, 알아두면 좋은 내용을 팀과 공유하세요.</p></div>
+        <div><h1>공유게시판</h1></div>
         <div class="head-actions"><button class="btn primary" onclick="openPostForm()">${ic('pencil', 'sm')}글쓰기</button></div>
       </div>
       <section class="panel">
@@ -1712,7 +1668,7 @@
         <div class="fld"><label for="pTitle">제목</label><input class="field-in" id="pTitle"></div>
         <div class="fld"><label for="pBody">내용</label><textarea class="field-in" id="pBody" style="min-height:140px"></textarea></div>
         ${uploaderHtml('post', '첨부 파일')}
-        <div class="fld"><label for="pLink">링크 (선택)</label><input class="field-in" id="pLink" placeholder="10MB가 넘는 파일은 드라이브에 올리고 링크를 붙여주세요"></div>
+        <div class="fld"><label for="pLink">링크 (선택)</label><input class="field-in" id="pLink" placeholder="10MB 넘는 파일은 드라이브 링크로"></div>
         <div class="msg err" id="pErr" hidden></div>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="pOk">등록</button></div>
       </form>`);
@@ -1794,7 +1750,7 @@
     const cnt = c => c === 'all' ? D.rules.length : D.rules.filter(r => r.category === c).length;
     return `
       <div class="head">
-        <div><h1>회사 기준</h1><p>급여·근태·복리후생 등 회사 기준을 한곳에서 확인하세요. 개정되면 이력이 남습니다.</p></div>
+        <div><h1>회사 기준</h1></div>
         <div class="head-actions">${canEdit ? `<button class="btn primary" onclick="openRuleForm()">${ic('plus', 'sm')}기준 등록</button>` : ''}</div>
       </div>
       <div class="rules-layout">
@@ -1816,7 +1772,6 @@
     const r = id ? D.rules.find(x => x.id === id) : { category: ruleCat !== 'all' ? ruleCat : D.ruleCategories[0], title: '', body: '', effective: '', owner: '', link: '' };
     openModal(`
       <h3>${id ? '기준 수정' : '기준 등록'}</h3>
-      <p class="sub">팀원 모두가 보는 기준입니다. 원문이 있으면 구글 드라이브 링크를 함께 올려주세요.</p>
       <form class="form" id="rForm" novalidate>
         <div class="two">
           <div class="fld"><label for="rCat">분류</label><select class="field-in" id="rCat">${D.ruleCategories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
@@ -1845,7 +1800,7 @@
           applyData(data); closeModal();
           const saved = id ? D.rules.find(x => x.id === id) : D.rules.slice().sort((a, b) => Number(b.id) - Number(a.id))[0];
           openRule = saved ? saved.id : null; ruleCat = 'all'; ruleQuery = ''; page = 'rules'; render();
-          toast(id ? '기준을 수정했습니다. 개정 이력에 기록됩니다.' : '기준을 등록했습니다.');
+          toast(id ? '기준을 수정했습니다.' : '기준을 등록했습니다.');
         })
         .catch(err => { $('#rOk').disabled = false; $('#rErr').textContent = err.message || String(err); $('#rErr').hidden = false; });
     };
@@ -1934,7 +1889,7 @@
     }).join('');
     return `
       <div class="head">
-        <div><h1>팀원·권한</h1><p>팀원을 등록하고 "권한 한 번에 적용"을 누르면 시트·첨부 폴더·캘린더 공유와 시트 잠금을 자동으로 합니다.</p></div>
+        <div><h1>팀원·권한</h1><p>등록 후 [권한 한 번에 적용] → 시트·폴더·캘린더 공유와 잠금 자동 처리</p></div>
         <div class="head-actions">
           <button class="btn" onclick="refreshAdmin()">${ic('refresh', 'sm')}상태 새로고침</button>
           <button class="btn primary" onclick="applyAll()">${ic('shield', 'sm')}권한 한 번에 적용</button>
@@ -2016,7 +1971,7 @@
       ${A.roles.map(r => `<td style="text-align:center"><input type="checkbox" class="check" ${menuDraft[r][m.key] !== false ? 'checked' : ''} onchange="menuDraft['${r}']['${m.key}']=this.checked;$('#mSave').disabled=false" aria-label="${r} ${esc(m.label)}"></td>`).join('')}
       <td style="text-align:center"><input type="checkbox" class="check" checked disabled aria-label="관리자 ${esc(m.label)}"></td></tr>`).join('');
     return `
-      <div class="head"><div><h1>메뉴 권한</h1><p>역할마다 볼 수 있는 메뉴를 정합니다. 끈 메뉴는 화면에서 숨겨지고, 서버에서도 해당 기능과 데이터가 막힙니다.</p></div></div>
+      <div class="head"><div><h1>메뉴 권한</h1><p>끈 메뉴는 화면과 서버 모두에서 막힙니다.</p></div></div>
       <section class="panel">
         <div class="table-wrap"><table class="t" style="max-width:560px">
           <thead><tr><th>메뉴</th>${A.roles.map(r => `<th style="text-align:center">${r}</th>`).join('')}<th style="text-align:center">관리자</th></tr></thead>
@@ -2028,7 +1983,7 @@
   }
   function saveMenus() {
     $('#mSave').disabled = true;
-    call('apiSaveMenuAccess', menuDraft).then(data => { A.menuAccess = data.menuAccess; menuDraft = JSON.parse(JSON.stringify(data.menuAccess)); load(); toast('메뉴 권한을 저장했습니다. 팀원은 새로고침하면 반영됩니다.'); })
+    call('apiSaveMenuAccess', menuDraft).then(data => { A.menuAccess = data.menuAccess; menuDraft = JSON.parse(JSON.stringify(data.menuAccess)); load(); toast('메뉴 권한을 저장했습니다. (팀원은 새로고침 후 반영)'); })
       .catch(e => { $('#mSave').disabled = false; fail(e); });
   }
 
@@ -2036,7 +1991,7 @@
     const st = A.settings, res = A.status.resources;
     const status = x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ 연결됨: ${esc(x.name)}` : esc(x.error)}</div>`;
     return `
-      <div class="head"><div><h1>설정</h1><p>[설정] 시트를 직접 고치지 않아도 여기서 바꿀 수 있습니다.</p></div></div>
+      <div class="head"><div><h1>설정</h1></div></div>
       <section class="panel" style="max-width:640px">
         <form class="form" id="sForm" novalidate>
           <div class="fld"><label for="sTeam">팀명</label><input class="field-in" id="sTeam" value="${esc(st.team)}"></div>
@@ -2234,20 +2189,6 @@
       .then(() => toast(`${list.length}건을 복사했습니다. 엑셀에 붙여넣으세요.`), () => toast('복사하지 못했습니다.'));
   }
 
-  function budgetBars() {
-    const a = D.budget.accounts;
-    if (!a.length) return '<div class="empty">[예산과목] 시트에 코스트·계정과목을 등록하세요.</div>';
-    const max = Math.max(...a.map(x => x.current), 1);
-    return `<div class="bars" id="bars">${a.map((x, i) => {
-      const w = Math.max(x.current, 0) / max * 100;
-      return `<div class="bar-row" data-i="${i}" tabindex="0" aria-label="${esc(bLabel(x.cost, x.code, x.name))} 현재예산 ${won(x.current)}원">
-        <span class="nm">${x.cost || x.code ? `<small>${esc([x.cost, x.code].filter(Boolean).join(' · '))}</small>` : ''}${esc(x.name)}</span>
-        <span class="track">${w ? `<span class="seg avail" style="width:${w}%"></span>` : ''}</span>
-        <span class="val">${won(x.current)}</span>
-      </div>`;
-    }).join('')}</div>`;
-  }
-
   /* ================= 내 주간업무 편집 ================= */
   function blank() { return { task: '', dueIso: '', cont: false, raw: '' }; }
   function convItems(list) {
@@ -2342,7 +2283,7 @@
     D.members[i] = Object.assign({}, before, { done: payload.done, note: payload.note, thisWeek: payload.thisWeek.map(toItem), nextWeek: payload.nextWeek.map(toItem) });
     draft = draftMine = null;
     render();
-    toast(payload.done ? '저장했습니다. 작성완료로 표시됩니다.' : '저장했습니다. 다 쓰면 작성완료에 체크하세요.');
+    toast(payload.done ? '저장했습니다. (작성완료)' : '저장했습니다. 다 쓰면 작성완료에 체크하세요.');
 
     call('apiSaveMyWeek', payload)
       .then(data => { applyData(data); if (page !== 'weekly' || weeklyTab !== 'mine') render(); })
@@ -2366,7 +2307,7 @@
     });
     draft = draftPre = null;
     render();
-    toast(clear ? '미리 쓴 내용을 지웠습니다. 월요일에는 평소처럼 차주 업무가 이월됩니다.' : '다음 주 보고를 미리 저장했습니다. 월요일에 자동으로 들어가고 작성완료로 표시됩니다.');
+    toast(clear ? '미리 쓴 내용을 지웠습니다.' : '미리 저장했습니다. 월요일에 자동 반영됩니다.');
     call('apiSavePreWeek', payload)
       .then(data => applyData(data))
       .catch(e => {
@@ -2502,7 +2443,7 @@
       <div class="meet-body" style="font-size:${Math.round(meetScale * 18)}px">${body}</div>
       <div class="meet-nav">
         <button class="btn" onclick="meetGo(${meetIdx - 1})" ${meetIdx === 0 ? 'disabled' : ''}>${ic('chevL', 'sm')}이전</button>
-        <span>${onHr ? '인사현황' : `${meetIdx + 1} / ${total}`} · ← → 키로 넘기기</span>
+        <span>${onHr ? '인사현황' : `${meetIdx + 1} / ${total}`} · ← → 이동</span>
         <button class="btn primary" onclick="meetGo(${meetIdx + 1})" ${onHr ? 'disabled' : ''}>다음${ic('chev', 'sm')}</button>
       </div>`;
   }
@@ -2531,6 +2472,11 @@
 
   /* ================= 대시보드: 눌러서 자세히 ================= */
   /** 누를 수 있는 카드/줄 (키보드 Enter로도) */
+  /** "김민지, 박서연, 이하준 외 2명" — 12명이 다 들어가도 카드가 넘치지 않게 */
+  function nameShort(names, max) {
+    max = max || 3;
+    return names.length > max ? `${names.slice(0, max).join(', ')} 외 ${names.length - max}명` : names.join(', ');
+  }
   function tapAttr(js) { return `role="button" tabindex="0" onclick="${js}" onkeydown="if(event.key==='Enter'){${js}}"`; }
 
   function nameList(list, empty) {
@@ -2544,11 +2490,11 @@
     const done = D.members.filter(m => m.done), pend = D.members.filter(m => !m.done);
     const canRemind = (D.me.isLeader || D.me.isAdmin) && pend.length;
     const close = '<div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button>';
-    if (kind === 'done' || kind === 'deadline') {
+    if (kind === 'done') {
       const mineOpen = D.me.writer && mineMember() && !mineMember().done;
       openModal(`
-        <h3>${kind === 'deadline' ? '주간보고 마감' : '작성 현황'}</h3>
-        <p class="sub">${kind === 'deadline' ? `${esc(D.week.deadlineText)}까지 · ${esc(s.left.big)}` : `${esc(D.week.thisLabel)} · 작성완료 ${s.done}/${s.total}명`}</p>
+        <h3>작성 현황</h3>
+        <p class="sub">${esc(D.week.deadlineText)} 마감 · ${esc(s.left.big)} · 작성완료 ${s.done}/${s.total}명</p>
         <h4 class="dd-h">미작성 <span>${pend.length}명</span></h4>
         ${nameList(pend, '모두 작성했습니다.')}
         <h4 class="dd-h">작성완료 <span>${done.length}명</span></h4>
@@ -2695,17 +2641,17 @@
     </section>`;
   }
   function hrNextMonday() { const d = parseD(D.week.key); d.setDate(d.getDate() + 7); return d; }
-  /** 날짜 → 어느 주에 들어가는지 안내 ("금주 · 9월 4주 칸" / "10월 2주 — 그 주가 되면…") */
+  /** 날짜 → 어느 주에 들어가는지 안내 ("→ 금주 칸" / "10월 2주 · 그 주가 되면 표시") */
   function hrWeekHint(iso) {
-    if (!iso) return '일자를 고르면 그 날짜가 속한 주에 들어갑니다.';
+    if (!iso) return '일자에 맞는 주에 들어갑니다.';
     const d = parseD(iso);
     const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
     const thisMon = parseD(D.week.key), nextMon = hrNextMonday();
     const label = `${mon.getMonth() + 1}월 ${Math.ceil(mon.getDate() / 7)}주`;
-    if (mon < thisMon) return `${label} — 지난 주차라 이번 주 표에는 나오지 않습니다.`;
-    if (+mon === +thisMon) return `금주 · ${D.week.thisLabel} 칸에 들어갑니다.`;
-    if (+mon === +nextMon) return `차주 · ${D.week.nextLabel} 칸에 들어갑니다.`;
-    return `${label} — 미리 등록해 두면 그 주가 됐을 때 표에 나타납니다.`;
+    if (mon < thisMon) return `${label} · 지난 주차 (표에 안 나옴)`;
+    if (+mon === +thisMon) return `→ 금주 칸 (${D.week.thisLabel})`;
+    if (+mon === +nextMon) return `→ 차주 칸 (${D.week.nextLabel})`;
+    return `${label} · 그 주가 되면 표시`;
   }
 
   function openHrForm(id) {
@@ -2762,9 +2708,9 @@
     const chips = list.map(l => `<span class="leave-chip">${esc(l.text)}${l.source === '캘린더' ? ' <small>캘린더</small>' : ''}
       <button class="icon-btn" onclick="deleteLeave('${esc(l.id)}')" aria-label="${esc(l.text)} 지우기" title="지우기">${ic('x', 'sm')}</button></span>`).join('');
     return `<section class="panel leave-strip">
-      <div class="panel-head"><h2>휴무 일정<span>${range} · 휴무계획/특이사항에 자동으로 들어갑니다</span></h2>
+      <div class="panel-head"><h2>휴무 일정<span>${range}</span></h2>
         <button class="btn small" onclick="openLeaveForm()">${ic('plus', 'sm')}휴가 등록</button></div>
-      ${chips ? `<div class="leave-chips">${chips}</div>` : `<p class="leave-empty">등록된 휴가가 없습니다. 여기서 등록하거나 팀 캘린더에 "${esc(D.me.name)} 연차"처럼 넣으면 자동으로 들어옵니다.</p>`}
+      ${chips ? `<div class="leave-chips">${chips}</div>` : `<p class="leave-empty">등록된 휴가 없음 · 팀 캘린더에 "${esc(D.me.name)} 연차"로 넣어도 자동 반영</p>`}
     </section>`;
   }
 
@@ -2837,7 +2783,6 @@
         </fieldset>`;
     openModal(`
       <h3>예산전용 신청</h3>
-      <p class="sub">변경전 예산을 줄여 변경후로 옮깁니다. 신청하면 바로 반영됩니다.</p>
       <form class="form" id="bForm" novalidate>
         <div class="two">${reqField}${monField}</div>
         ${side('From', '변경전', 'from')}
@@ -2881,7 +2826,7 @@
       if (msg) { err.textContent = msg; err.hidden = false; return; }
       $('#bSubmit').disabled = true;
       call('apiSubmitBudget', form)
-        .then(data => { applyData(data); closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; budgetMonth = form.month; render(); toast(`${monthName(form.month)}분 ${data.newId || D.budget.requests[0].id} 신청 완료. 예산에 반영했습니다.`); })
+        .then(data => { applyData(data); closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; budgetMonth = form.month; render(); toast(`${monthName(form.month)}분 ${data.newId || D.budget.requests[0].id} 신청 완료`); })
         .catch(e2 => { $('#bSubmit').disabled = false; err.textContent = e2.message || String(e2); err.hidden = false; });
     };
   }
@@ -2913,32 +2858,6 @@
     const b = e.target.closest('button');
     if (b) go(b.dataset.page);
   });
-
-  // 예산 막대 툴팁
-  function showTip(row, x, y) {
-    const a = D.budget.accounts[Number(row.dataset.i)];
-    const tip = $('#tip');
-    tip.innerHTML = `<b>${esc(bLabel(a.cost, a.code, a.name))}</b>
-      <div><span>편성액</span>${won(a.budget)}</div>
-      <div><span>전입</span>+${won(a.inAmt)}</div>
-      <div><span>전출</span>−${won(a.outAmt)}</div>
-      <div><span>현재예산</span><b style="margin:0">${won(a.current)}</b></div>`;
-    tip.hidden = false;
-    const w = tip.offsetWidth, h = tip.offsetHeight;
-    tip.style.left = Math.min(x + 14, window.innerWidth - w - 8) + 'px';
-    tip.style.top = Math.min(y + 14, window.innerHeight - h - 8) + 'px';
-  }
-  document.addEventListener('mousemove', e => {
-    const row = e.target.closest && e.target.closest('.bar-row');
-    if (row) showTip(row, e.clientX, e.clientY); else $('#tip').hidden = true;
-  });
-  document.addEventListener('focusin', e => {
-    if (e.target.classList && e.target.classList.contains('bar-row')) {
-      const r = e.target.getBoundingClientRect();
-      showTip(e.target, r.left + 80, r.bottom);
-    }
-  });
-  document.addEventListener('focusout', () => { $('#tip').hidden = true; });
 
   // 예시 화면 전용: 보는 사람 전환
   function renderDemoBar() {

@@ -149,8 +149,8 @@ function refreshHr_(ctx) {
 }
 
 /** 주간보고 시트 아래에 인사현황 표를 붙인다. 표가 끝난 다음 행 번호를 돌려준다. */
-function writeHrTable_(sh, ctx, top) {
-  const table = hrTable_(readHr_(ctx));
+function writeHrTable_(sh, ctx, top, table) {
+  table = table || hrTable_(readHr_(ctx));
   sh.getRange(top, 1).setValue('■ 인사 현황').setFontSize(12).setFontWeight('bold');
   const h = top + 1;
   sh.getRange(h, 1, 2, 6).setValues([

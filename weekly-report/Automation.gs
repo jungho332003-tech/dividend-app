@@ -150,7 +150,7 @@ function sendClosingMail_(ctx) {
 /**
  * 매시간 실행
  *  - 팀 캘린더의 휴가 일정을 [휴가] 시트로 가져오기
- *  - 평일 업무시간엔 보고서 자동 새로고침
+ *  - 평일 업무시간엔 보고서 자동 새로고침 (바뀐 내용이 있을 때만)
  *  - 마감 N시간 전 미작성자 알림 (주 1회)
  *  - 마감 후 팀장에게 취합 메일 (주 1회)
  */
@@ -164,7 +164,7 @@ function hourlyCheck() {
   syncLeavesFromCalendar_(ctx);
 
   const day = now.getDay();
-  if (day >= 1 && day <= 5 && now.getHours() >= 8 && now.getHours() <= 20) generateReport();
+  if (day >= 1 && day <= 5 && now.getHours() >= 8 && now.getHours() <= 20) refreshReportIfChanged_();
 
   const remindHours = Number(ctx.cfg[CFG.REMIND_HOURS]) || 3;
   const remindAt = new Date(ctx.deadline.getTime() - remindHours * 3600 * 1000);
@@ -174,7 +174,7 @@ function hourlyCheck() {
   }
 
   if (now >= ctx.deadline && props.getProperty(PROP.CLOSED) !== key) {
-    generateReport();
+    refreshReportIfChanged_();
     sendClosingMail_(ctx);
     props.setProperty(PROP.CLOSED, key);
   }

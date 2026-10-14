@@ -26,9 +26,11 @@ function doGet() {
 /* ---------- 캐시 ----------
  * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 60초간 캐시한다 (팀 전체가 공유).
  * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
+ * 캐시 한 칸은 100KB까지라, 팀원·게시글·예산 내역이 쌓여 커지면 여러 칸에 나눠 담는다.
  */
 
 const CACHE_TTL = 60;
+const CACHE_CHUNK = 30000; // 글자 수 (한글 3바이트 기준 90KB)
 const CK = {
   members: ctx => 'members:' + ctx.thisWeek.key,
   hr: ctx => 'hr:' + ctx.thisWeek.key,
@@ -39,9 +41,8 @@ const CK = {
 };
 
 function cached_(key, build, ttl) {
-  const cache = CacheService.getDocumentCache();
   try {
-    const hit = cache.get(key);
+    const hit = cacheGet_(key);
     if (hit) return JSON.parse(hit);
   } catch (e) { /* 캐시 오류는 무시하고 새로 읽는다 */ }
   const value = build();
@@ -51,8 +52,27 @@ function cached_(key, build, ttl) {
 
 function putCache_(key, value, ttl) {
   try {
-    CacheService.getDocumentCache().put(key, JSON.stringify(value), ttl || CACHE_TTL);
-  } catch (e) { /* 100KB 초과 등 캐시할 수 없으면 건너뛴다 */ }
+    const cache = CacheService.getDocumentCache();
+    const text = JSON.stringify(value);
+    if (text.length <= CACHE_CHUNK) return cache.put(key, text, ttl || CACHE_TTL);
+    // 큰 값: key#0, key#1 … 에 나눠 담고 key 에는 조각 수만 적는다
+    const parts = {};
+    let n = 0;
+    for (let i = 0; i < text.length; i += CACHE_CHUNK) parts[key + '#' + n++] = text.slice(i, i + CACHE_CHUNK);
+    parts[key] = '#chunks:' + n;
+    cache.putAll(parts, ttl || CACHE_TTL);
+  } catch (e) { /* 캐시할 수 없으면 건너뛴다 */ }
+}
+
+/** 캐시 문자열 (나눠 담은 값은 다시 잇는다). 없거나 조각이 빠졌으면 null */
+function cacheGet_(key) {
+  const cache = CacheService.getDocumentCache();
+  const head = cache.get(key);
+  if (!head || head.indexOf('#chunks:') !== 0) return head;
+  const keys = [];
+  for (let i = 0, n = Number(head.slice(8)); i < n; i++) keys.push(key + '#' + i);
+  const got = cache.getAll(keys);
+  return keys.every(k => got[k] != null) ? keys.map(k => got[k]).join('') : null;
 }
 
 /* ---------- 조회 ---------- */
