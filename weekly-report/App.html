@@ -216,6 +216,8 @@
   .kpi .value small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 2px; }
   .kpi .sub { color: var(--ink-2); font-size: 13px; }
   .kpi.alert .value { color: var(--warn-ink); }
+  .kpi .label .dday { color: var(--ink); font-weight: 800; margin-left: 4px; }
+  .kpi.alert .label .dday { color: var(--warn-ink); }
   .tap { cursor: pointer; }
   .kpi.tap { transition: border-color .15s, box-shadow .15s; }
   .kpi.tap:hover, .kpi.tap:focus-visible { border-color: var(--line-strong); box-shadow: 0 4px 14px rgba(16, 26, 22, .08); outline: none; }
@@ -1080,15 +1082,11 @@
 
       const W = can('weekly'), B = can('budget'), C = can('calendar'), BO = can('board'), R = can('rules');
       const kpis = [
-        W && `<div class="kpi tap ${s.overdue && s.done < s.total ? 'alert' : ''}" ${tapAttr("showDash('deadline')")}>
-            <span class="kpi-ico">${ic('clock')}</span><span class="label">주간보고 마감</span>
-            <span class="value">${s.left.big}</span>
-            <span class="sub">${esc(s.left.sub)}</span>
-          </div>`,
-        W && `<div class="kpi tap" ${tapAttr("showDash('done')")}>
-            <span class="kpi-ico">${ic('userCheck')}</span><span class="label">작성완료</span>
+        W && `<div class="kpi tap ${s.overdue && s.done < s.total ? 'alert' : ''}" ${tapAttr("showDash('done')")}>
+            <span class="kpi-ico">${ic('userCheck')}</span><span class="label">주간보고 마감 <b class="dday">${esc(s.left.big)}</b></span>
             <span class="value">${s.done}<small> / ${s.total}명</small></span>
             <div class="meter" role="img" aria-label="작성률 ${pct}%"><i style="width:${pct}%"></i></div>
+            <span class="sub">${esc(s.left.sub)}</span>
           </div>`,
         B && `<div class="kpi tap" ${tapAttr("showDash('budget')")}>
             <span class="kpi-ico">${ic('budget')}</span><span class="label">이번 달 예산전용</span>
