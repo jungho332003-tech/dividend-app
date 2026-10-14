@@ -15,11 +15,11 @@ function getTeamCalendar_() {
 
 /** startIso ~ endIso 사이 일정 + 공휴일 */
 function apiCalendar(startIso, endIso) {
-  requireMenu_(currentMember_(getMembers()), 'calendar');
+  const ctx = getContext(); // 팀원 목록은 캐시에서
+  requireMenu_(currentMember_(ctx.members), 'calendar');
   const start = new Date(startIso);
   const end = new Date(endIso);
   const cal = getTeamCalendar_();
-  const ctx = getContext();
   const raw = cal.getEvents(start, end);
 
   // 캘린더에 직접 넣은 휴가 일정을 주간보고에 반영 (팀 캘린더가 설정된 경우)
@@ -87,7 +87,7 @@ function apiAddEvent(ev) {
   const m = String(ev.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!title || !m) throw new Error('제목과 날짜를 입력해 주세요.');
 
-  const me = currentMember_(getMembers());
+  const me = currentMember_(sheetBase_().members); // 캐시 (시트를 매번 읽지 않도록)
   requireMenu_(me, 'calendar');
   const mine = ev.target === 'mine';
   const cal = mine ? CalendarApp.getDefaultCalendar() : getTeamCalendar_();

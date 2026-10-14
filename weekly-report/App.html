@@ -1592,16 +1592,23 @@
     setTarget(target);
     setKind(kind);
 
-    const after = (dateIso, msg) => {
+    // 서버 저장을 기다리지 않고 달력에 바로 그린다. 실패하면 지우고 알린다.
+    const tempId = 'tmp-' + Date.now();
+    const showNow = (ev, dateIso) => {
       closeModal();
-      calCache = {};
+      Object.values(calCache).forEach(c => { if (c && c.events) c.events.push(ev); });
       upcoming = null;
       if (page === 'calendar') {
         calMonth = new Date(+dateIso.slice(0, 4), +dateIso.slice(5, 7) - 1, 1);
         calSel = dateIso;
       }
       render();
-      toast(msg);
+    };
+    const undo = e2 => {
+      Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(x => x.id !== tempId); });
+      upcoming = null;
+      if (page === 'calendar') render();
+      toast(`저장하지 못했습니다. (${e2.message || e2})`);
     };
     $('#eForm').onsubmit = e => {
       e.preventDefault();
@@ -1609,18 +1616,25 @@
         const leave = { type: $('#lType').value, start: $('#lStart').value, end: $('#lEnd').value, memo: $('#lMemo').value.trim() };
         if (!leave.start) return err('시작일을 골라 주세요.');
         if (leave.end && leave.end < leave.start) return err('종료일이 시작일보다 빠릅니다.');
-        $('#eOk').disabled = true;
+        showNow({ id: tempId, title: `[${leave.type}] ${D.me.name}`, start: leave.start, end: dkey(addD(parseD(leave.end || leave.start), 1)),
+          allDay: true, location: '', desc: '', kind: 'leave' }, leave.start);
         call('apiAddLeave', leave)
-          .then(data => { applyData(data); after(leave.start, data && data.warning ? data.warning : `${leave.type} 등록 완료`); })
-          .catch(e2 => { $('#eOk').disabled = false; err(e2.message || String(e2)); });
+          .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : `${leave.type} 등록 완료`); })
+          .catch(undo);
         return;
       }
       const ev = { title: $('#eTitle').value.trim(), date: $('#eDate').value, allDay: $('#eAll').checked, startTime: $('#eStart').value, endTime: $('#eEnd').value, location: $('#eLoc').value, desc: $('#eDesc').value, target: target };
       if (!ev.title || !ev.date) return err('제목과 날짜를 입력해 주세요.');
-      $('#eOk').disabled = true;
+      const at = t => { const [h, mi] = String(t).split(':').map(Number); const d = parseD(ev.date); d.setHours(h || 0, mi || 0); return d; };
+      const s0 = at(ev.startTime || '09:00');
+      let e0 = at(ev.endTime || '10:00');
+      if (e0 <= s0) e0 = new Date(s0.getTime() + 36e5);
+      page = 'calendar';
+      showNow({ id: tempId, title: ev.title, allDay: ev.allDay, location: ev.location, desc: ev.desc, kind: target === 'mine' && both ? 'mine' : 'event',
+        start: ev.allDay ? ev.date : s0.toISOString(), end: ev.allDay ? dkey(addD(parseD(ev.date), 1)) : e0.toISOString() }, ev.date);
       call('apiAddEvent', ev)
-        .then(() => { if (page !== 'calendar') page = 'calendar'; after(ev.date, target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.'); })
-        .catch(e2 => { $('#eOk').disabled = false; err(e2.message || String(e2)); });
+        .then(() => toast(target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.'))
+        .catch(undo);
     };
   }
   /* ================= 공유게시판 ================= */
