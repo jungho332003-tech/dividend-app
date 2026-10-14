@@ -571,12 +571,11 @@
   .stat-v { font-size: 22px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25; }
   .stat-v small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 1px; }
   .stat-s { font-size: 12px; color: var(--muted); }
-  .stat.hot .stat-v { color: var(--accent-2); }
   .stat.warn .stat-v { color: var(--warn-ink); }
   .stat .meter { margin-top: 5px; }
 
   /* 아래 세 칸 */
-  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
   .prog2 { display: grid; grid-template-columns: 64px 40px 52px minmax(40px, 1fr) 38px; gap: 8px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
   .prog2:first-of-type { border-top: 0; }
   .prog2 .n { color: var(--muted); font-size: 12px; text-align: right; }
@@ -606,9 +605,9 @@
   details.help summary { cursor: pointer; width: fit-content; }
   details.help > div { margin-top: 6px; line-height: 1.7; }
 
-  @media (max-width: 1080px) { .grid-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .cal-layout { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 1080px) { .cal-layout { grid-template-columns: minmax(0, 1fr); } }
   @media (max-width: 760px) {
-    .grid-3 { grid-template-columns: minmax(0, 1fr); }
+    .grid-2 { grid-template-columns: minmax(0, 1fr); }
     .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .stat { border-left: 0; border-top: 1px solid var(--line); }
     .stat:nth-child(-n+2) { border-top: 0; }
@@ -1285,13 +1284,11 @@ window.MockApi = (function () {
     const done = cnt('done');
     const pct = P.length ? Math.round(done / P.length * 100) : 0;
     const leave = P.filter(p => p.leave).length;
-    const mine = D.me.name ? P.filter(myTodo) : [];
 
     const stat = (label, value, sub, onclick, cls) => `<button class="stat ${cls || ''}" onclick="${onclick}"><span class="stat-l">${label}</span><span class="stat-v">${value}</span><span class="stat-s">${sub}</span></button>`;
     const kpis = `
       <div class="stats">
         ${stat('검토 대상', `${P.length}<small>명</small>`, [leave ? `휴직 ${leave}명` : '', gone ? `퇴사 ${gone}명 제외` : ''].filter(Boolean).join(' · ') || '전체', "reviewTab='all';reviewStatus='all';reviewEmp='';go('review')")}
-        ${D.me.name ? stat('내 차례', `${mine.length}<small>명</small>`, '1차·미비·2차', "reviewTab='mine';reviewStatus='all';go('review')", mine.length ? 'hot' : '') : ''}
         ${stat('미비서류', `${cnt('supp')}<small>명</small>`, '보완 요청', "reviewTab='all';reviewStatus='supp';go('review')", cnt('supp') ? 'warn' : '')}
         ${stat('2차 대기', `${cnt('wait2')}<small>명</small>`, '1차 완료', "reviewTab='all';reviewStatus='wait2';go('review')")}
         <button class="stat done" onclick="reviewTab='all';reviewStatus='done';go('review')"><span class="stat-l">검토완료</span><span class="stat-v">${pct}<small>%</small></span><span class="stat-s">${done} / ${P.length}명</span><span class="meter"><i style="width:${pct}%"></i></span></button>
@@ -1299,11 +1296,6 @@ window.MockApi = (function () {
 
     // 담당자별 진행
     const owners = [...new Set(P.map(p => p.owner || '(미배정)'))].sort((a, b) => (a === '(미배정)') - (b === '(미배정)') || a.localeCompare(b, 'ko'));
-    const todoRows = mine.slice(0, 5).map(p => `
-      <div class="list-row" style="cursor:pointer" onclick="openPerson('${esc(p.id)}')">
-        <span class="who">${esc(p.name)}</span>${statusChip(p)}
-        <span class="meta">${esc(p.dept)}${p.owner2 === D.me.name && pStatus(p) === 'wait2' ? ' · 2차 검토 차례' : ''}${p.missing ? ` · ⚠ ${esc(p.missing)}` : ''}</span>
-      </div>`).join('') + (mine.length > 5 ? `<button class="linkish more-link" onclick="reviewTab='mine';reviewStatus='all';go('review')">외 ${mine.length - 5}명 더 보기</button>` : '') || '<div class="empty">지금 처리할 대상자가 없습니다.</div>';
 
     const recentNotices = D.notices.filter(activeNotice).slice(0, 4).map(n => `
       <div class="list-row" style="cursor:pointer;grid-template-columns:auto minmax(0,1fr) auto" onclick="openNotice='${esc(n.id)}';go('notice')">
@@ -1320,7 +1312,7 @@ window.MockApi = (function () {
       ${can('notice') ? noticeBanners() : ''}
       ${can('review') || can('dash') ? kpis : ''}
       ${calendarHtml()}
-      <div class="grid-3">
+      <div class="grid-2">
         <section class="panel">
           <div class="panel-head"><h2>담당자별 진행</h2><span>미비 · 완료율</span></div>
           ${owners.map(o => {
@@ -1330,7 +1322,6 @@ window.MockApi = (function () {
             return `<div class="prog2"><b>${esc(o)}</b><span class="n">${list.length}명</span><span class="n ${sup ? 'warn' : ''}">${sup ? `미비 ${sup}` : ''}</span><span class="meter" title="검토완료 ${d}명"><i style="width:${pc}%"></i></span><span class="n pc">${pc}%</span></div>`;
           }).join('') || '<div class="empty">대상자가 없습니다.</div>'}
         </section>
-        ${D.me.name && can('review') ? `<section class="panel"><div class="panel-head"><h2>내 차례</h2><span>${mine.length}명</span></div><div class="list">${todoRows}</div></section>` : ''}
         ${can('notice') ? `<section class="panel"><div class="panel-head"><h2>최근 공지</h2><button class="linkish" onclick="go('notice')">전체</button></div><div class="list">${recentNotices}</div></section>` : ''}
       </div>`;
   };
