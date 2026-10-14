@@ -485,6 +485,12 @@
   .sheet-grid th { background: var(--panel-2); font-weight: 700; color: var(--ink); height: 44px; }
   .sheet-grid td.nm { font-weight: 600; }
   .sheet-grid tbody tr { cursor: pointer; }
+  .sheet-grid th.pick, .sheet-grid td.pick { width: 38px; padding: 0; cursor: default; }
+  .sheet-grid td.pick label, .sheet-grid th.pick label { display: flex; align-items: center; justify-content: center; min-height: 34px; cursor: pointer; }
+  .sheet-grid tr.picked td { background: var(--accent-soft); }
+  .bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); font-size: 13px; position: sticky; top: 8px; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .bulk-bar label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .bulk-bar .field-in { min-width: 120px; padding-top: 6px; padding-bottom: 6px; }
   .sheet-grid tr.gone td { color: var(--muted); background: var(--panel-2); }
   .sheet-grid tr.gone td.nm { text-decoration: line-through; text-decoration-color: var(--line); }
   .chip.emp-휴직 { background: var(--pend-bg); color: var(--pend-ink); }
@@ -870,7 +876,7 @@ window.MockApi = (function () {
   }
 
   return {
-    delay: { apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
+    delay: { apiAssignPeople: 800, apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
     now: () => NOW,
@@ -925,6 +931,12 @@ window.MockApi = (function () {
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }
       });
       return { people: myPeople(m), added, updated };
+    },
+    apiAssignPeople(ids, patch) {
+      const m = meInfo(); if (!lead(m)) throw new Error('담당자 일괄 지정은 총괄 또는 관리자만 할 수 있습니다.');
+      let assigned = 0;
+      people.forEach(p => { if (ids.indexOf(p.id) < 0) return; assigned++; ['owner', 'owner2'].forEach(k => { if (k in patch) p[k] = patch[k]; }); p.updated = stamp(); p.editor = m.name; });
+      return { people: myPeople(m), assigned };
     },
     apiTemplateLink() { return { demo: true }; },
     apiSetYear(y) { if (!stores[y]) throw new Error(`${y}년 자료가 없습니다.`); viewYears[me] = y; return this.apiBootstrap(); },
@@ -1040,8 +1052,12 @@ window.MockApi = (function () {
   let page = 'dash';
   let reviewTab = 'mine';      // mine | all | logs
   let reviewStatus = 'all';
+  const KEEP = '\u0000keep';
   let reviewOwner = '';
-  let reviewEmp = '';       // '' | 재직 | 휴직 | 퇴사
+  let reviewEmp = '';
+  // 명단 체크(총괄·관리자): 담당자 일괄 지정용. '' = 바꾸지 않음
+  let picked = new Set();
+  let bulkOwner = KEEP, bulkOwner2 = KEEP;       // '' | 재직 | 휴직 | 퇴사
   let reviewQuery = '';
   let logQuery = '';
   let noticeFilter = 'all';
@@ -1123,7 +1139,7 @@ window.MockApi = (function () {
     $('#main').innerHTML = `<div class="loading">${esc(y)}년 자료를 불러오는 중…</div>`;
     call('apiSetYear', y).then(data => {
       setData(data);
-      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; reviewEmp = ''; calMonth = null; calSel = null;
+      openNotice = openRule = null; reviewStatus = 'all'; reviewOwner = ''; reviewEmp = ''; picked.clear(); calMonth = null; calSel = null;
       reviewTab = D.people.some(isMine) ? 'mine' : 'all';
       render();
       toast(`${y}년 귀속 자료로 바꿨습니다.`);
@@ -1466,15 +1482,56 @@ window.MockApi = (function () {
     // 대상자가 많으면 처음에는 앞 200명만 그리고 「더 보기」로 늘린다 (검색·필터는 전체 대상)
     const BASIC = ['no', 'dept', 'empNo', 'name', 'subgroup', 'payArea', 'rank', 'phone', 'email', 'leave'];
     const shown = list.slice(0, reviewLimit);
+    const pick = isLead();
     const rows = shown.map(p => `
-      <tr class="${p.retired ? 'gone' : ''}" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
+      <tr class="${p.retired ? 'gone' : ''} ${pick && picked.has(p.id) ? 'picked' : ''}" onclick="openPerson('${esc(p.id)}')" title="눌러서 ${esc(p.name)}님 정보 수정">
+        ${pick ? `<td class="pick" onclick="event.stopPropagation()"><label><input type="checkbox" class="check" ${picked.has(p.id) ? 'checked' : ''} onchange="pickPerson('${esc(p.id)}',this.checked)" aria-label="${esc(p.name)} 선택"></label></td>` : ''}
         ${BASIC.map(k => `<td class="${k === 'name' ? 'nm' : ''}">${k === 'leave' ? empChip(p) : esc(p[k])}</td>`).join('')}
       </tr>`).join('');
     return rows
-      ? `<div class="table-wrap"><table class="sheet-grid"><thead><tr>${BASIC.map(k => `<th>${k === 'leave' ? '휴직·퇴사' : esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ? `${pick ? bulkBarHtml() : ''}<div class="table-wrap"><table class="sheet-grid"><thead><tr>${pick ? `<th class="pick"><label><input type="checkbox" class="check" ${list.length && list.every(p => picked.has(p.id)) ? 'checked' : ''} onchange="pickAll(this.checked)" aria-label="목록 전체 선택" title="검색·필터된 ${list.length}명 전체 선택"></label></th>` : ''}${BASIC.map(k => `<th>${k === 'leave' ? '휴직·퇴사' : esc(col(k).l)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
         ${list.length > shown.length ? `<button class="btn small more-rows" onclick="reviewLimit+=${PAGE_ROWS};$('#reviewList').innerHTML=reviewListHtml()">${PAGE_ROWS}명 더 보기 (남은 ${list.length - shown.length}명)</button>` : ''}
         <p class="hint" style="margin-top:8px">${list.length > shown.length ? `${list.length}명 중 ${shown.length}명 표시` : `${list.length}명`} · 이름을 누르면 기본 정보와 검토 내용을 수정하는 화면이 뜹니다.</p>`
       : `<div class="empty">${reviewTab === 'mine' ? (D.me.name ? '[대상자] 시트의 담당자·2차검토 담당자 칸에 내 이름이 있는 사람이 없습니다.' : '[담당자] 시트에 등록되어야 내 담당을 볼 수 있습니다.') : '조건에 맞는 대상자가 없습니다.'}</div>`;
+  }
+
+  /* 담당자 일괄 지정 */
+  function refreshList() { const el = $('#reviewList'); if (el) el.innerHTML = reviewListHtml(); }
+  function pickPerson(id, on) { if (on) picked.add(id); else picked.delete(id); refreshList(); }
+  function pickAll(on) { reviewFiltered().forEach(p => { if (on) picked.add(p.id); else picked.delete(p.id); }); refreshList(); }
+  function bulkBarHtml() {
+    // 지금 있는 대상자만 센다 (삭제·연도 변경으로 사라진 사람 제외)
+    const ids = D.people.filter(p => picked.has(p.id)).map(p => p.id);
+    if (!ids.length) return '<p class="hint" style="margin:0 0 8px">왼쪽 체크박스로 대상자를 고르면 담당자를 한 번에 지정할 수 있습니다.</p>';
+    const order = r => r === '응대담당' ? 0 : r === '2차검토' ? 1 : 2;
+    const staff = D.staff.slice().sort((a, b) => order(a.role) - order(b.role) || a.name.localeCompare(b.name, 'ko'));
+    const opts = cur => [[KEEP, '그대로 두기'], ['', '(비우기)']].concat(staff.map(x => [x.name, `${x.name} · ${x.role}`]))
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    return `<div class="bulk-bar">
+      <b>${ids.length}명 선택</b>
+      <label>담당자 <select class="field-in" onchange="bulkOwner=this.value">${opts(bulkOwner)}</select></label>
+      <label>2차검토 담당자 <select class="field-in" onchange="bulkOwner2=this.value">${opts(bulkOwner2)}</select></label>
+      <button class="btn small primary" onclick="bulkAssign()">지정</button>
+      <button class="btn small" onclick="picked.clear();refreshList()">선택 해제</button>
+    </div>`;
+  }
+  function bulkAssign() {
+    const targets = D.people.filter(p => picked.has(p.id));
+    const patch = {};
+    if (bulkOwner !== KEEP) patch.owner = bulkOwner;
+    if (bulkOwner2 !== KEEP) patch.owner2 = bulkOwner2;
+    if (!targets.length) return toast('대상자를 먼저 골라 주세요.');
+    if (!Object.keys(patch).length) return toast('담당자나 2차검토 담당자를 골라 주세요.');
+    const label = [patch.owner !== undefined ? `담당자 ${patch.owner || '비움'}` : '', patch.owner2 !== undefined ? `2차검토 ${patch.owner2 || '비움'}` : ''].filter(Boolean).join(' · ');
+    // 화면에 먼저 반영하고 뒤에서 저장
+    const before = targets.map(p => [p, p.owner, p.owner2, p.updated, p.editor]);
+    targets.forEach(p => Object.assign(p, patch, { editor: D.me.name }));
+    picked.clear(); bulkOwner = bulkOwner2 = KEEP;
+    render();
+    saveInBackground('apiAssignPeople', [targets.map(p => p.id), patch], {
+      ok: `${targets.length}명 지정 완료 — ${label}`,
+      undo: () => { before.forEach(([p, o, o2, u, e]) => Object.assign(p, { owner: o, owner2: o2, updated: u, editor: e })); targets.forEach(p => picked.add(p.id)); },
+    });
   }
 
   const PAGE_ROWS = 200;

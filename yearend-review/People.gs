@@ -295,6 +295,56 @@ function apiImportPeople(rows) {
   return Object.assign(refreshPart_('people'), { added: added, updated: updated });
 }
 
+/**
+ * 총괄·관리자: 명단에서 체크한 대상자들의 담당자·2차검토 담당자를 한 번에 지정
+ * patch: { owner?, owner2? }  — 넣은 칸만 바꾸고, '' 이면 비운다
+ */
+function apiAssignPeople(ids, patch) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'review');
+  if (!me.isLeader && !me.isAdmin) throw new Error('담당자 일괄 지정은 총괄 또는 관리자만 할 수 있습니다.');
+  const keys = ['owner', 'owner2'].filter(k => patch && k in patch);
+  const want = {};
+  (ids || []).forEach(id => { want[String(id)] = true; });
+  if (!keys.length || !Object.keys(want).length) throw new Error('대상자와 지정할 담당자를 골라 주세요.');
+  const names = ctx.members.map(m => m.name);
+  keys.forEach(k => {
+    patch[k] = String(patch[k] || '').trim();
+    if (patch[k] && names.indexOf(patch[k]) < 0) throw new Error(`[담당자] 시트에 없는 이름입니다: ${patch[k]}`);
+  });
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  let count = 0;
+  try {
+    const sh = peopleSheetOrThrow_(ctx.ss);
+    const all = sh.getDataRange().getValues();
+    const map = colMapFrom_(all[0] || []);
+    keys.forEach(k => ensureCol_(sh, map, COLS.find(c => c.k === k)));
+    const rows = all.slice(1);
+    if (!rows.length) throw new Error('대상자가 없습니다.');
+    // 바꿀 열만 통째로 읽은 값에서 고쳐 한 번에 쓴다 (사람 수와 관계없이 열마다 한 번)
+    const write = keys.concat(['updated', 'editor'].filter(k => map[k]));
+    const cols = {};
+    write.forEach(k => { cols[k] = rows.map(r => [r[map[k] - 1] == null ? '' : r[map[k] - 1]]); });
+    const now = new Date();
+    rows.forEach((r, i) => {
+      const id = (map.empNo ? cellText_(r[map.empNo - 1]) : '') || 'r' + (i + 2);
+      if (!want[id]) return;
+      count++;
+      keys.forEach(k => { cols[k][i][0] = patch[k]; });
+      if (cols.updated) cols.updated[i][0] = now;
+      if (cols.editor) cols.editor[i][0] = me.name || me.email;
+    });
+    if (!count) throw new Error('대상자를 찾을 수 없습니다. 새로고침해 주세요.');
+    write.forEach(k => sh.getRange(2, map[k], rows.length, 1).setValues(cols[k]));
+  } finally {
+    lock.releaseLock();
+  }
+  return Object.assign(refreshPart_('people'), { assigned: count });
+}
+
 /** 응대기록 추가: 누구든 응대한 사람이 남긴다 */
 function apiAddLog(id, kind, body) {
   const ctx = getContext();

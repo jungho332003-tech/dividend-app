@@ -232,7 +232,7 @@ window.MockApi = (function () {
   }
 
   return {
-    delay: { apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
+    delay: { apiAssignPeople: 800, apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
     now: () => NOW,
@@ -287,6 +287,12 @@ window.MockApi = (function () {
         else { people.push(person(Object.assign(o, { editor: m.name, updated: stamp() }))); added++; }
       });
       return { people: myPeople(m), added, updated };
+    },
+    apiAssignPeople(ids, patch) {
+      const m = meInfo(); if (!lead(m)) throw new Error('담당자 일괄 지정은 총괄 또는 관리자만 할 수 있습니다.');
+      let assigned = 0;
+      people.forEach(p => { if (ids.indexOf(p.id) < 0) return; assigned++; ['owner', 'owner2'].forEach(k => { if (k in patch) p[k] = patch[k]; }); p.updated = stamp(); p.editor = m.name; });
+      return { people: myPeople(m), assigned };
     },
     apiTemplateLink() { return { demo: true }; },
     apiSetYear(y) { if (!stores[y]) throw new Error(`${y}년 자료가 없습니다.`); viewYears[me] = y; return this.apiBootstrap(); },

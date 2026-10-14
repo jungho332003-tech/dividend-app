@@ -102,6 +102,25 @@ function withDefaults(api) {
     as('owner@x.com');
     assert.strictEqual(api.apiSavePerson('1001', { retired: false }).personPatch.retired, false);
   });
+  ok('담당자 일괄 지정: 총괄·관리자만, 고른 칸만 바뀜', () => {
+    as('kim@x.com'); throwsMsg(() => api.apiAssignPeople(['1001'], { owner: '이수민' }), /총괄 또는 관리자/);
+    as('lead@x.com');
+    throwsMsg(() => api.apiAssignPeople(['1001'], { owner: '없는사람' }), /없는 이름/);
+    throwsMsg(() => api.apiAssignPeople(['1001'], {}), /골라 주세요/);
+    const before = api.apiBootstrap().people;
+    const o2 = before.find(p => p.empNo === '1001').owner2;
+    const r = api.apiAssignPeople(['1001', '1003'], { owner: '이수민' });
+    assert.strictEqual(r.assigned, 2);
+    const a = r.people.find(p => p.empNo === '1001'), c = r.people.find(p => p.empNo === '1003');
+    assert.strictEqual(a.owner, '이수민'); assert.strictEqual(c.owner, '이수민');
+    assert.strictEqual(a.owner2, o2, '2차검토 담당자는 그대로'); assert.strictEqual(a.editor, '정해린');
+    const other = r.people.find(p => p.empNo !== '1001' && p.empNo !== '1003');
+    assert.strictEqual(other.owner, before.find(p => p.empNo === other.empNo).owner, '안 고른 사람은 그대로');
+    api.apiAssignPeople(['1003'], { owner: '김도현', owner2: '' });
+    const c2 = api.apiBootstrap().people.find(p => p.empNo === '1003');
+    assert.strictEqual(c2.owner, '김도현'); assert.strictEqual(c2.owner2 || '', '');
+    api.apiAssignPeople(['1001'], { owner: '김도현' });
+  });
   ok('add/delete person', () => {
     as('kim@x.com'); throwsMsg(() => api.apiAddPerson({ name: 'x' }), /총괄 또는 관리자/);
     as('lead@x.com');
