@@ -487,7 +487,7 @@
   .ev { font-size: 11.5px; line-height: 1.4; padding: 1px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel-2); color: var(--ink-2); }
   .ev.holiday { background: none; color: var(--warn-ink); font-weight: 600; }
   .ev.deadline { background: none; color: var(--accent); font-weight: 700; }
-  .ev.leave { background: var(--panel-2); color: var(--ink); font-weight: 600; box-shadow: inset 2px 0 0 var(--next); border-radius: 2px 4px 4px 2px; }
+  .ev.leave { background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; }
   .ev.mine { background: var(--panel); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .tt.mine { color: var(--ink-2); }
   .only-me { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--ink-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-strong); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
@@ -508,10 +508,10 @@
   .cal-legend .lg { width: 12px; height: 10px; border-radius: 3px; display: inline-block; }
   .lg.event { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .lg.mine { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line-strong); }
-  .lg.leave { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--next); }
+  .lg.leave { background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn-ink); }
   .lg.holiday { background: var(--warn-ink); height: 3px; }
   .lg.deadline { background: var(--accent); height: 3px; }
-  .tt.leave { color: var(--ink); font-weight: 600; }
+  .tt.leave { color: var(--warn-ink); font-weight: 600; }
   .leave-strip { padding: 14px 18px; }
   .leave-strip .panel-head { margin-bottom: 8px; }
   .leave-strip .panel-head h2 span { color: var(--muted); font-weight: 500; font-size: 12.5px; margin-left: 6px; }
@@ -1535,7 +1535,7 @@
           <div class="cal-legend">
             <span><i class="lg event"></i>${D.teamCalendar ? '팀 일정' : '일정'}</span>
             ${D.teamCalendar ? '<span><i class="lg mine"></i>내 일정 (나만 보기)</span>' : ''}
-            <span><i class="lg leave"></i>휴가</span><span><i class="lg holiday"></i>공휴일</span><span><i class="lg deadline"></i>주간보고 마감</span>
+            <span><i class="lg leave"></i>휴가</span><span><i class="lg deadline"></i>주간보고 마감</span>
           </div>
         </section>
         <section class="panel">
