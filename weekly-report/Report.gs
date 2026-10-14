@@ -45,13 +45,18 @@ function buildReport_(ctx) {
   // 본문
   const rows = [];
   const blocks = [];
+  const bold = []; // 팀장이 굵게 표시한 업무 칸 (A1)
+  const marks = marksOf_(ctx);
   let row = REPORT.FIRST_ROW;
   ctx.members.filter(m => m.write).forEach(m => {
     const input = readInput(ss, m.name);
+    const mk = marks[m.name] || { thisWeek: [], nextWeek: [] };
     const n = Math.max(REPORT.MIN_BLOCK_ROWS, input.thisWeek.length, input.nextWeek.length);
     for (let i = 0; i < n; i++) {
       const a = input.thisWeek[i];
       const b = input.nextWeek[i];
+      if (a && mk.thisWeek.indexOf(a.task) >= 0) bold.push('B' + (row + i));
+      if (b && mk.nextWeek.indexOf(b.task) >= 0) bold.push('D' + (row + i));
       rows.push([
         i === 0 ? m.name : '',
         a ? a.task : '', a ? formatDue(a.due) : '',
@@ -70,6 +75,7 @@ function buildReport_(ctx) {
     [3, 5].forEach(c => sh.getRange(REPORT.FIRST_ROW, c, rows.length, 1).setHorizontalAlignment('center'));
     sh.getRange(REPORT.FIRST_ROW, REPORT.COMMENT_COL, rows.length, 1).setBackground('#fffbea');
 
+    if (bold.length) sh.getRangeList(bold).setFontWeight('bold');
     blocks.forEach(b => {
       [1, 6, REPORT.COMMENT_COL].forEach(c => sh.getRange(b.row, c, b.n, 1).merge());
       sh.getRange(b.row, 1, b.n, 1).setHorizontalAlignment('center').setBackground(b.done ? null : '#fde2e2');

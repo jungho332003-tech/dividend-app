@@ -425,7 +425,7 @@ function applyProtections_(ctx) {
   setupHrSheet_(ss); // 예전 버전에서 업데이트한 경우
   setupLeaveSheet_(ss);
   // 게시판·인사현황·휴가: 누구나 등록 (직접 수정 시 경고만)
-  [BOARD.SHEET, BOARD.COMMENTS, HR.SHEET, LEAVE.SHEET].forEach(name => {
+  [BOARD.SHEET, BOARD.COMMENTS, HR.SHEET, LEAVE.SHEET, MARK.SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
     if (sh) warnOnlyProtect_(sh);
   });
@@ -631,13 +631,18 @@ function buildReport_(ctx) {
   // 본문
   const rows = [];
   const blocks = [];
+  const bold = []; // 팀장이 굵게 표시한 업무 칸 (A1)
+  const marks = marksOf_(ctx);
   let row = REPORT.FIRST_ROW;
   ctx.members.filter(m => m.write).forEach(m => {
     const input = readInput(ss, m.name);
+    const mk = marks[m.name] || { thisWeek: [], nextWeek: [] };
     const n = Math.max(REPORT.MIN_BLOCK_ROWS, input.thisWeek.length, input.nextWeek.length);
     for (let i = 0; i < n; i++) {
       const a = input.thisWeek[i];
       const b = input.nextWeek[i];
+      if (a && mk.thisWeek.indexOf(a.task) >= 0) bold.push('B' + (row + i));
+      if (b && mk.nextWeek.indexOf(b.task) >= 0) bold.push('D' + (row + i));
       rows.push([
         i === 0 ? m.name : '',
         a ? a.task : '', a ? formatDue(a.due) : '',
@@ -656,6 +661,7 @@ function buildReport_(ctx) {
     [3, 5].forEach(c => sh.getRange(REPORT.FIRST_ROW, c, rows.length, 1).setHorizontalAlignment('center'));
     sh.getRange(REPORT.FIRST_ROW, REPORT.COMMENT_COL, rows.length, 1).setBackground('#fffbea');
 
+    if (bold.length) sh.getRangeList(bold).setFontWeight('bold');
     blocks.forEach(b => {
       [1, 6, REPORT.COMMENT_COL].forEach(c => sh.getRange(b.row, c, b.n, 1).merge());
       sh.getRange(b.row, 1, b.n, 1).setHorizontalAlignment('center').setBackground(b.done ? null : '#fde2e2');
@@ -2634,6 +2640,8 @@ function readMember_(ctx, name, comment) {
     // 캘린더·휴가 등록에서 자동으로 붙는 휴무 (이번 주~다음 주 / 미리 쓰기는 다음 주~다다음 주)
     leaves: memberLeaves_(ctx, name, ctx.thisWeek.monday, 2),
     preLeaves: memberLeaves_(ctx, name, ctx.nextWeek.monday, 2),
+    // 팀장이 굵게 표시한 업무
+    marks: marksOf_(ctx)[name] || { thisWeek: [], nextWeek: [] },
     pre: {
       exists: input.pre.exists,
       note: input.pre.note,
@@ -2846,6 +2854,74 @@ function apiSaveComment(name, comment) {
   const text = String(comment || '').trim();
   sh.getRange(REPORT.FIRST_ROW + idx, REPORT.COMMENT_COL).setValue(text);
   return memberPatch_(ctx, name, text);
+}
+
+/* ---------- 팀장 강조(굵게) ---------- */
+
+/**
+ * 팀장이 팀 주간보고에서 업무를 눌러 굵게 표시한다.
+ * [강조]  주차(월요일) | 이름 | 구분(금주/차주) | 업무 | 표시자 | 일시
+ * 업무 내용으로 찾기 때문에 팀원이 내용을 고치면 강조가 풀린다. 다음 주차가 되면 새로 시작한다.
+ */
+const MARK = { SHEET: '강조' };
+
+function markSheet_(ss) {
+  let sh = ss.getSheetByName(MARK.SHEET);
+  if (sh) return sh;
+  sh = ss.insertSheet(MARK.SHEET);
+  sh.getRange(1, 1, 1, 6).setValues([['주차(월요일)', '이름', '구분', '업무', '표시자', '일시']]);
+  styleHeader_(sh.getRange(1, 1, 1, 6));
+  sh.getRange('A2:A').setNumberFormat('@');
+  sh.getRange('F2:F').setNumberFormat('yyyy-mm-dd hh:mm');
+  [100, 80, 60, 360, 80, 130].forEach((w, i) => sh.setColumnWidth(i + 1, w));
+  sh.setFrozenRows(1);
+  return sh;
+}
+
+/** 이번 주 강조: { 이름: { thisWeek: [업무], nextWeek: [업무] } } (요청 안에서 한 번만 읽는다) */
+function marksOf_(ctx) {
+  if (ctx._marks) return ctx._marks;
+  const out = {};
+  const sh = ctx.ss.getSheetByName(MARK.SHEET);
+  if (sh && sh.getLastRow() >= 2) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(r => {
+      const week = r[0] instanceof Date ? ymd(r[0]) : String(r[0]).trim();
+      if (week !== ctx.thisWeek.key || !String(r[3]).trim()) return;
+      const m = out[String(r[1]).trim()] = out[String(r[1]).trim()] || { thisWeek: [], nextWeek: [] };
+      (String(r[2]).trim() === '차주' ? m.nextWeek : m.thisWeek).push(String(r[3]).trim());
+    });
+  }
+  ctx._marks = out;
+  return out;
+}
+
+/** 팀장: 업무 강조 켜기/끄기. which: 'this' | 'next' */
+function apiToggleMark(name, which, task) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'weekly');
+  if (!me.isLeader) throw new Error('팀장만 굵게 표시할 수 있습니다.');
+  const label = which === 'next' ? '차주' : '금주';
+  const text = String(task || '').trim();
+  if (!text) throw new Error('업무를 찾을 수 없습니다.');
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    const sh = markSheet_(ctx.ss);
+    const rows = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues() : [];
+    const idx = rows.findIndex(r => (r[0] instanceof Date ? ymd(r[0]) : String(r[0]).trim()) === ctx.thisWeek.key
+      && String(r[1]).trim() === name && String(r[2]).trim() === label && String(r[3]).trim() === text);
+    if (idx >= 0) sh.deleteRow(idx + 2);
+    else {
+      sh.getRange(sh.getLastRow() + 1, 1).setNumberFormat('@');
+      sh.getRange(sh.getLastRow() + 1, 1, 1, 6).setValues([[ctx.thisWeek.key, name, label, text, me.name, new Date()]]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  ctx._marks = null;
+  return memberPatch_(ctx, name);
 }
 
 /* ---------- 예산전용 ---------- */

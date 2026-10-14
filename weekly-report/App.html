@@ -338,7 +338,11 @@
   .report.team td.note { color: var(--ink); font-weight: 500; }
   .dot-inline { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-ink); vertical-align: 1px; }
   .due-late { color: var(--warn-ink); font-weight: 700; }
-  .due-soon { color: var(--ink); font-weight: 700; }
+  .report td.task.mk, li.mk > span, .meet li.mk .t { font-weight: 800; color: var(--ink); }
+  .report td.task.markable { cursor: pointer; }
+  .report td.task.markable:hover { box-shadow: inset 0 0 0 2px var(--line-strong); }
+  .meet li.markable { cursor: pointer; }
+  .meet li.markable:hover .t { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
   /* 회의 모드 */
   .meet { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex; flex-direction: column; padding: 18px 28px 16px; gap: 14px; overflow: hidden; }
   body.meeting { overflow: hidden; }
@@ -1017,16 +1021,16 @@
 
   /** 휴대폰용 팀 주간보고: 사람별 카드 */
   function reportCards() {
-    const list = items => items.length
-      ? `<ul>${items.map(it => `<li><span>${esc(it.task)}</span><em>${esc(it.due)}</em></li>`).join('')}</ul>`
+    const list = (items, m, w) => items.length
+      ? `<ul>${items.map(it => `<li class="${isMarked(m, w, it.task) ? 'mk' : ''}"><span>${esc(it.task)}</span><em>${esc(it.due)}</em></li>`).join('')}</ul>`
       : '<p class="none">작성한 업무가 없습니다.</p>';
     return D.members.map(m => `
       <article class="mcard">
         <div class="mcard-head">
           <b>${esc(m.name)}</b>${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
         </div>
-        <div class="msec wk-this"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek)}</div>
-        <div class="msec wk-next"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek)}</div>
+        <div class="msec wk-this"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek, m, 'this')}</div>
+        <div class="msec wk-next"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek, m, 'next')}</div>
         ${noteOf(m) ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(noteOf(m))}</span></p>` : ''}
         ${m.comment || D.me.isLeader ? `<div class="cm mcm ${D.me.isLeader ? 'editable' : ''}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" role="button"' : ''}>${m.comment ? esc(m.comment) : '<span class="ph">팀장 코멘트 남기기</span>'}</div>` : ''}
       </article>`).join('');
@@ -1246,7 +1250,7 @@
           const b = m.nextWeek[i] || {};
           rows += `<tr class="${i === 0 ? 'top' : ''} ${mi % 2 ? 'alt' : ''}">`;
           if (i === 0) rows += `<td class="nm" rowspan="${n}"><b>${esc(m.name)}</b>${m.done ? '' : '<span class="dot" title="작성완료 미체크" aria-label="미작성"></span>'}</td>`;
-          rows += `<td class="task">${esc(a.task)}</td><td class="c">${dueHtml(a, true)}</td><td class="split task">${esc(b.task)}</td><td class="c">${dueHtml(b, false)}</td>`;
+          rows += `${taskCell(m, 'this', i, a, '')}<td class="c">${dueHtml(a, true)}</td>${taskCell(m, 'next', i, b, 'split')}<td class="c">${dueHtml(b, false)}</td>`;
           if (i === 0) {
             rows += `<td rowspan="${n}" class="split note">${esc(noteOf(m))}</td>`;
             rows += `<td class="cm ${D.me.isLeader ? 'editable' : ''}" rowspan="${n}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" title="눌러서 코멘트 작성"' : ''}>${esc(m.comment)}</td>`;
@@ -1265,7 +1269,7 @@
         </div>
         <section class="panel">
           <p class="report-title">■ ${esc(D.week.title)}</p>
-          <p class="report-note">${D.me.isLeader ? '팀장 코멘트 칸을 누르면 바로 작성할 수 있습니다.' : '팀장 코멘트는 팀장님만 작성할 수 있습니다.'}</p>
+          <p class="report-note">${D.me.isLeader ? '업무를 누르면 굵게 표시되고(다시 누르면 해제), 팀장 코멘트 칸을 누르면 바로 작성할 수 있습니다.' : '굵은 글씨는 팀장님이 강조한 업무입니다.'}</p>
           <div class="mcards">${reportCards()}</div>
           <div class="table-wrap desk">
             <table class="report team">
@@ -2374,15 +2378,48 @@
     if (e.key === 'Escape' && !$('#scrim').hidden) closeModal();
   });
   /* ================= 팀 주간보고: 기한 표시 / 회의 모드 ================= */
-  /** 기한: 지났으면 빨강(금주만), 이틀 안이면 굵게, 지속은 회색 칩 */
+  /** 기한: 지났으면 빨강(금주만), 지속은 회색 칩 */
   function dueHtml(it, isThis) {
     if (!it || !it.task) return '';
     if (it.due === '지속') return '<span class="due-cont">지속</span>';
     if (!it.dueIso) return esc(it.due || '');
     const days = Math.round((parseD(it.dueIso) - parseD(dkey(now()))) / 864e5);
-    const cls = isThis && days < 0 ? 'due-late' : days >= 0 && days <= 2 ? 'due-soon' : '';
+    const cls = isThis && days < 0 ? 'due-late' : '';
     return `<span class="${cls}" ${cls === 'due-late' ? 'title="기한 지남"' : ''}>${esc(it.due)}</span>`;
   }
+
+  /* ----- 팀장 강조(굵게) ----- */
+  function isMarked(m, w, task) {
+    const list = m && m.marks ? m.marks[w === 'next' ? 'nextWeek' : 'thisWeek'] : null;
+    return !!(list && task && list.indexOf(task) >= 0);
+  }
+  /** 팀 주간보고 표의 업무 칸: 팀장은 눌러서 굵게 켜고 끈다 */
+  function taskCell(m, w, i, it, cls) {
+    const can = D.me.isLeader && it && it.task;
+    return `<td class="task ${cls} ${isMarked(m, w, it && it.task) ? 'mk' : ''} ${can ? 'markable' : ''}" ${can ? `data-mk="${esc(m.name)}|${w}|${i}" tabindex="0" title="눌러서 굵게 표시"` : ''}>${esc(it && it.task)}</td>`;
+  }
+  function toggleMark(key) {
+    const [name, w, i] = key.split('|');
+    const m = D.members.find(x => x.name === name);
+    const it = m && (w === 'next' ? m.nextWeek : m.thisWeek)[Number(i)];
+    if (!it) return;
+    m.marks = m.marks || { thisWeek: [], nextWeek: [] };
+    const list = m.marks[w === 'next' ? 'nextWeek' : 'thisWeek'];
+    const before = list.slice();
+    const at = list.indexOf(it.task);
+    if (at >= 0) list.splice(at, 1); else list.push(it.task);
+    const redraw = () => { if (!$('#meet').hidden) drawMeeting(); else render(); };
+    redraw();
+    call('apiToggleMark', name, w, it.task).then(data => { applyData(data); redraw(); })
+      .catch(err => { m.marks[w === 'next' ? 'nextWeek' : 'thisWeek'] = before; redraw(); fail(err); });
+  }
+  document.addEventListener('click', e => {
+    const el = e.target.closest && e.target.closest('.markable[data-mk]');
+    if (el) toggleMark(el.dataset.mk);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.matches && e.target.matches('td.markable[data-mk]')) { e.preventDefault(); toggleMark(e.target.dataset.mk); }
+  });
 
   // 회의 모드: 한 사람씩 크게 (← → 로 넘기기). 마지막 장은 인사현황
   let meetIdx = 0;
@@ -2414,8 +2451,9 @@
     const onHr = meetIdx >= total;
     const pills = D.members.map((m, i) => `<button class="mp ${i === meetIdx ? 'on' : ''} ${m.done ? '' : 'pending'}" onclick="meetGo(${i})">${esc(m.name)}</button>`).join('')
       + `<button class="mp hr ${onHr ? 'on' : ''}" onclick="meetGo(${total})">인사현황</button>`;
+    const mm = D.members[meetIdx];
     const list = (items, isThis) => items.length
-      ? `<ol>${items.map(it => `<li><span class="t">${esc(it.task)}</span><span class="d">${dueHtml(it, isThis)}</span></li>`).join('')}</ol>`
+      ? `<ol>${items.map((it, i) => `<li class="${isMarked(mm, isThis ? 'this' : 'next', it.task) ? 'mk' : ''} ${D.me.isLeader ? 'markable' : ''}" ${D.me.isLeader ? `data-mk="${esc(mm.name)}|${isThis ? 'this' : 'next'}|${i}" title="눌러서 굵게 표시"` : ''}><span class="t">${esc(it.task)}</span><span class="d">${dueHtml(it, isThis)}</span></li>`).join('')}</ol>`
       : '<p class="none">작성한 업무가 없습니다.</p>';
     let body;
     if (onHr) {
@@ -2542,7 +2580,7 @@
     const m = D.members.find(x => x.name === name);
     if (!m) return;
     const list = (items, isThis) => items.length
-      ? `<ul class="dd-items">${items.map(it => `<li><span>${esc(it.task)}</span><em>${dueHtml(it, isThis)}</em></li>`).join('')}</ul>`
+      ? `<ul class="dd-items">${items.map(it => `<li class="${isMarked(m, isThis ? 'this' : 'next', it.task) ? 'mk' : ''}"><span>${esc(it.task)}</span><em>${dueHtml(it, isThis)}</em></li>`).join('')}</ul>`
       : '<p class="dd-empty">작성한 업무가 없습니다.</p>';
     const note = noteOf(m);
     openModal(`
