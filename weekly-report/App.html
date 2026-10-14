@@ -448,6 +448,18 @@
   .ev.mine { background: var(--panel); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .tt.mine { color: var(--ink-2); }
   .only-me { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--ink-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-strong); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+  .form .pane { display: flex; flex-direction: column; gap: inherit; }
+  .form .pane[hidden] { display: none; }
+  .kind-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; margin: 4px 0 10px; }
+  .kind-tabs button { border: 0; background: var(--panel); padding: 10px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; justify-content: center; }
+  .kind-tabs button + button { border-left: 1px solid var(--line-strong); }
+  .kind-tabs button[aria-selected="true"] { background: var(--ink); color: var(--panel); }
+  .day-peek { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 6px 0 12px; background: var(--panel-2); max-height: 180px; overflow: auto; }
+  .day-peek > b { font-size: 12.5px; color: var(--muted); }
+  .day-peek .ag { padding: 6px 0; }
+  .more-peek { font-size: 12px; color: var(--muted); padding-top: 4px; }
+  .cal-day { cursor: pointer; }
+  .cal-day:hover { box-shadow: inset 0 0 0 2px var(--line-strong); }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
   .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .lg { width: 12px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -1462,7 +1474,8 @@
     if (n === 0) calSel = dkey(now());
     render();
   }
-  function calPick(k) { calSel = k; $('#main').innerHTML = PAGES.calendar(); }
+  // 날짜를 누르면 그날을 고르고 바로 그 날짜로 일정 추가 창을 연다 (그날 일정은 창 위에 함께 보인다)
+  function calPick(k) { calSel = k; $('#main').innerHTML = PAGES.calendar(); openEventForm(k); }
 
   VIEWS.calendar = function () {
     if (!calMonth) calMonth = new Date(now().getFullYear(), now().getMonth(), 1);
@@ -1490,8 +1503,7 @@
         <div><h1>일정</h1><p>${data && data.calendarName ? `${D.teamCalendar ? '팀 캘린더' : '구글 캘린더'} · ${esc(data.calendarName)}` : '구글 캘린더 연동'}${data && data.myCalendarName ? ' + 내 캘린더(나만 보기)' : ''} · 공휴일과 주간보고 마감이 함께 표시됩니다</p></div>
         <div class="head-actions">
           <button class="btn" onclick="loadMonth(true)">${ic('refresh', 'sm')}새로고침</button>
-          ${canLeave() ? `<button class="btn" onclick="openLeaveForm()">${ic('leave', 'sm')}휴가 등록</button>` : ''}
-          <button class="btn primary" onclick="openEventForm()">${ic('plus', 'sm')}일정 추가</button>
+          <button class="btn primary" onclick="openEventForm()">${ic('plus', 'sm')}일정·휴가 추가</button>
         </div>
       </div>
       ${data && data.error ? `<div class="notice">${esc(data.error)}</div>` : ''}
@@ -1520,63 +1532,118 @@
       </div>`;
   };
 
-  function openEventForm(dateKey) {
+  /**
+   * 일정 추가 창: [일정] / [휴가] 탭.
+   * 달력에서 날짜를 누르면 그 날짜로 열리고, 위에 그날 일정이 함께 보인다.
+   */
+  function openEventForm(dateKey, mode) {
     const both = !!D.teamCalendar;
+    const canEv = can('calendar'), canLv = canLeave();
+    let kind = mode === 'leave' && canLv ? 'leave' : canEv ? 'event' : 'leave';
+    const d = dateKey || (page === 'calendar' && calSel) || dkey(now());
+    // 그날 이미 있는 일정 (달력에서 열었을 때)
+    const data = calCache[d.slice(0, 7)];
+    const dayEvents = data ? (byDay(data.events)[d] || []) : [];
     openModal(`
-      <h3>일정 추가</h3>
+      <h3>${dayLabel(d)} · 일정 추가</h3>
+      ${dayEvents.length ? `<div class="day-peek"><b>이날 일정 ${dayEvents.length}건</b>${dayEvents.slice(0, 4).map(agRow).join('')}${dayEvents.length > 4 ? `<div class="more-peek">외 ${dayEvents.length - 4}건</div>` : ''}</div>` : ''}
+      ${canEv && canLv ? `<div class="kind-tabs" role="tablist" id="eKind">
+        <button type="button" role="tab" data-k="event">${ic('calendar', 'sm')}일정</button>
+        <button type="button" role="tab" data-k="leave">${ic('leave', 'sm')}휴가</button>
+      </div>` : ''}
       <p class="sub" id="eWhere"></p>
       <form class="form" id="eForm" novalidate>
-        ${both ? `<div class="fld"><label>등록할 곳</label>
-          <div class="filters" id="eTarget">
-            <button type="button" data-t="team">${ic('users', 'sm')} 팀 캘린더</button>
-            <button type="button" data-t="mine">${ic('shield', 'sm')} 내 캘린더 (나만 보기)</button>
-          </div></div>` : ''}
-        <div class="fld"><label for="eTitle">제목</label><input class="field-in" id="eTitle" placeholder="예) 노사협의회 4분기 회의"></div>
-        <div class="two">
-          <div class="fld"><label for="eDate">날짜</label><input class="field-in" type="date" id="eDate" value="${dateKey || calSel || dkey(now())}"></div>
-          <div class="fld"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="check" id="eAll"> 종일</label></div>
+        <div class="pane" id="paneEvent">
+          ${both ? `<div class="fld"><label>등록할 곳</label>
+            <div class="filters" id="eTarget">
+              <button type="button" data-t="team">${ic('users', 'sm')} 팀 캘린더</button>
+              <button type="button" data-t="mine">${ic('shield', 'sm')} 내 캘린더 (나만 보기)</button>
+            </div></div>` : ''}
+          <div class="fld"><label for="eTitle">제목</label><input class="field-in" id="eTitle" placeholder="예) 노사협의회 4분기 회의"></div>
+          <div class="two">
+            <div class="fld"><label for="eDate">날짜</label><input class="field-in" type="date" id="eDate" value="${esc(d)}"></div>
+            <div class="fld"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="check" id="eAll"> 종일</label></div>
+          </div>
+          <div class="two" id="eTimes">
+            <div class="fld"><label for="eStart">시작</label><input class="field-in" type="time" id="eStart" value="10:00"></div>
+            <div class="fld"><label for="eEnd">종료</label><input class="field-in" type="time" id="eEnd" value="11:00"></div>
+          </div>
+          <div class="fld"><label for="eLoc">장소</label><input class="field-in" id="eLoc" placeholder="예) 본관 3층 대회의실"></div>
+          <div class="fld"><label for="eDesc">메모</label><textarea class="field-in" id="eDesc"></textarea></div>
         </div>
-        <div class="two" id="eTimes">
-          <div class="fld"><label for="eStart">시작</label><input class="field-in" type="time" id="eStart" value="10:00"></div>
-          <div class="fld"><label for="eEnd">종료</label><input class="field-in" type="time" id="eEnd" value="11:00"></div>
+        <div class="pane" id="paneLeave">
+          <div class="fld"><label for="lType">종류</label><select class="field-in" id="lType">${LEAVE_TYPES.map(t => `<option>${t}</option>`).join('')}</select></div>
+          <div class="two">
+            <div class="fld"><label for="lStart">시작일</label><input class="field-in" type="date" id="lStart" value="${esc(d)}"></div>
+            <div class="fld"><label for="lEnd">종료일 (하루면 비워두기)</label><input class="field-in" type="date" id="lEnd"></div>
+          </div>
+          <div class="fld"><label for="lMemo">메모 (선택)</label><input class="field-in" id="lMemo" placeholder="예) 가족 행사"></div>
         </div>
-        <div class="fld"><label for="eLoc">장소</label><input class="field-in" id="eLoc" placeholder="예) 본관 3층 대회의실"></div>
-        <div class="fld"><label for="eDesc">메모</label><textarea class="field-in" id="eDesc"></textarea></div>
         <div class="msg err" id="eErr" hidden></div>
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="eOk">추가</button></div>
       </form>`);
+    const err = m => { $('#eErr').textContent = m; $('#eErr').hidden = false; };
     $('#eAll').onchange = e => { $('#eTimes').hidden = e.target.checked; };
     // 팀 캘린더가 없으면 모두 각자 캘린더로 들어간다
     let target = both ? eventTarget : 'mine';
+    const where = () => {
+      $('#eWhere').textContent = kind === 'leave'
+        ? `${D.teamCalendar ? '팀 캘린더에 "[연차] ' + D.me.name + '"처럼 일정이 만들어지고, ' : ''}그 주의 주간보고 휴무계획/특이사항에 자동으로 들어갑니다.`
+        : !both ? '내 구글 캘린더에 등록됩니다.'
+        : target === 'mine' ? '내 구글 캘린더에 비공개로 등록되어 나만 봅니다. 팀원에게는 보이지 않습니다.'
+        : '팀 캘린더에 등록되어 팀원 모두에게 보입니다.';
+    };
     const setTarget = t => {
       target = t; eventTarget = t;
       document.querySelectorAll('#eTarget button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === t)));
-      $('#eWhere').textContent = !both ? '내 구글 캘린더에 등록됩니다.'
-        : t === 'mine' ? '내 구글 캘린더에 비공개로 등록되어 나만 봅니다. 팀원에게는 보이지 않습니다.'
-        : '팀 캘린더에 등록되어 팀원 모두에게 보입니다.';
+      where();
     };
-    setTarget(target);
+    const setKind = k => {
+      kind = k;
+      document.querySelectorAll('#eKind button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.k === k)));
+      $('#paneEvent').hidden = k !== 'event';
+      $('#paneLeave').hidden = k !== 'leave';
+      $('#eOk').textContent = k === 'leave' ? '휴가 등록' : '일정 추가';
+      $('#eErr').hidden = true;
+      where();
+      const f = $(k === 'leave' ? '#lType' : '#eTitle'); if (f) f.focus();
+    };
     if (both) $('#eTarget').onclick = e => { const b = e.target.closest('button'); if (b) setTarget(b.dataset.t); };
+    if ($('#eKind')) $('#eKind').onclick = e => { const b = e.target.closest('button'); if (b) setKind(b.dataset.k); };
+    setTarget(target);
+    setKind(kind);
+
+    const after = (dateIso, msg) => {
+      closeModal();
+      calCache = {};
+      upcoming = null;
+      if (page === 'calendar') {
+        calMonth = new Date(+dateIso.slice(0, 4), +dateIso.slice(5, 7) - 1, 1);
+        calSel = dateIso;
+      }
+      render();
+      toast(msg);
+    };
     $('#eForm').onsubmit = e => {
       e.preventDefault();
+      if (kind === 'leave') {
+        const leave = { type: $('#lType').value, start: $('#lStart').value, end: $('#lEnd').value, memo: $('#lMemo').value.trim() };
+        if (!leave.start) return err('시작일을 골라 주세요.');
+        if (leave.end && leave.end < leave.start) return err('종료일이 시작일보다 빠릅니다.');
+        $('#eOk').disabled = true;
+        call('apiAddLeave', leave)
+          .then(data => { applyData(data); after(leave.start, data && data.warning ? data.warning : `${leave.type} 등록 완료. 주간보고 휴무계획에 자동으로 들어갑니다.`); })
+          .catch(e2 => { $('#eOk').disabled = false; err(e2.message || String(e2)); });
+        return;
+      }
       const ev = { title: $('#eTitle').value.trim(), date: $('#eDate').value, allDay: $('#eAll').checked, startTime: $('#eStart').value, endTime: $('#eEnd').value, location: $('#eLoc').value, desc: $('#eDesc').value, target: target };
-      if (!ev.title || !ev.date) { $('#eErr').textContent = '제목과 날짜를 입력해 주세요.'; $('#eErr').hidden = false; return; }
+      if (!ev.title || !ev.date) return err('제목과 날짜를 입력해 주세요.');
       $('#eOk').disabled = true;
       call('apiAddEvent', ev)
-        .then(() => {
-          closeModal();
-          calCache = {};
-          upcoming = null;
-          calMonth = new Date(+ev.date.slice(0, 4), +ev.date.slice(5, 7) - 1, 1);
-          calSel = ev.date;
-          page = 'calendar';
-          render();
-          toast(target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.');
-        })
-        .catch(err => { $('#eOk').disabled = false; $('#eErr').textContent = err.message || String(err); $('#eErr').hidden = false; });
+        .then(() => { if (page !== 'calendar') page = 'calendar'; after(ev.date, target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.'); })
+        .catch(e2 => { $('#eOk').disabled = false; err(e2.message || String(e2)); });
     };
   }
-
   /* ================= 공유게시판 ================= */
   VIEWS.board = function () {
     const cats = ['all', '공지', '자료', '일반'];
@@ -2531,36 +2598,8 @@
     </section>`;
   }
 
-  function openLeaveForm(dateKey) {
-    const d = dateKey || (page === 'calendar' && calSel) || dkey(now());
-    openModal(`
-      <h3>휴가 등록</h3>
-      <p class="sub">팀 캘린더에 "[연차] ${esc(D.me.name)}"처럼 일정이 만들어지고, 그 주의 주간보고 휴무계획/특이사항에 자동으로 들어갑니다.</p>
-      <form class="form" id="lForm" novalidate>
-        <div class="fld"><label for="lType">종류</label><select class="field-in" id="lType">${LEAVE_TYPES.map(t => `<option>${t}</option>`).join('')}</select></div>
-        <div class="two">
-          <div class="fld"><label for="lStart">시작일</label><input class="field-in" type="date" id="lStart" value="${esc(d)}"></div>
-          <div class="fld"><label for="lEnd">종료일 (하루면 비워두기)</label><input class="field-in" type="date" id="lEnd"></div>
-        </div>
-        <div class="fld"><label for="lMemo">메모 (선택)</label><input class="field-in" id="lMemo" placeholder="예) 가족 행사"></div>
-        <div class="msg err" id="lErr" hidden></div>
-        <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="lOk">등록</button></div>
-      </form>`);
-    const err = m => { $('#lErr').textContent = m; $('#lErr').hidden = false; };
-    $('#lForm').onsubmit = e => {
-      e.preventDefault();
-      const leave = { type: $('#lType').value, start: $('#lStart').value, end: $('#lEnd').value, memo: $('#lMemo').value.trim() };
-      if (!leave.start) return err('시작일을 골라 주세요.');
-      if (leave.end && leave.end < leave.start) return err('종료일이 시작일보다 빠릅니다.');
-      $('#lOk').disabled = true;
-      call('apiAddLeave', leave)
-        .then(data => {
-          applyData(data); closeModal(); calCache = {}; upcoming = null; render();
-          toast(data && data.warning ? data.warning : `${leave.type} 등록 완료. 주간보고 휴무계획에 자동으로 들어갑니다.`);
-        })
-        .catch(e2 => { $('#lOk').disabled = false; err(e2.message || String(e2)); });
-    };
-  }
+  /** 휴가 등록 = 일정 추가 창의 [휴가] 탭 */
+  function openLeaveForm(dateKey) { openEventForm(dateKey, 'leave'); }
 
   function deleteLeave(id) {
     const m = mineMember();
