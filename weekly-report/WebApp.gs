@@ -170,6 +170,8 @@ function currentMember_(members) {
     writer: !!(m && m.write),
     isLeader: !!(m && m.role === '팀장'),
     isAdmin: isAdmin,
+    // 예산담당자: 예산전용 [월별 정리] 탭을 본다
+    budgetManager: !!(m && m.budget),
   };
   me.menus = allowedMenus_(me);
   return me;

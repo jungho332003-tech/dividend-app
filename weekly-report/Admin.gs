@@ -92,7 +92,7 @@ function apiAdminData(force) {
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget })),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -190,11 +190,12 @@ function accessStatus_(ctx) {
 
 /* ---------- 저장 ---------- */
 
-/** 팀원 목록 전체 저장. list: [{order, name, email, role, write, admin}] */
+/** 팀원 목록 전체 저장. list: [{order, name, email, role, write, admin, budget}] */
 function apiSaveMembers(list) {
   const ctx = getContext();
   requireAdmin_(ctx);
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
+  ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
 
   const rows = (list || []).map((m, i) => ({
     order: Number(m.order) || i + 1,
@@ -203,6 +204,7 @@ function apiSaveMembers(list) {
     role: ROLES.indexOf(m.role) >= 0 ? m.role : '팀원',
     write: !!m.write,
     admin: !!m.admin,
+    budget: !!m.budget,
   })).filter(m => m.name);
 
   const names = {};
@@ -213,9 +215,9 @@ function apiSaveMembers(list) {
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 6).clearContent();
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 7).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 6).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N']));
+    sh.getRange(2, 1, rows.length, 7).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N']));
   }
   clearCaches_(ctx);
   // 저장만 하고 공유 상태는 다시 확인하지 않는다 (확인은 "권한 한 번에 적용"이나 "상태 새로고침"에서)

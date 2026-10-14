@@ -160,11 +160,11 @@ function setConfigValue(key, value) {
   clearContextCache_();
 }
 
-/** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) */
+/** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) | 예산담당(Y/N) */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -173,6 +173,7 @@ function getMembers() {
       role: String(r[3]).trim(),
       write: String(r[4]).trim().toUpperCase() !== 'N',
       admin: String(r[5]).trim().toUpperCase() === 'Y',
+      budget: String(r[6]).trim().toUpperCase() === 'Y',
     }))
     .sort((a, b) => a.order - b.order);
 }
@@ -360,6 +361,7 @@ function initialize() {
   setupLeaveSheet_(ss);
   setupMenuSheet_(ss);
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
+  ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');
@@ -2216,7 +2218,7 @@ function apiAdminData(force) {
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget })),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -2314,11 +2316,12 @@ function accessStatus_(ctx) {
 
 /* ---------- 저장 ---------- */
 
-/** 팀원 목록 전체 저장. list: [{order, name, email, role, write, admin}] */
+/** 팀원 목록 전체 저장. list: [{order, name, email, role, write, admin, budget}] */
 function apiSaveMembers(list) {
   const ctx = getContext();
   requireAdmin_(ctx);
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
+  ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
 
   const rows = (list || []).map((m, i) => ({
     order: Number(m.order) || i + 1,
@@ -2327,6 +2330,7 @@ function apiSaveMembers(list) {
     role: ROLES.indexOf(m.role) >= 0 ? m.role : '팀원',
     write: !!m.write,
     admin: !!m.admin,
+    budget: !!m.budget,
   })).filter(m => m.name);
 
   const names = {};
@@ -2337,9 +2341,9 @@ function apiSaveMembers(list) {
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 6).clearContent();
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 7).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 6).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N']));
+    sh.getRange(2, 1, rows.length, 7).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N']));
   }
   clearCaches_(ctx);
   // 저장만 하고 공유 상태는 다시 확인하지 않는다 (확인은 "권한 한 번에 적용"이나 "상태 새로고침"에서)
@@ -2684,6 +2688,8 @@ function currentMember_(members) {
     writer: !!(m && m.write),
     isLeader: !!(m && m.role === '팀장'),
     isAdmin: isAdmin,
+    // 예산담당자: 예산전용 [월별 정리] 탭을 본다
+    budgetManager: !!(m && m.budget),
   };
   me.menus = allowedMenus_(me);
   return me;

@@ -974,7 +974,7 @@
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
     weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
-    budget: () => ({ list: '신청 내역', copy: '월별 정리', status: '예산현황' })[budgetTab],
+    budget: () => (budgetTab === 'copy' && D.me.budgetManager ? '월별 정리' : '신청 내역'),
     admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', settings: '설정', guide: '접속 안내' })[adminTab],
   };
   /** 위쪽 줄: 현재 위치(경로) · 이번 주 · 내 이름 */
@@ -1093,10 +1093,6 @@
             <div class="agenda" id="upcoming">${upcomingHtml()}</div>
           </section>`,
         B && `<section class="panel">
-            <div class="panel-head"><h2>예산 과목별 현재예산</h2><span>원</span></div>
-            ${budgetBars()}
-          </section>`,
-        B && `<section class="panel">
             <div class="panel-head"><h2>최근 예산전용</h2><button class="btn small ghost" onclick="setTab('budget','list', true)">전체 보기${ic('chev', 'sm')}</button></div>
             <div class="list">${recent}</div>
           </section>`,
@@ -1145,10 +1141,10 @@
     budget() {
       const tabs = `<div class="subtabs" role="tablist">
         <button role="tab" aria-selected="${budgetTab === 'list'}" onclick="setTab('budget','list')">신청 내역</button>
-        <button role="tab" aria-selected="${budgetTab === 'copy'}" onclick="setTab('budget','copy')">월별 정리</button>
-        <button role="tab" aria-selected="${budgetTab === 'status'}" onclick="setTab('budget','status')">예산현황</button>
+        ${D.me.budgetManager ? `<button role="tab" aria-selected="${budgetTab === 'copy'}" onclick="setTab('budget','copy')">월별 정리</button>` : ''}
       </div>`;
-      return tabs + (budgetTab === 'list' ? VIEWS.budgetList() : budgetTab === 'copy' ? VIEWS.budgetCopy() : VIEWS.accounts());
+      // 월별 정리는 예산담당자만
+      return tabs + (budgetTab === 'copy' && D.me.budgetManager ? VIEWS.budgetCopy() : VIEWS.budgetList());
     },
 
     calendar() { return VIEWS.calendar(); },
@@ -1914,6 +1910,7 @@
         <td data-label="역할">${sel(i, m.role)}</td>
         <td data-label="주간보고 작성">${chk(i, 'write', m.write, '주간보고 작성')}</td>
         <td data-label="관리자">${chk(i, 'admin', m.admin, '관리자')}</td>
+        <td data-label="예산담당">${chk(i, 'budget', m.budget, '예산담당')}</td>
         ${st && saved ? `<td data-label="스프레드시트">${accessChip('sheet', st.sheet)}</td><td data-label="입력시트">${accessChip('input', st.input)}</td><td data-label="첨부 폴더">${accessChip('folder', st.folder)}</td><td data-label="팀 캘린더">${accessChip('calendar', st.calendar)}</td>`
           : `<td colspan="4" class="c-wide"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
         <td class="c-x"><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">${ic('x', 'sm')}</button></td>
@@ -1936,7 +1933,7 @@
       <section class="panel">
         <div class="table-wrap">
           <table class="t cards admin-cards">
-            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
+            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -1953,7 +1950,7 @@
     if (bar) bar.hidden = false;
   }
   function aAdd() {
-    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false });
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false, budget: false });
     aDirty = true;
     render();
     const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');
