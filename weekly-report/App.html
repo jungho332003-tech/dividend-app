@@ -1587,11 +1587,12 @@
     // 팀 캘린더가 없으면 모두 각자 캘린더로 들어간다
     let target = both ? eventTarget : 'mine';
     const where = () => {
-      $('#eWhere').textContent = kind === 'leave'
-        ? `${D.teamCalendar ? '팀 캘린더에 "[연차] ' + D.me.name + '"처럼 일정이 만들어지고, ' : ''}그 주의 주간보고 휴무계획/특이사항에 자동으로 들어갑니다.`
+      const text = kind === 'leave' ? ''
         : !both ? '내 구글 캘린더에 등록됩니다.'
         : target === 'mine' ? '내 구글 캘린더에 비공개로 등록되어 나만 봅니다. 팀원에게는 보이지 않습니다.'
         : '팀 캘린더에 등록되어 팀원 모두에게 보입니다.';
+      $('#eWhere').textContent = text;
+      $('#eWhere').hidden = !text;
     };
     const setTarget = t => {
       target = t; eventTarget = t;
