@@ -229,6 +229,8 @@
   .dd-row span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dd-row em { font-style: normal; font-weight: 700; white-space: nowrap; }
   .dd-row svg { color: var(--muted); }
+  .later-row em small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); text-align: right; }
+  .later-row[disabled] { cursor: default; }
   .dd-empty { color: var(--muted); font-size: 13px; margin: 4px 0; }
   .dd-table td.nm { font-weight: 700; white-space: nowrap; vertical-align: top; }
   .linkish { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
@@ -1293,14 +1295,15 @@
       const canEdit = !!D.me.name;
       return `
         <div class="head">
-          <div><h1>인사현황</h1><p>입사·휴직·복직·퇴사·인터뷰 등을 등록하면 주간보고 아래 표로 정리됩니다. 다음 주가 되면 차주 항목은 금주 칸으로 자동으로 옮겨집니다.</p></div>
+          <div><h1>인사현황</h1><p>날짜를 넣어 등록하면 그 날짜가 속한 주에 맞게 금주·차주 칸에 들어갑니다. 더 뒤의 날짜는 미리 등록해 두면 그 주가 됐을 때 나타납니다.</p></div>
           <div class="head-actions">${canEdit ? `<button class="btn primary" onclick="openHrForm()">${ic('plus', 'sm')}인사현황 등록</button>` : ''}</div>
         </div>
         <section class="panel">
           <p class="report-note">${canEdit ? '항목을 누르면 고치거나 지울 수 있습니다. (본인이 등록한 항목 · 팀장/관리자는 전체)' : '[팀원] 시트에 등록된 사람만 등록할 수 있습니다.'}</p>
           <div class="mcards">${hrCards(true)}</div>
           <div class="table-wrap desk">${hrTableHtml(true)}</div>
-        </section>`;
+        </section>
+        ${hrLaterHtml()}`;
     },
 
     budgetList() {
@@ -2614,7 +2617,7 @@
   function hrCount() { const h = hrData(); return h.thisWeek.length + h.nextWeek.length; }
   function hrCats() { return D.hrCategories || ['입사', '휴직', '복직', '퇴사', '인터뷰', '기타']; }
   function hrCanEdit(x) { return !!D.me.name && (x.author === D.me.name || D.me.isLeader || D.me.isAdmin); }
-  function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek).find(x => x.id === id); }
+  function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek, h.later || []).find(x => x.id === id); }
 
   /** 시트와 같은 모양: 구분별로 금주·차주를 나란히 (빈 줄 없이) */
   function hrTableHtml(editable) {
@@ -2667,29 +2670,41 @@
     return cards || '<div class="notice">이번 주·다음 주에 등록된 인사현황이 없습니다.</div>';
   }
 
+  /** 다다음 주 이후로 미리 등록한 항목 */
+  function hrLaterHtml() {
+    const later = hrData().later || [];
+    if (!later.length) return '';
+    return `<section class="panel">
+      <div class="panel-head"><h2>이후 예정</h2><span>${later.length}건 · 그 주가 되면 표에 나타납니다</span></div>
+      <div class="dd-list">${later.map(x => `<button type="button" class="dd-row later-row" ${hrCanEdit(x) ? `onclick="openHrForm('${esc(x.id)}')"` : 'disabled'}>
+        <b>${esc(x.category)}</b><span>${esc(x.target)}${x.memo ? ` · ${esc(x.memo)}` : ''}</span><em>${esc(x.when)}<small>${esc(x.weekLabel)}</small></em>${hrCanEdit(x) ? ic('chev', 'sm') : ''}</button>`).join('')}</div>
+    </section>`;
+  }
   function hrNextMonday() { const d = parseD(D.week.key); d.setDate(d.getDate() + 7); return d; }
+  /** 날짜 → 어느 주에 들어가는지 안내 ("금주 · 9월 4주 칸" / "10월 2주 — 그 주가 되면…") */
+  function hrWeekHint(iso) {
+    if (!iso) return '일자를 고르면 그 날짜가 속한 주에 들어갑니다.';
+    const d = parseD(iso);
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+    const thisMon = parseD(D.week.key), nextMon = hrNextMonday();
+    const label = `${mon.getMonth() + 1}월 ${Math.ceil(mon.getDate() / 7)}주`;
+    if (mon < thisMon) return `${label} — 지난 주차라 이번 주 표에는 나오지 않습니다.`;
+    if (+mon === +thisMon) return `금주 · ${D.week.thisLabel} 칸에 들어갑니다.`;
+    if (+mon === +nextMon) return `차주 · ${D.week.nextLabel} 칸에 들어갑니다.`;
+    return `${label} — 미리 등록해 두면 그 주가 됐을 때 표에 나타납니다.`;
+  }
 
   function openHrForm(id) {
     const x = id ? hrFind(id) : null;
     if (id && !x) return;
-    const h = hrData();
-    const week = x ? (h.nextWeek.indexOf(x) >= 0 ? 'next' : 'this') : 'this';
     const cat = x ? x.category : hrCats()[0];
     openModal(`
       <h3>인사현황 ${x ? '수정' : '등록'}</h3>
       <form class="form" id="hForm" novalidate>
-        <div class="two">
-          <div class="fld"><label for="hCat">구분</label><select class="field-in" id="hCat">${hrCats().map(c => `<option ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
-          <div class="fld"><label>주차</label>
-            <div class="filters" id="hWeek">
-              <button type="button" data-w="this" aria-pressed="${week === 'this'}">금주</button>
-              <button type="button" data-w="next" aria-pressed="${week === 'next'}">차주</button>
-            </div>
-          </div>
-        </div>
+        <div class="fld"><label for="hCat">구분</label><select class="field-in" id="hCat">${hrCats().map(c => `<option ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="fld"><label for="hTarget">대상 및 내용</label><input class="field-in" id="hTarget" value="${x ? esc(x.target) : ''}" placeholder="예) 홍길동(인사팀) 신규 입사"></div>
         <div class="two">
-          <div class="fld"><label for="hStart" id="hStartLabel">${week === 'next' ? '발령일' : '일자'}</label><input class="field-in" type="date" id="hStart" value="${x ? esc(x.start) : ''}"></div>
+          <div class="fld"><label for="hStart">일자 (발령일)</label><input class="field-in" type="date" id="hStart" value="${x ? esc(x.start) : ''}"></div>
           <div class="fld"><label for="hEnd">종료일 (기간일 때)</label><input class="field-in" type="date" id="hEnd" value="${x ? esc(x.end) : ''}"></div>
         </div>
         <div class="fld"><label for="hMemo">비고 (선택)</label><input class="field-in" id="hMemo" value="${x ? esc(x.memo) : ''}" placeholder="예) 10/7(수) 입사자 간략 OJT 진행"></div>
@@ -2700,23 +2715,16 @@
           <button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="hOk">${x ? '저장' : '등록'}</button>
         </div>
       </form>`);
-    let w = week;
-    const setW = v => {
-      w = v;
-      document.querySelectorAll('#hWeek button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.w === w)));
-      $('#hStartLabel').textContent = w === 'next' ? '발령일' : '일자';
-      $('#hWeekHint').textContent = `${w === 'next' ? '차주' : '금주'} · ${w === 'next' ? D.week.nextLabel : D.week.thisLabel} 칸에 들어갑니다.`;
-    };
-    setW(w);
-    $('#hWeek').onclick = e => { const b = e.target.closest('button'); if (b) setW(b.dataset.w); };
-    // 날짜를 고르면 금주/차주를 자동으로 맞춘다
-    $('#hStart').onchange = () => { const v = $('#hStart').value; if (v) setW(parseD(v) >= hrNextMonday() ? 'next' : 'this'); };
+    // 날짜를 고르면 어느 주에 들어가는지 바로 보여준다
+    const hint = () => { $('#hWeekHint').textContent = hrWeekHint($('#hStart').value); };
+    hint();
+    $('#hStart').oninput = $('#hStart').onchange = hint;
     const err = m => { $('#hErr').textContent = m; $('#hErr').hidden = false; };
     $('#hForm').onsubmit = e => {
       e.preventDefault();
-      const entry = { id: x ? x.id : '', week: w, category: $('#hCat').value, target: $('#hTarget').value.trim(), start: $('#hStart').value, end: $('#hEnd').value, memo: $('#hMemo').value.trim() };
+      const entry = { id: x ? x.id : '', category: $('#hCat').value, target: $('#hTarget').value.trim(), start: $('#hStart').value, end: $('#hEnd').value, memo: $('#hMemo').value.trim() };
       if (!entry.target) return err('대상 및 내용을 입력해 주세요.');
-      if (entry.end && !entry.start) return err('시작 일자를 먼저 골라 주세요.');
+      if (!entry.start) return err('일자를 골라 주세요. 날짜에 맞는 주에 들어갑니다.');
       if (entry.end && entry.start && entry.end < entry.start) return err('종료일이 시작일보다 빠릅니다.');
       $('#hOk').disabled = true;
       call('apiSaveHr', entry)

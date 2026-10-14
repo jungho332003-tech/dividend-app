@@ -1593,7 +1593,8 @@ function apiDeleteRule(id) {
  *  구 분 | 금주: 대상 및 내용 | 일자/기간 | 차주: 대상 및 내용 | 발령일 | 비고
  *
  * [인사현황]  번호 | 등록일시 | 등록자 | 주차(월요일) | 구분 | 대상 및 내용 | 시작일 | 종료일 | 비고 | 삭제(Y)
- * 주차는 그 주 월요일 날짜로 저장한다 → 다음 주가 되면 "차주"였던 항목이 자동으로 "금주"로 보인다.
+ * 주차는 일자(시작일)가 속한 주의 월요일로 정한다 → 날짜만 넣으면 그 주에 맞게 들어가고,
+ * 다음 주가 되면 "차주"였던 항목이 자동으로 "금주"로 보인다. 더 뒤의 날짜는 미리 등록해 두면 그 주가 됐을 때 나타난다.
  */
 
 const HR = {
@@ -1617,18 +1618,20 @@ function setupHrSheet_(ss) {
   sh.setFrozenRows(1);
 }
 
-/** 이번 주·다음 주 항목만 읽는다 */
+/** 이번 주·다음 주 항목 + 그 뒤에 미리 등록한 항목(later) */
 function readHr_(ctx) {
   const sh = ctx.ss.getSheetByName(HR.SHEET);
-  const out = { thisWeek: [], nextWeek: [] };
+  const out = { thisWeek: [], nextWeek: [], later: [] };
   if (!sh || sh.getLastRow() < 2) return out;
   const thisKey = ctx.thisWeek.key, nextKey = ctx.nextWeek.key;
   sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.DELETED).getValues().forEach(r => {
     if (!String(r[0]) || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
-    const week = r[HCOL.WEEK - 1] instanceof Date ? ymd(r[HCOL.WEEK - 1]) : String(r[HCOL.WEEK - 1]).trim();
-    const list = week === thisKey ? out.thisWeek : week === nextKey ? out.nextWeek : null;
-    if (!list) return;
     const start = r[HCOL.START - 1], end = r[HCOL.END - 1];
+    // 주차: 일자가 있으면 그 날짜의 주, 없으면 (예전에 금주/차주를 골라 저장한) 주차 칸
+    const week = start instanceof Date ? ymd(mondayOf(start))
+      : r[HCOL.WEEK - 1] instanceof Date ? ymd(r[HCOL.WEEK - 1]) : String(r[HCOL.WEEK - 1]).trim();
+    const list = week === thisKey ? out.thisWeek : week === nextKey ? out.nextWeek : week > nextKey ? out.later : null;
+    if (!list) return;
     list.push({
       id: String(r[0]),
       author: String(r[HCOL.AUTHOR - 1]),
@@ -1638,11 +1641,14 @@ function readHr_(ctx) {
       end: end instanceof Date ? ymd(end) : '',
       when: hrPeriod_(start, end),
       memo: String(r[HCOL.MEMO - 1] || ''),
+      week: week,
+      weekLabel: list === out.later ? getWeekInfo(mondayOf(start), ctx.holidays).label : '',
     });
   });
   const byDate = (a, b) => (a.start || '9').localeCompare(b.start || '9') || Number(a.id) - Number(b.id);
   out.thisWeek.sort(byDate);
   out.nextWeek.sort(byDate);
+  out.later.sort(byDate);
   return out;
 }
 
@@ -1671,7 +1677,7 @@ function hrTable_(hr) {
   });
 }
 
-/** 등록·수정. entry: { id?, week:'this'|'next', category, target, start, end, memo } */
+/** 등록·수정. entry: { id?, category, target, start, end, memo } — 주차는 start 날짜로 정한다 */
 function apiSaveHr(entry) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
@@ -1683,10 +1689,10 @@ function apiSaveHr(entry) {
   if (!target) throw new Error('대상 및 내용을 입력해 주세요.');
   const start = parseDue_(entry.start);
   const end = parseDue_(entry.end);
-  if (start && !(start instanceof Date)) throw new Error('일자 형식이 올바르지 않습니다.');
+  if (!(start instanceof Date)) throw new Error('일자를 골라 주세요. 날짜에 맞는 주에 들어갑니다.');
   if (end && !(end instanceof Date)) throw new Error('종료일 형식이 올바르지 않습니다.');
   if (start instanceof Date && end instanceof Date && end < start) throw new Error('종료일이 시작일보다 빠릅니다.');
-  const week = entry.week === 'next' ? ctx.nextWeek.key : ctx.thisWeek.key;
+  const week = ymd(mondayOf(start)); // 날짜가 속한 주
   const memo = String(entry.memo || '').trim();
 
   const sh = ctx.ss.getSheetByName(HR.SHEET) || (setupHrSheet_(ctx.ss), ctx.ss.getSheetByName(HR.SHEET));
