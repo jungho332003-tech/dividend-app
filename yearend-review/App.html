@@ -1253,7 +1253,7 @@
     const cs = D.cols.filter(c => c.g === g);
     const bools = cs.filter(c => c.t === 'bool'), longs = cs.filter(c => c.t === 'long'), shorts = cs.filter(c => !c.t);
     const who = cs[0].who;
-    const note = who === 'lead' ? (isLead() ? '' : '총괄·관리자만 수정') : who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
+    const note = who === 'lead' ? '' : who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
     return `<div class="sec">${esc(g)}<span>${esc(note)}</span></div>
       ${shorts.length ? `<div class="three">${shorts.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
       ${bools.length ? `<div class="bools">${bools.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
@@ -1283,7 +1283,7 @@
     $('#modal').classList.add('wide');
     openModal(`
       <h3>${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:14px">${esc(p.empNo)} · ${esc(p.dept)} ${esc(p.rank)}</span> ${empChip(p)} ${statusChip(p)}</h3>
-      <p class="sub">${p.phone ? `☎ ${esc(p.phone)} · ` : ''}${p.email ? `${esc(p.email)} · ` : ''}최종 수정 ${esc(p.updated || '-')}${p.editor ? ` (${esc(p.editor)})` : ''}</p>
+      <p class="sub">최종 수정 ${esc(p.updated || '-')}${p.editor ? ` (${esc(p.editor)})` : ''}</p>
       <form class="form" id="personForm" novalidate>
         ${canTake ? `<div class="notice take"><span>아직 1차 담당자가 없습니다. 맡으면 검토 내용을 입력할 수 있습니다.</span><button type="button" class="btn small primary" onclick="draftOwner=D.me.name;drawPerson()">내가 담당하기</button></div>` : ''}
         ${ro() ? `<div class="notice">🔒 ${esc(D.year)}년 귀속은 마감되어 조회만 할 수 있습니다.</div>` : ''}
