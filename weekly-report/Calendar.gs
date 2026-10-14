@@ -48,15 +48,42 @@ function apiCalendar(startIso, endIso) {
     });
   }
 
+  // 내 개인 캘린더 (나만 보기) — 팀 캘린더가 따로 있을 때만. 웹앱은 접속자 본인 계정으로 돌아서 본인 것만 보인다
+  let myName = '';
+  if (teamCalendarSet_(ctx)) {
+    try {
+      const my = CalendarApp.getDefaultCalendar();
+      if (my.getId() !== cal.getId()) {
+        myName = my.getName();
+        const seen = {};
+        events.forEach(e => { seen[e.id] = true; });
+        my.getEvents(start, end).forEach(e => {
+          if (seen[e.getId()]) return; // 팀 일정에 초대된 것은 한 번만
+          events.push({
+            id: e.getId(),
+            title: e.getTitle(),
+            start: e.getStartTime().toISOString(),
+            end: e.getEndTime().toISOString(),
+            allDay: e.isAllDayEvent(),
+            location: e.getLocation() || '',
+            desc: e.getDescription() || '',
+            kind: 'mine',
+          });
+        });
+      }
+    } catch (e) { /* 개인 캘린더를 못 읽으면 팀 일정만 보여준다 */ }
+  }
+
   if (ctx.deadline >= start && ctx.deadline < end) {
     events.push({ id: 'deadline', title: '주간보고 마감', start: ctx.deadline.toISOString(), end: ctx.deadline.toISOString(), allDay: false, location: '', desc: '', kind: 'deadline' });
   }
 
-  return { calendarName: cal.getName(), events: events };
+  return { calendarName: cal.getName(), myCalendarName: myName, events: events };
 }
 
 /**
- * ev: { title, date:'yyyy-mm-dd', allDay, startTime:'HH:mm', endTime:'HH:mm', location, desc }
+ * ev: { title, date:'yyyy-mm-dd', allDay, startTime:'HH:mm', endTime:'HH:mm', location, desc, target:'team'|'mine' }
+ * target 'mine' → 접속자 본인의 기본 캘린더에 "비공개"로 넣는다 (본인만 보기)
  */
 function apiAddEvent(ev) {
   const title = String(ev.title || '').trim();
@@ -65,16 +92,18 @@ function apiAddEvent(ev) {
 
   const me = currentMember_(getMembers());
   requireMenu_(me, 'calendar');
-  const cal = getTeamCalendar_();
+  const mine = ev.target === 'mine';
+  const cal = mine ? CalendarApp.getDefaultCalendar() : getTeamCalendar_();
   const opts = {
     location: String(ev.location || '').trim(),
     description: [String(ev.desc || '').trim(), me.name ? `등록: ${me.name}` : ''].filter(Boolean).join('\n'),
   };
   const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 
+  let created = null;
   try {
     if (ev.allDay) {
-      cal.createAllDayEvent(title, day, opts);
+      created = cal.createAllDayEvent(title, day, opts);
     } else {
       const at = (t, fallback) => {
         const [h, mi] = String(t || fallback).split(':').map(Number);
@@ -85,10 +114,15 @@ function apiAddEvent(ev) {
       const s = at(ev.startTime, '09:00');
       let e = at(ev.endTime, '10:00');
       if (e <= s) e = new Date(s.getTime() + 3600 * 1000);
-      cal.createEvent(title, s, e, opts);
+      created = cal.createEvent(title, s, e, opts);
     }
   } catch (err) {
+    if (mine) throw new Error('내 캘린더에 일정을 만들지 못했습니다. 잠시 후 다시 시도하세요.');
     throw new Error('일정을 추가할 권한이 없습니다. 팀 캘린더의 "일정 변경" 권한을 관리자에게 요청하세요.');
+  }
+  // 개인 캘린더를 다른 사람과 공유해 두었더라도 내용은 안 보이게
+  if (mine && created) {
+    try { created.setVisibility(CalendarApp.Visibility.PRIVATE); } catch (e) { /* 무시 */ }
   }
   return true;
 }

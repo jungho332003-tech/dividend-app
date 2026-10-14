@@ -92,6 +92,8 @@ function baseData_(ctx) {
     },
     ruleCategories: RULES.CATEGORIES,
     hrCategories: HR.CATEGORIES,
+    // 팀 캘린더가 따로 있으면 일정 추가 때 "팀 / 내 캘린더(나만 보기)"를 고른다
+    teamCalendar: teamCalendarSet_(ctx),
   };
 }
 

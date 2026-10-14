@@ -17,6 +17,7 @@
     --accent-ink: #ffffff;
     --accent-soft: #e3f2ec;
     --next: #2d63c8;
+    --mine: #8a4fd6;
     --next-soft: #e9f0fc;
     --warn-bg: #fdecea;
     --warn-ink: #b42318;
@@ -42,7 +43,7 @@
       --bg: #0c110f; --panel: #141b18; --panel-2: #1a2320; --ink: #e6ece9; --ink-2: #c2ccc7; --muted: #8e9b95;
       --line: #25302b; --line-strong: #3a4641; --field-line: #33403a;
       --accent: #3fbf95; --accent-2: #74d9b7; --accent-ink: #04140e; --accent-soft: #15322a;
-      --next: #7ea6f2; --next-soft: #18233a; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
+      --next: #7ea6f2; --mine: #b58cf0; --next-soft: #18233a; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
       --comment-bg: #352f1a; --side-bg: #080c0a;
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3); --shadow: 0 18px 48px rgba(0, 0, 0, .55);
     }
@@ -52,7 +53,7 @@
     --bg: #0c110f; --panel: #141b18; --panel-2: #1a2320; --ink: #e6ece9; --ink-2: #c2ccc7; --muted: #8e9b95;
     --line: #25302b; --line-strong: #3a4641; --field-line: #33403a;
     --accent: #3fbf95; --accent-2: #74d9b7; --accent-ink: #04140e; --accent-soft: #15322a;
-    --next: #7ea6f2; --next-soft: #18233a; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
+    --next: #7ea6f2; --mine: #b58cf0; --next-soft: #18233a; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
     --comment-bg: #352f1a; --side-bg: #080c0a;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3); --shadow: 0 18px 48px rgba(0, 0, 0, .55);
   }
@@ -383,6 +384,17 @@
   .ev.holiday { background: var(--warn-bg); color: var(--warn-ink); }
   .ev.deadline { background: var(--pend-bg); color: var(--pend-ink); font-weight: 600; }
   .ev.leave { background: var(--next-soft); color: var(--next); font-weight: 600; }
+  .ev.mine { background: var(--panel); color: var(--mine); box-shadow: inset 0 0 0 1px var(--mine); }
+  .tt.mine { color: var(--mine); }
+  .only-me { display: inline-block; font-size: 10.5px; font-weight: 700; color: #fff; background: var(--mine); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .cal-legend .lg { width: 12px; height: 10px; border-radius: 3px; display: inline-block; }
+  .lg.event { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  .lg.mine { background: var(--panel); box-shadow: inset 0 0 0 1px var(--mine); }
+  .lg.leave { background: var(--next-soft); box-shadow: inset 0 0 0 1px var(--next); }
+  .lg.holiday { background: var(--warn-bg); box-shadow: inset 0 0 0 1px var(--warn-ink); }
+  .lg.deadline { background: var(--pend-bg); box-shadow: inset 0 0 0 1px var(--pend-ink); }
   .tt.leave { color: var(--next); font-weight: 600; }
   .leave-strip { padding: 14px 18px; }
   .leave-strip .panel-head { margin-bottom: 8px; }
@@ -734,6 +746,7 @@
   let draftPre = null;
   let calMonth = null;       // 보고 있는 달의 1일
   let calSel = null;         // 선택한 날짜 key
+  let eventTarget = 'team';  // 일정 추가: 마지막으로 고른 곳 ('team' | 'mine')
   let calCache = {};         // 'yyyy-mm' -> {calendarName, events}
   let upcoming = null;       // 대시보드용 7일 일정
 
@@ -1344,7 +1357,7 @@
     return ev.kind === 'deadline' || +s === +e ? hm(s) : `${hm(s)}–${hm(e)}`;
   }
   function agRow(ev) {
-    return `<div class="ag"><span class="tm">${timeText(ev)}</span><div><div class="tt ${ev.kind}">${esc(ev.title)}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
+    return `<div class="ag"><span class="tm">${timeText(ev)}</span><div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
   }
   function dayLabel(k) { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAY[d.getDay()]})`; }
 
@@ -1413,7 +1426,7 @@
     const selEvents = map[calSel] || [];
     return `
       <div class="head">
-        <div><h1>일정</h1><p>${data && data.calendarName ? `구글 캘린더 · ${esc(data.calendarName)}` : '구글 캘린더 연동'} · 공휴일과 주간보고 마감이 함께 표시됩니다</p></div>
+        <div><h1>일정</h1><p>${data && data.calendarName ? `${D.teamCalendar ? '팀 캘린더' : '구글 캘린더'} · ${esc(data.calendarName)}` : '구글 캘린더 연동'}${data && data.myCalendarName ? ' + 내 캘린더(나만 보기)' : ''} · 공휴일과 주간보고 마감이 함께 표시됩니다</p></div>
         <div class="head-actions">
           <button class="btn" onclick="loadMonth(true)">${ic('refresh', 'sm')}새로고침</button>
           ${canLeave() ? `<button class="btn" onclick="openLeaveForm()">${ic('leave', 'sm')}휴가 등록</button>` : ''}
@@ -1433,6 +1446,11 @@
             <span>${data ? '' : '불러오는 중…'}</span>
           </div>
           <div class="cal-grid">${cells}</div>
+          <div class="cal-legend">
+            <span><i class="lg event"></i>${D.teamCalendar ? '팀 일정' : '일정'}</span>
+            ${D.teamCalendar ? '<span><i class="lg mine"></i>내 일정 (나만 보기)</span>' : ''}
+            <span><i class="lg leave"></i>휴가</span><span><i class="lg holiday"></i>공휴일</span><span><i class="lg deadline"></i>주간보고 마감</span>
+          </div>
         </section>
         <section class="panel">
           <div class="panel-head"><h2>${dayLabel(calSel)}</h2><button class="btn small" onclick="openEventForm('${calSel}')">${ic('plus', 'sm')}추가</button></div>
@@ -1442,10 +1460,16 @@
   };
 
   function openEventForm(dateKey) {
+    const both = !!D.teamCalendar;
     openModal(`
       <h3>일정 추가</h3>
-      <p class="sub">팀 캘린더에 등록되어 모두에게 보입니다.</p>
+      <p class="sub" id="eWhere"></p>
       <form class="form" id="eForm" novalidate>
+        ${both ? `<div class="fld"><label>등록할 곳</label>
+          <div class="filters" id="eTarget">
+            <button type="button" data-t="team">${ic('users', 'sm')} 팀 캘린더</button>
+            <button type="button" data-t="mine">${ic('shield', 'sm')} 내 캘린더 (나만 보기)</button>
+          </div></div>` : ''}
         <div class="fld"><label for="eTitle">제목</label><input class="field-in" id="eTitle" placeholder="예) 노사협의회 4분기 회의"></div>
         <div class="two">
           <div class="fld"><label for="eDate">날짜</label><input class="field-in" type="date" id="eDate" value="${dateKey || calSel || dkey(now())}"></div>
@@ -1461,9 +1485,20 @@
         <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary" id="eOk">추가</button></div>
       </form>`);
     $('#eAll').onchange = e => { $('#eTimes').hidden = e.target.checked; };
+    // 팀 캘린더가 없으면 모두 각자 캘린더로 들어간다
+    let target = both ? eventTarget : 'mine';
+    const setTarget = t => {
+      target = t; eventTarget = t;
+      document.querySelectorAll('#eTarget button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === t)));
+      $('#eWhere').textContent = !both ? '내 구글 캘린더에 등록됩니다.'
+        : t === 'mine' ? '내 구글 캘린더에 비공개로 등록되어 나만 봅니다. 팀원에게는 보이지 않습니다.'
+        : '팀 캘린더에 등록되어 팀원 모두에게 보입니다.';
+    };
+    setTarget(target);
+    if (both) $('#eTarget').onclick = e => { const b = e.target.closest('button'); if (b) setTarget(b.dataset.t); };
     $('#eForm').onsubmit = e => {
       e.preventDefault();
-      const ev = { title: $('#eTitle').value.trim(), date: $('#eDate').value, allDay: $('#eAll').checked, startTime: $('#eStart').value, endTime: $('#eEnd').value, location: $('#eLoc').value, desc: $('#eDesc').value };
+      const ev = { title: $('#eTitle').value.trim(), date: $('#eDate').value, allDay: $('#eAll').checked, startTime: $('#eStart').value, endTime: $('#eEnd').value, location: $('#eLoc').value, desc: $('#eDesc').value, target: target };
       if (!ev.title || !ev.date) { $('#eErr').textContent = '제목과 날짜를 입력해 주세요.'; $('#eErr').hidden = false; return; }
       $('#eOk').disabled = true;
       call('apiAddEvent', ev)
@@ -1475,7 +1510,7 @@
           calSel = ev.date;
           page = 'calendar';
           render();
-          toast('일정을 추가했습니다.');
+          toast(target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.');
         })
         .catch(err => { $('#eOk').disabled = false; $('#eErr').textContent = err.message || String(err); $('#eErr').hidden = false; });
     };
