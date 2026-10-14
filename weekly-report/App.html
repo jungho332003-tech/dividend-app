@@ -1920,7 +1920,8 @@
       const saved = A.members.some(x => x.name === m.name && x.email === m.email);
       return `<tr>
         <td data-label="이름"><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
-        <td data-label="이메일" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일"></td>
+        <td data-label="이메일 (구글 계정)" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="구글 계정 이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일 (구글 계정)"></td>
+        <td data-label="알림메일 (회사)" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.notify || '')}" placeholder="비우면 구글 계정으로" oninput="aEdit(${i},'notify',this.value)" aria-label="알림메일 (회사 메일)"></td>
         <td data-label="역할">${sel(i, m.role)}</td>
         <td data-label="주간보고 작성">${chk(i, 'write', m.write, '주간보고 작성')}</td>
         <td data-label="관리자">${chk(i, 'admin', m.admin, '관리자')}</td>
@@ -1947,7 +1948,7 @@
       <section class="panel">
         <div class="table-wrap">
           <table class="t cards admin-cards">
-            <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
+            <thead><tr><th>이름</th><th>이메일 (구글 계정)</th><th>알림메일 (회사)</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -1964,7 +1965,7 @@
     if (bar) bar.hidden = false;
   }
   function aAdd() {
-    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false, budget: false });
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false, budget: false, notify: '' });
     aDirty = true;
     render();
     const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');

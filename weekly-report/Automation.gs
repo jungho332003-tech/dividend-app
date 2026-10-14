@@ -107,13 +107,13 @@ function menuSendReminder() {
   SpreadsheetApp.getUi().alert(sent.length ? `알림을 보냈습니다: ${sent.join(', ')}` : '미작성자가 없습니다.');
 }
 
-/** 작성완료 미체크 팀원에게 메일. 보낸 사람 이름 목록 반환 */
+/** 작성완료 미체크 팀원에게 메일 (알림메일 칸이 있으면 그 주소로). 보낸 사람 이름 목록 반환 */
 function sendReminder_(ctx) {
   const pending = pendingMembers_(ctx);
-  pending.filter(m => m.email).forEach(m => {
+  pending.filter(m => mailTo_(m)).forEach(m => {
     const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + m.name);
     MailApp.sendEmail({
-      to: m.email,
+      to: mailTo_(m),
       subject: `[${ctx.cfg[CFG.TEAM]}] 주간업무 작성 요청 - ${ctx.thisWeek.label}`,
       htmlBody:
         `${m.name}님, 이번 주 주간업무 작성을 부탁드립니다.<br>` +
@@ -122,7 +122,7 @@ function sendReminder_(ctx) {
         `작성 후 "작성완료 체크"를 눌러주세요.`,
     });
   });
-  return pending.filter(m => m.email).map(m => m.name);
+  return pending.filter(m => mailTo_(m)).map(m => m.name);
 }
 
 function pendingMembers_(ctx) {
@@ -136,7 +136,7 @@ function sendClosingMail_(ctx) {
   const pending = pendingMembers_(ctx).map(m => m.name);
   const report = ctx.ss.getSheetByName(SHEET.REPORT);
   MailApp.sendEmail({
-    to: leaders.map(m => m.email).join(','),
+    to: leaders.map(mailTo_).join(','),
     subject: `[${ctx.cfg[CFG.TEAM]}] 주간업무 취합 완료 - ${ctx.thisWeek.label}`,
     htmlBody:
       `${ctx.thisWeek.label} 주간업무가 취합되었습니다.<br><br>` +

@@ -151,11 +151,11 @@ function setConfigValue(key, value) {
   clearContextCache_();
 }
 
-/** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) | 예산담당(Y/N) */
+/** [팀원] 시트: 순서 | 이름 | 이메일(구글 계정) | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) | 예산담당(Y/N) | 알림메일(회사 메일 등) */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -165,12 +165,18 @@ function getMembers() {
       write: String(r[4]).trim().toUpperCase() !== 'N',
       admin: String(r[5]).trim().toUpperCase() === 'Y',
       budget: String(r[6]).trim().toUpperCase() === 'Y',
+      notify: String(r[7] || '').trim(),
     }))
     .sort((a, b) => a.order - b.order);
 }
 
+/** 알림 메일 받는 주소: [팀원] 알림메일 칸이 있으면 그 주소(회사 메일 등), 없으면 구글 계정 이메일 */
+function mailTo_(m) {
+  return (m && (m.notify || m.email)) || '';
+}
+
 function getLeaders(members) {
-  return (members || getMembers()).filter(m => m.role === '팀장' && m.email);
+  return (members || getMembers()).filter(m => m.role === '팀장' && mailTo_(m));
 }
 
 function getHolidaySet() {

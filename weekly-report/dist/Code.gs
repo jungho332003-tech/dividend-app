@@ -160,11 +160,11 @@ function setConfigValue(key, value) {
   clearContextCache_();
 }
 
-/** [팀원] 시트: 순서 | 이름 | 이메일 | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) | 예산담당(Y/N) */
+/** [팀원] 시트: 순서 | 이름 | 이메일(구글 계정) | 역할(팀원/팀장) | 작성대상(Y/N) | 관리자(Y/N) | 예산담당(Y/N) | 알림메일(회사 메일 등) */
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -174,12 +174,18 @@ function getMembers() {
       write: String(r[4]).trim().toUpperCase() !== 'N',
       admin: String(r[5]).trim().toUpperCase() === 'Y',
       budget: String(r[6]).trim().toUpperCase() === 'Y',
+      notify: String(r[7] || '').trim(),
     }))
     .sort((a, b) => a.order - b.order);
 }
 
+/** 알림 메일 받는 주소: [팀원] 알림메일 칸이 있으면 그 주소(회사 메일 등), 없으면 구글 계정 이메일 */
+function mailTo_(m) {
+  return (m && (m.notify || m.email)) || '';
+}
+
 function getLeaders(members) {
-  return (members || getMembers()).filter(m => m.role === '팀장' && m.email);
+  return (members || getMembers()).filter(m => m.role === '팀장' && mailTo_(m));
 }
 
 function getHolidaySet() {
@@ -362,6 +368,7 @@ function initialize() {
   setupMenuSheet_(ss);
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
+  ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 8, '알림메일');
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');
@@ -807,13 +814,13 @@ function menuSendReminder() {
   SpreadsheetApp.getUi().alert(sent.length ? `알림을 보냈습니다: ${sent.join(', ')}` : '미작성자가 없습니다.');
 }
 
-/** 작성완료 미체크 팀원에게 메일. 보낸 사람 이름 목록 반환 */
+/** 작성완료 미체크 팀원에게 메일 (알림메일 칸이 있으면 그 주소로). 보낸 사람 이름 목록 반환 */
 function sendReminder_(ctx) {
   const pending = pendingMembers_(ctx);
-  pending.filter(m => m.email).forEach(m => {
+  pending.filter(m => mailTo_(m)).forEach(m => {
     const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + m.name);
     MailApp.sendEmail({
-      to: m.email,
+      to: mailTo_(m),
       subject: `[${ctx.cfg[CFG.TEAM]}] 주간업무 작성 요청 - ${ctx.thisWeek.label}`,
       htmlBody:
         `${m.name}님, 이번 주 주간업무 작성을 부탁드립니다.<br>` +
@@ -822,7 +829,7 @@ function sendReminder_(ctx) {
         `작성 후 "작성완료 체크"를 눌러주세요.`,
     });
   });
-  return pending.filter(m => m.email).map(m => m.name);
+  return pending.filter(m => mailTo_(m)).map(m => m.name);
 }
 
 function pendingMembers_(ctx) {
@@ -836,7 +843,7 @@ function sendClosingMail_(ctx) {
   const pending = pendingMembers_(ctx).map(m => m.name);
   const report = ctx.ss.getSheetByName(SHEET.REPORT);
   MailApp.sendEmail({
-    to: leaders.map(m => m.email).join(','),
+    to: leaders.map(mailTo_).join(','),
     subject: `[${ctx.cfg[CFG.TEAM]}] 주간업무 취합 완료 - ${ctx.thisWeek.label}`,
     htmlBody:
       `${ctx.thisWeek.label} 주간업무가 취합되었습니다.<br><br>` +
@@ -2230,7 +2237,7 @@ function apiAdminData(force) {
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget, notify: m.notify })),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -2328,12 +2335,13 @@ function accessStatus_(ctx) {
 
 /* ---------- 저장 ---------- */
 
-/** 팀원 목록 전체 저장. list: [{order, name, email, role, write, admin, budget}] */
+/** 팀원 목록 전체 저장. list: [{order, name, email, role, write, admin, budget, notify}] */
 function apiSaveMembers(list) {
   const ctx = getContext();
   requireAdmin_(ctx);
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
+  ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 8, '알림메일');
 
   const rows = (list || []).map((m, i) => ({
     order: Number(m.order) || i + 1,
@@ -2343,6 +2351,7 @@ function apiSaveMembers(list) {
     write: !!m.write,
     admin: !!m.admin,
     budget: !!m.budget,
+    notify: String(m.notify || '').trim().toLowerCase(),
   })).filter(m => m.name);
 
   const names = {};
@@ -2350,12 +2359,13 @@ function apiSaveMembers(list) {
     if (names[m.name]) throw new Error(`이름이 겹칩니다: ${m.name}. 동명이인은 "김민지A"처럼 구분해 주세요.`);
     names[m.name] = true;
     if (m.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m.email)) throw new Error(`이메일 형식을 확인해 주세요: ${m.name} (${m.email})`);
+    if (m.notify && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m.notify)) throw new Error(`알림메일 형식을 확인해 주세요: ${m.name} (${m.notify})`);
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 7).clearContent();
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 8).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 7).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N']));
+    sh.getRange(2, 1, rows.length, 8).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N', m.notify]));
   }
   clearCaches_(ctx);
   // 저장만 하고 공유 상태는 다시 확인하지 않는다 (확인은 "권한 한 번에 적용"이나 "상태 새로고침"에서)
