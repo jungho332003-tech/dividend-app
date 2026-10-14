@@ -1062,10 +1062,9 @@
         || '<div class="empty">이번 주 기한이 있는 업무가 없습니다.</div>';
 
       const boardPreview = D.board.slice(0, 4).map(p => `
-        <div class="list-row" style="cursor:pointer" onclick="openPost='${esc(p.id)}';go('board')">
+        <div class="list-row tap" style="grid-template-columns:72px minmax(0,1fr)" ${tapAttr(`openPost='${esc(p.id)}';go('board')`)}>
           <span class="chip cat-${esc(p.category)}">${esc(p.category)}</span>
           <span class="who" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.pinned ? ic('pin', 'xs') + ' ' : ''}${esc(p.title)}</span>
-          <span class="meta">${esc(p.author)} · ${esc(p.date.slice(5, 10))}</span>
         </div>`).join('') || '<div class="empty">게시글이 없습니다.</div>';
 
       const rulePreview = D.rules.slice().sort((a, b) => b.updated.localeCompare(a.updated)).slice(0, 3).map(r => `
