@@ -30,7 +30,7 @@ function apiCalendar(startIso, endIso) {
 
   const events = raw.map(e => ({
     id: e.getId(),
-    title: e.getTitle(),
+    title: leaveTitle_(e.getTitle(), names) || e.getTitle(),
     start: e.getStartTime().toISOString(),
     end: e.getEndTime().toISOString(),
     allDay: e.isAllDayEvent(),

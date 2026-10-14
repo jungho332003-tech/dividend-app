@@ -1506,7 +1506,7 @@
       const cls = ['cal-day', d.getMonth() !== calMonth.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', dk === todayK ? 'today' : '', dk === calSel ? 'sel' : '', evs.some(e => e.kind === 'holiday') ? 'holi' : ''].join(' ');
       cells += `<button class="${cls}" onclick="calPick('${dk}')" aria-label="${dayLabel(dk)} 일정 ${evs.length}건">
         <span class="dn">${d.getDate()}</span>
-        ${evs.slice(0, 3).map(e => `<span class="ev ${e.kind}">${e.allDay || e.kind === 'holiday' ? '' : hm(parseD(e.start)) + ' '}${esc(e.title)}</span>`).join('')}
+        ${evs.slice(0, 3).map(e => `<span class="ev ${e.kind}">${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : hm(parseD(e.start)) + ' '}${esc(e.title)}</span>`).join('')}
         ${evs.length > 3 ? `<span class="more">+${evs.length - 3}건</span>` : ''}
       </button>`;
     }

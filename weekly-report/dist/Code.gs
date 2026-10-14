@@ -1229,7 +1229,7 @@ function apiCalendar(startIso, endIso) {
 
   const events = raw.map(e => ({
     id: e.getId(),
-    title: e.getTitle(),
+    title: leaveTitle_(e.getTitle(), names) || e.getTitle(),
     start: e.getStartTime().toISOString(),
     end: e.getEndTime().toISOString(),
     allDay: e.isAllDayEvent(),
@@ -2036,6 +2036,20 @@ function syncLeavesFromCalendar_(ctx) {
  */
 function teamCalendarSet_(ctx) {
   return !!String(ctx.cfg[CFG.CALENDAR] || '').trim();
+}
+
+/**
+ * 휴가 일정 제목을 "[연차] 김민지" 형식으로 맞춘다 (화면 표시용, 캘린더 원본은 그대로).
+ * 휴가 일정이 아니면 '' 를 돌려준다.
+ */
+function leaveTitle_(title, names) {
+  const word = String(title).match(LEAVE.WORDS);
+  const name = names.filter(Boolean).sort((a, b) => b.length - a.length).find(n => title.indexOf(n) >= 0);
+  if (!word || !name) return '';
+  const type = leaveType_(word[1], title);
+  // 웹앱에서 만든 "[정기휴가] 윤수아"처럼 이미 대괄호 종류가 있으면 그 종류를 쓴다
+  const tagged = String(title).match(/^\s*\[([^\]]+)\]/);
+  return `[${tagged ? tagged[1].trim() : type}] ${name}`;
 }
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */
