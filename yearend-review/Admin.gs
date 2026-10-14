@@ -233,8 +233,8 @@ function apiSaveSettings(s) {
 /* ---------- 연도 마감 ---------- */
 
 /**
- * 마감(close=true) / 마감 풀기(false). 마감된 연도는 관리자 말고는 조회만 할 수 있고,
- * 그 연도의 대상자·응대기록·일정 시트도 관리자만 고칠 수 있게 잠근다.
+ * 마감(close=true) / 마감 풀기(false). 마감된 연도는 총괄·관리자 말고는 조회만 할 수 있고,
+ * 그 연도의 대상자·응대기록·일정 시트도 총괄·관리자만 고칠 수 있게 잠근다.
  */
 function apiCloseYear(year, close) {
   const ctx = getContext();

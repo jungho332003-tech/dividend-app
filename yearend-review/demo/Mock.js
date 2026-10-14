@@ -394,7 +394,7 @@ window.MockApi = (function () {
   ['apiSavePerson', 'apiAddPerson', 'apiDeletePerson', 'apiImportPeople', 'apiAssignPeople', 'apiAddLog', 'apiSaveEvent', 'apiDeleteEvent', 'apiSaveNotice', 'apiDeleteNotice', 'apiAddNoticeComment', 'apiSaveRule', 'apiDeleteRule', 'apiUploadFile', 'apiDeleteFile'].forEach(fn => {
     const orig = api[fn];
     api[fn] = function () {
-      if (closed.indexOf(curYear()) >= 0 && !meInfo().isAdmin) throw new Error(`${curYear()}년 귀속은 마감되어 조회만 할 수 있습니다.`);
+      if (closed.indexOf(curYear()) >= 0 && !lead(meInfo())) throw new Error(`${curYear()}년 귀속은 마감되어 조회만 할 수 있습니다.`);
       return orig.apply(this, arguments);
     };
   });

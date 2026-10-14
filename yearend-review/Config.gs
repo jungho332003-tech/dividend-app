@@ -20,7 +20,7 @@ const CFG = {
   TEAM: '업무명',
   YEAR: '귀속연도',
   DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
-  CLOSED: '마감 연도',   // 예) 2024,2025 — 마감된 연도는 관리자만 고칠 수 있다
+  CLOSED: '마감 연도',   // 예) 2024,2025 — 마감된 연도는 총괄·관리자만 고칠 수 있다
 };
 
 /**
@@ -222,9 +222,9 @@ function closedYears_(cfg) {
   return String(cfg[CFG.CLOSED] || '').split(/[,\s]+/).filter(y => /^\d{4}$/.test(y));
 }
 
-/** 보고 있는 연도가 마감되었으면 관리자 말고는 아무것도 고칠 수 없다 */
+/** 보고 있는 연도가 마감되었으면 총괄·관리자 말고는 아무것도 고칠 수 없다 */
 function requireOpen_(ctx, me) {
-  if (!me.isAdmin && ctx.closed.indexOf(ctx.year) >= 0) {
+  if (!me.isAdmin && !me.isLeader && ctx.closed.indexOf(ctx.year) >= 0) {
     throw new Error(`${ctx.year}년 귀속은 마감되어 조회만 할 수 있습니다.`);
   }
 }

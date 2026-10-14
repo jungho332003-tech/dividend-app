@@ -306,7 +306,7 @@ function withDefaults(api) {
     as('owner@x.com'); api.apiSetYear(oldYear);
   });
 
-  ok('연도 마감: 관리자 말고는 조회만, 풀면 다시 입력', () => {
+  ok('연도 마감: 담당자는 조회만, 총괄·관리자는 수정, 풀면 다시 입력', () => {
     as('owner@x.com');
     const y = api.apiBootstrap().year;
     as('kim@x.com'); api.apiSetYear(y);
@@ -325,10 +325,13 @@ function withDefaults(api) {
     throwsMsg(() => api.apiAddLog('1001', '전화', 'x'), /마감되어/);
     throwsMsg(() => api.apiSaveNotice({ title: 't', body: 'b', category: '질문' }), /마감되어/);
     api.apiMarkRead(b.notices[0] ? b.notices[0].id : '1'); // 읽음 표시는 개인 기록이라 된다
-    as('lead@x.com');
-    throwsMsg(() => api.apiSavePerson('1001', { note1: 'x' }), /마감되어/);
-    throwsMsg(() => api.apiAssignPeople(['1001'], { owner: '김도현' }), /마감되어/);
-    throwsMsg(() => api.apiSaveEvent({ title: 't', start: '2027-01-02', kind: '일정' }), /마감되어/);
+    as('choi@x.com');
+    throwsMsg(() => api.apiSavePerson('1001', { note2: 'x' }), /마감되어/);
+    as('lead@x.com'); // 총괄은 마감된 연도도 고칠 수 있다 (마감·풀기는 관리자만)
+    throwsMsg(() => api.apiCloseYear(y, false), /관리자만/);
+    assert.strictEqual(api.apiSavePerson('1001', { note1: '총괄 수정' }).personPatch.note1, '총괄 수정');
+    assert.strictEqual(api.apiAssignPeople(['1001'], { owner: '김도현' }).assigned, 1);
+    api.apiSaveEvent({ title: '마감 후 일정', start: '2027-01-02', kind: '일정' });
     as('owner@x.com');
     assert.strictEqual(api.apiSavePerson('1001', { note1: '관리자 수정' }).personPatch.note1, '관리자 수정');
     api.apiCloseYear(y, false);
