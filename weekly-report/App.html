@@ -2678,15 +2678,16 @@
     return cards || '<div class="notice">이번 주·다음 주에 등록된 인사현황이 없습니다.</div>';
   }
 
-  /** 이번 주부터 그 뒤로 등록된 항목 전체 (날짜순) — 눌러서 바로 수정 */
+  /** 이번 주부터 그 뒤로 내가 등록한 항목 (날짜순) — 눌러서 바로 수정 */
   function hrLaterHtml() {
     const h = hrData();
     const tag = (list, lbl) => list.map(x => Object.assign({ _wk: lbl || x.weekLabel || '' }, x));
     const all = tag(h.thisWeek, '금주').concat(tag(h.nextWeek, '차주'), tag(h.later || []))
+      .filter(x => x.author === D.me.name)
       .sort((a, b) => (a.start || '9').localeCompare(b.start || '9') || Number(a.id) - Number(b.id));
     if (!all.length) return '';
     return `<section class="panel">
-      <div class="panel-head"><h2>이후 예정</h2><span>이번 주부터 ${all.length}건 · 눌러서 수정</span></div>
+      <div class="panel-head"><h2>내가 등록한 예정</h2><span>이번 주부터 ${all.length}건 · 눌러서 수정</span></div>
       <div class="dd-list">${all.map(x => `<button type="button" class="dd-row later-row" ${hrCanEdit(x) ? `onclick="openHrForm('${esc(x.id)}')"` : 'disabled'}>
         <b>${esc(x.category)}</b><span>${esc(x.target)}${x.memo ? ` · ${esc(x.memo)}` : ''}</span><em>${esc(x.when)}<small>${esc(x._wk.replace(/ \(.*\)$/, ''))}</small></em>${hrCanEdit(x) ? ic('chev', 'sm') : ''}</button>`).join('')}</div>
     </section>`;
