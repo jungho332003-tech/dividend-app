@@ -28,23 +28,22 @@ const CFG = {
  *  t:  text(기본) | bool(O/체크) | long(여러 줄)
  *  re: 해마다 이름이 바뀌는 열 매칭용 (공백 뺀 제목에 대해)
  *  who: 누가 고칠 수 있나
- *       info   기본 정보 — 1차 담당자·총괄
- *       lead   휴직·퇴사 — 총괄·관리자만
+ *       lead   기본 정보(휴직·퇴사 포함) — 총괄·관리자만
  *       assign 담당 배정 — 총괄 (비어 있으면 본인을 1차 담당자로 지정 가능)
  *       first  1차 검토 — 1차 담당자·총괄
  *       second 2차 검토 — 2차 검토 담당자·총괄
  */
 const COLS = [
-  { k: 'no', l: 'No.', g: '기본 정보', who: 'info' },
-  { k: 'dept', l: '부서', g: '기본 정보', who: 'info' },
-  { k: 'empNo', l: '사원번호', g: '기본 정보', who: 'info' },
-  { k: 'name', l: '성명', g: '기본 정보', who: 'info' },
-  { k: 'subgroup', l: '사원하위그룹명', g: '기본 정보', who: 'info' },
-  { k: 'payArea', l: '급여영역', g: '기본 정보', who: 'info' },
-  { k: 'rank', l: '직급', g: '기본 정보', who: 'info' },
-  { k: 'phone', l: '전화번호', g: '기본 정보', who: 'info' },
-  { k: 'email', l: '이메일주소', g: '기본 정보', who: 'info' },
-  // 휴직·퇴사는 총괄·관리자만 정한다. 퇴사자는 명단에서 흐리게 보이고 대시보드 진행률에서 빠진다
+  { k: 'no', l: 'No.', g: '기본 정보', who: 'lead' },
+  { k: 'dept', l: '부서', g: '기본 정보', who: 'lead' },
+  { k: 'empNo', l: '사원번호', g: '기본 정보', who: 'lead' },
+  { k: 'name', l: '성명', g: '기본 정보', who: 'lead' },
+  { k: 'subgroup', l: '사원하위그룹명', g: '기본 정보', who: 'lead' },
+  { k: 'payArea', l: '급여영역', g: '기본 정보', who: 'lead' },
+  { k: 'rank', l: '직급', g: '기본 정보', who: 'lead' },
+  { k: 'phone', l: '전화번호', g: '기본 정보', who: 'lead' },
+  { k: 'email', l: '이메일주소', g: '기본 정보', who: 'lead' },
+  // 기본 정보는 총괄·관리자만 고친다. 퇴사자는 명단에서 흐리게 보이고 대시보드 진행률에서 빠진다
   { k: 'leave', l: '휴직여부', t: 'bool', g: '기본 정보', who: 'lead' },
   { k: 'retired', l: '퇴사여부', t: 'bool', re: '^(퇴사|퇴직)(여부)?$', g: '기본 정보', who: 'lead' },
   { k: 'owner', l: '담당자', g: '담당', who: 'assign' },

@@ -1170,7 +1170,7 @@
   function fieldHtml(p, c) {
     const id = 'pf_' + c.k;
     const off = !canEdit(p, c, draftOwner);
-    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}" ${off && c.who === 'lead' ? 'title="총괄·관리자만 바꿀 수 있습니다"' : ''}><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}${off && c.who === 'lead' ? ' <small style="color:var(--muted)">(총괄·관리자)</small>' : ''}</label>`;
+    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}"><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}</label>`;
     if (c.t === 'long') return `<div class="fld"><label for="${id}">${esc(c.l)}</label><textarea class="field-in" id="${id}" ${off ? 'disabled' : ''} style="min-height:64px">${esc(p[c.k])}</textarea></div>`;
     if (c.who === 'assign') {
       const opts = [''].concat(D.staff.map(s => s.name));
@@ -1185,7 +1185,7 @@
     const cs = D.cols.filter(c => c.g === g);
     const bools = cs.filter(c => c.t === 'bool'), longs = cs.filter(c => c.t === 'long'), shorts = cs.filter(c => !c.t);
     const who = cs[0].who;
-    const note = who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
+    const note = who === 'lead' ? (isLead() ? '' : '총괄·관리자만 수정') : who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
     return `<div class="sec">${esc(g)}<span>${esc(note)}</span></div>
       ${shorts.length ? `<div class="three">${shorts.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
       ${bools.length ? `<div class="bools">${bools.map(c => fieldHtml(p, c)).join('')}</div>` : ''}

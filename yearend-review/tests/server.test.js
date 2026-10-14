@@ -91,6 +91,7 @@ function withDefaults(api) {
     assert.strictEqual(r.personPatch.id, '2002'); assert.strictEqual(r.oldId, '1002');
   });
   ok('휴직·퇴사는 총괄·관리자만', () => {
+    as('kim@x.com'); throwsMsg(() => api.apiSavePerson('1001', { dept: '바꿈' }), /총괄·관리자만/); throwsMsg(() => api.apiSavePerson('1001', { phone: '010' }), /총괄·관리자만/);
     as('kim@x.com'); throwsMsg(() => api.apiSavePerson('1001', { retired: true }), /총괄·관리자만/);
     as('choi@x.com'); throwsMsg(() => api.apiSavePerson('1001', { leave: true }), /총괄·관리자만/);
     as('lead@x.com');

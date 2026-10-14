@@ -29,9 +29,9 @@ window.MockApi = (function () {
   const reads = {}; // email -> [id]
 
   const COLS = [
-    ['no', 'No.', '', '기본 정보', 'info'], ['dept', '부서', '', '기본 정보', 'info'], ['empNo', '사원번호', '', '기본 정보', 'info'], ['name', '성명', '', '기본 정보', 'info'],
-    ['subgroup', '사원하위그룹명', '', '기본 정보', 'info'], ['payArea', '급여영역', '', '기본 정보', 'info'], ['rank', '직급', '', '기본 정보', 'info'],
-    ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'lead'], ['retired', '퇴사여부', 'bool', '기본 정보', 'lead', '^(퇴사|퇴직)(여부)?$'],
+    ['no', 'No.', '', '기본 정보', 'lead'], ['dept', '부서', '', '기본 정보', 'lead'], ['empNo', '사원번호', '', '기본 정보', 'lead'], ['name', '성명', '', '기본 정보', 'lead'],
+    ['subgroup', '사원하위그룹명', '', '기본 정보', 'lead'], ['payArea', '급여영역', '', '기본 정보', 'lead'], ['rank', '직급', '', '기본 정보', 'lead'],
+    ['phone', '전화번호', '', '기본 정보', 'lead'], ['email', '이메일주소', '', '기본 정보', 'lead'], ['leave', '휴직여부', 'bool', '기본 정보', 'lead'], ['retired', '퇴사여부', 'bool', '기본 정보', 'lead', '^(퇴사|퇴직)(여부)?$'],
     ['owner', '담당자', '', '담당', 'assign'], ['owner2', '2차검토 담당자', '', '담당', 'assign'],
     ['review2', '2차 서류검토 여부', 'bool', '2차 검토', 'second'], ['ehr', '시스템 등록', 'bool', '진행', 'first', '^(시스템등록|e-?hr등록)$'],
     ['arrived', '서류 도착여부', 'bool', '진행', 'first'], ['verified', '서류확인 및 검증', 'bool', '진행', 'first'],

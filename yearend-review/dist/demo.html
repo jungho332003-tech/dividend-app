@@ -667,9 +667,9 @@ window.MockApi = (function () {
   const reads = {}; // email -> [id]
 
   const COLS = [
-    ['no', 'No.', '', '기본 정보', 'info'], ['dept', '부서', '', '기본 정보', 'info'], ['empNo', '사원번호', '', '기본 정보', 'info'], ['name', '성명', '', '기본 정보', 'info'],
-    ['subgroup', '사원하위그룹명', '', '기본 정보', 'info'], ['payArea', '급여영역', '', '기본 정보', 'info'], ['rank', '직급', '', '기본 정보', 'info'],
-    ['phone', '전화번호', '', '기본 정보', 'info'], ['email', '이메일주소', '', '기본 정보', 'info'], ['leave', '휴직여부', 'bool', '기본 정보', 'lead'], ['retired', '퇴사여부', 'bool', '기본 정보', 'lead', '^(퇴사|퇴직)(여부)?$'],
+    ['no', 'No.', '', '기본 정보', 'lead'], ['dept', '부서', '', '기본 정보', 'lead'], ['empNo', '사원번호', '', '기본 정보', 'lead'], ['name', '성명', '', '기본 정보', 'lead'],
+    ['subgroup', '사원하위그룹명', '', '기본 정보', 'lead'], ['payArea', '급여영역', '', '기본 정보', 'lead'], ['rank', '직급', '', '기본 정보', 'lead'],
+    ['phone', '전화번호', '', '기본 정보', 'lead'], ['email', '이메일주소', '', '기본 정보', 'lead'], ['leave', '휴직여부', 'bool', '기본 정보', 'lead'], ['retired', '퇴사여부', 'bool', '기본 정보', 'lead', '^(퇴사|퇴직)(여부)?$'],
     ['owner', '담당자', '', '담당', 'assign'], ['owner2', '2차검토 담당자', '', '담당', 'assign'],
     ['review2', '2차 서류검토 여부', 'bool', '2차 검토', 'second'], ['ehr', '시스템 등록', 'bool', '진행', 'first', '^(시스템등록|e-?hr등록)$'],
     ['arrived', '서류 도착여부', 'bool', '진행', 'first'], ['verified', '서류확인 및 검증', 'bool', '진행', 'first'],
@@ -1552,7 +1552,7 @@ window.MockApi = (function () {
   function fieldHtml(p, c) {
     const id = 'pf_' + c.k;
     const off = !canEdit(p, c, draftOwner);
-    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}" ${off && c.who === 'lead' ? 'title="총괄·관리자만 바꿀 수 있습니다"' : ''}><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}${off && c.who === 'lead' ? ' <small style="color:var(--muted)">(총괄·관리자)</small>' : ''}</label>`;
+    if (c.t === 'bool') return `<label class="${off ? 'off' : ''}"><input type="checkbox" class="check" id="${id}" ${p[c.k] ? 'checked' : ''} ${off ? 'disabled' : ''}> ${esc(c.l)}</label>`;
     if (c.t === 'long') return `<div class="fld"><label for="${id}">${esc(c.l)}</label><textarea class="field-in" id="${id}" ${off ? 'disabled' : ''} style="min-height:64px">${esc(p[c.k])}</textarea></div>`;
     if (c.who === 'assign') {
       const opts = [''].concat(D.staff.map(s => s.name));
@@ -1567,7 +1567,7 @@ window.MockApi = (function () {
     const cs = D.cols.filter(c => c.g === g);
     const bools = cs.filter(c => c.t === 'bool'), longs = cs.filter(c => c.t === 'long'), shorts = cs.filter(c => !c.t);
     const who = cs[0].who;
-    const note = who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
+    const note = who === 'lead' ? (isLead() ? '' : '총괄·관리자만 수정') : who === 'second' ? `2차: ${p.owner2 || '미지정'}` : who === 'first' ? `1차: ${p.owner || draftOwner || '미지정'}` : '';
     return `<div class="sec">${esc(g)}<span>${esc(note)}</span></div>
       ${shorts.length ? `<div class="three">${shorts.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
       ${bools.length ? `<div class="bools">${bools.map(c => fieldHtml(p, c)).join('')}</div>` : ''}
