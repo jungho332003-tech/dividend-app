@@ -179,8 +179,8 @@ function writeHrTable_(sh, ctx, top) {
   [3, 5].forEach(c => sh.getRange(h + 2, c, values.length, 1).setHorizontalAlignment('center'));
   blocks.forEach(b => sh.getRange(b.row, 1, b.n, 1).merge().setHorizontalAlignment('center').setFontWeight('bold'));
   sh.getRange(h, 1, 2 + values.length, 6)
-    .setBorder(true, true, true, true, true, true, '#999999', SpreadsheetApp.BorderStyle.SOLID);
+    .setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
   blocks.forEach(b => sh.getRange(b.row, 1, b.n, 6)
-    .setBorder(true, null, true, null, null, null, '#555555', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
+    .setBorder(true, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
   return row;
 }

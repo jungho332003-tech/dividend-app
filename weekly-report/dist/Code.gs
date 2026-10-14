@@ -661,9 +661,9 @@ function buildReport_(ctx) {
   }
 
   const table = sh.getRange(h, 1, 2 + rows.length, REPORT.COLS);
-  table.setBorder(true, true, true, true, true, true, '#999999', SpreadsheetApp.BorderStyle.SOLID);
+  table.setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
   blocks.forEach(b => sh.getRange(b.row, 1, b.n, REPORT.COLS)
-    .setBorder(true, null, true, null, null, null, '#555555', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
+    .setBorder(true, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
 
   // 인사현황 표 (입사·휴직·복직·퇴사·인터뷰·기타)
   writeHrTable_(sh, ctx, h + 2 + rows.length + 2);
@@ -1773,9 +1773,9 @@ function writeHrTable_(sh, ctx, top) {
   [3, 5].forEach(c => sh.getRange(h + 2, c, values.length, 1).setHorizontalAlignment('center'));
   blocks.forEach(b => sh.getRange(b.row, 1, b.n, 1).merge().setHorizontalAlignment('center').setFontWeight('bold'));
   sh.getRange(h, 1, 2 + values.length, 6)
-    .setBorder(true, true, true, true, true, true, '#999999', SpreadsheetApp.BorderStyle.SOLID);
+    .setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
   blocks.forEach(b => sh.getRange(b.row, 1, b.n, 6)
-    .setBorder(true, null, true, null, null, null, '#555555', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
+    .setBorder(true, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
   return row;
 }
 

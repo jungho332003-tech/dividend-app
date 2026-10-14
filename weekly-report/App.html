@@ -19,6 +19,7 @@
     --next: #4b5652;
     --mine: #7a8580;
     --row-alt: #f6f8f7;
+    --grid: #1f2523;
     --next-soft: #f1f3f2;
     --warn-bg: #fdecea;
     --warn-ink: #b42318;
@@ -44,7 +45,7 @@
       --bg: #0c110f; --panel: #141b18; --panel-2: #1a2320; --ink: #e6ece9; --ink-2: #c2ccc7; --muted: #8e9b95;
       --line: #25302b; --line-strong: #3a4641; --field-line: #33403a;
       --accent: #3fbf95; --accent-2: #74d9b7; --accent-ink: #04140e; --accent-soft: #15322a;
-      --next: #aab5b0; --mine: #8e9b95; --row-alt: #18201d; --next-soft: #1c2522; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
+      --next: #aab5b0; --mine: #8e9b95; --row-alt: #18201d; --grid: #9aa6a0; --next-soft: #1c2522; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
       --comment-bg: #1a2320; --side-bg: #080c0a;
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3); --shadow: 0 18px 48px rgba(0, 0, 0, .55);
     }
@@ -54,7 +55,7 @@
     --bg: #0c110f; --panel: #141b18; --panel-2: #1a2320; --ink: #e6ece9; --ink-2: #c2ccc7; --muted: #8e9b95;
     --line: #25302b; --line-strong: #3a4641; --field-line: #33403a;
     --accent: #3fbf95; --accent-2: #74d9b7; --accent-ink: #04140e; --accent-soft: #15322a;
-    --next: #aab5b0; --mine: #8e9b95; --row-alt: #18201d; --next-soft: #1c2522; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
+    --next: #aab5b0; --mine: #8e9b95; --row-alt: #18201d; --grid: #9aa6a0; --next-soft: #1c2522; --warn-bg: #3d1d1a; --warn-ink: #ffab9f; --pend-bg: #3a2f14; --pend-ink: #f2cd78; --ok-bg: #173323; --ok-ink: #9fdcb0;
     --comment-bg: #1a2320; --side-bg: #080c0a;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3); --shadow: 0 18px 48px rgba(0, 0, 0, .55);
   }
@@ -286,16 +287,17 @@
   .t td.nowrap { white-space: nowrap; }
   .t td.strong { font-weight: 700; }
 
-  table.report { border-collapse: collapse; min-width: 980px; font-size: 13.5px; }
-  .report th, .report td { border: 1px solid var(--line); padding: 8px 10px; vertical-align: middle; }
-  .report th { background: var(--panel-2); text-align: center; font-weight: 600; white-space: nowrap; color: var(--ink-2); font-size: 12.5px; }
+  table.report { border-collapse: collapse; min-width: 980px; font-size: 13.5px; border: 2px solid var(--grid); }
+  .report thead tr:last-child th { border-bottom: 2px solid var(--grid); }
+  .report th, .report td { border: 1px solid var(--grid); padding: 8px 10px; vertical-align: middle; }
+  .report th { background: var(--panel-2); text-align: center; font-weight: 800; white-space: nowrap; color: var(--ink); font-size: 13.5px; }
   .report td.c { text-align: center; white-space: nowrap; color: var(--ink-2); }
-  .report tr.top td { border-top: 2px solid var(--line-strong); }
+  .report tr.top td { border-top: 2px solid var(--grid); }
   .report td.nm { text-align: center; font-weight: 600; white-space: nowrap; }
   .report td.nm.pending { background: var(--warn-bg); color: var(--warn-ink); }
   .report td.cm { background: var(--comment-bg); min-width: 220px; white-space: pre-wrap; }
   .report td.cm.editable { cursor: pointer; }
-  .report td.cm.editable:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
+  .report td.cm.editable:hover { box-shadow: inset 0 0 0 2px var(--accent); }
   .report td.cm textarea { width: 100%; min-height: 70px; border: 1px solid var(--field-line); border-radius: 6px; padding: 6px; background: var(--panel); }
   .report-title { font-weight: 700; margin: 0 0 4px; }
   /* 팀 주간보고: 회의 때 같이 보기 좋게 */
@@ -362,8 +364,8 @@
   .wk { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11.5px; font-weight: 700; margin-right: 6px; vertical-align: 1px; letter-spacing: 0; }
   .wk.this { background: var(--accent); color: var(--accent-ink); }
   .wk.next { background: var(--next); color: #fff; }
-  .report th.split, .report td.split { border-left: 2px solid var(--line-strong); }
-  .report td.cat { text-align: center; font-weight: 700; white-space: nowrap; background: var(--panel-2); }
+  .report th.split, .report td.split { border-left: 2px solid var(--grid); }
+  .report td.cat { text-align: center; font-weight: 800; white-space: nowrap; background: var(--panel-2); }
   .report td.hr-in.editable { cursor: pointer; }
   .report td.hr-in.editable:hover { background: var(--accent-soft); }
   .report td.hr-in small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
