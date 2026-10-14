@@ -1537,7 +1537,7 @@ window.MockApi = (function () {
   function bulkBarHtml() {
     // 지금 있는 대상자만 센다 (삭제·연도 변경으로 사라진 사람 제외)
     const ids = D.people.filter(p => picked.has(p.id)).map(p => p.id);
-    if (!ids.length) return '<p class="hint" style="margin:0 0 8px">왼쪽 체크박스로 대상자를 고르면 담당자를 한 번에 지정할 수 있습니다.</p>';
+    if (!ids.length) return '';
     const order = r => r === '응대담당' ? 0 : r === '2차검토' ? 1 : 2;
     const staff = D.staff.slice().sort((a, b) => order(a.role) - order(b.role) || a.name.localeCompare(b.name, 'ko'));
     const opts = cur => [[KEEP, '그대로 두기'], ['', '(비우기)']].concat(staff.map(x => [x.name, `${x.name} · ${x.role}`]))
@@ -1602,14 +1602,11 @@ window.MockApi = (function () {
       </section>`;
     }
     const base = reviewBase();
-    const scopeNote = D.me.scope && D.me.scope !== '전체' && !isLead()
-      ? `<p class="hint" style="margin:0 0 10px">열람 범위: ${D.me.scope.split(',').filter(x => x !== '본인' && x !== '(미배정)').length ? `내 담당 + ${esc(D.me.scope.split(',').filter(x => x !== '본인').filter(x => x !== '(미배정)').map(x => `${x} 담당`).join(', '))}` : '내 담당만'} + 담당자 없는 대상자 (관리자가 정합니다)</p>` : '';
     const owners = [...new Set(D.people.flatMap(p => [p.owner, p.owner2]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
     const chips = [['all', '전체']].concat(Object.keys(STATUS).map(k => [k, STATUS[k][0]]))
       .map(([k, l]) => `<button aria-pressed="${reviewStatus === k}" onclick="reviewStatus='${k}';reviewLimit=PAGE_ROWS;render()">${l} ${k === 'all' ? base.length : base.filter(p => pStatus(p) === k).length}</button>`).join('');
     return head + `
       <section class="panel">
-        ${scopeNote}
         <div class="search-row">
           <input class="search" id="reviewSearch" type="search" placeholder="사원번호·이름·부서·미비서류·특이사항 검색" value="${esc(reviewQuery)}" aria-label="대상자 검색">
           ${reviewTab === 'all' ? `<select class="field-in" onchange="reviewOwner=this.value;reviewLimit=PAGE_ROWS;render()" aria-label="담당자"><option value="">전체 담당자</option>${owners.concat('(미배정)').map(o => `<option ${o === reviewOwner ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>` : ''}
