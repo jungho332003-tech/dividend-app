@@ -810,8 +810,8 @@
   const col = k => D.cols.find(c => c.k === k);
   const hasNote = p => ['note1', 'fix1', 'note2', 'fix2'].some(k => String(p[k] || '').trim());
   const isLead = () => D.me.isLeader || D.me.isAdmin;
-  // 마감된 연도: 관리자 말고는 조회만
-  const ro = () => !!(D.closed && !D.me.isAdmin);
+  // 마감된 연도: 총괄·관리자 말고는 조회만
+  const ro = () => !!(D.closed && !isLead());
   const isClosedYear = y => (D.closedYears || []).indexOf(y) >= 0;
 
   /** 서버의 canEdit_와 같은 규칙 (화면에서 막고, 서버에서도 다시 막는다) */
@@ -865,7 +865,7 @@
     const note = D.year !== D.baseYear
       ? `<div class="year-note"><span><b>${esc(D.year)}년 귀속</b> 자료를 보고 있습니다. 지금 진행 중인 연도는 ${esc(D.baseYear)}년입니다.</span><button class="btn small" onclick="switchYear('${esc(D.baseYear)}')">${esc(D.baseYear)}년으로 돌아가기</button></div>` : '';
     const lockNote = D.closed
-      ? `<div class="year-note closed"><span>🔒 <b>${esc(D.year)}년 귀속은 마감되었습니다.</b> ${D.me.isAdmin ? '관리자만 고칠 수 있고, 다른 사람은 조회만 합니다.' : '모든 자료를 조회만 할 수 있습니다.'}</span></div>` : '';
+      ? `<div class="year-note closed"><span>🔒 <b>${esc(D.year)}년 귀속은 마감되었습니다.</b> ${isLead() ? '총괄·관리자만 고칠 수 있고, 담당자는 조회만 합니다.' : '모든 자료를 조회만 할 수 있습니다.'}</span></div>` : '';
     $('#main').innerHTML = lockNote + note + PAGES[page]();
     if (page === 'admin' && !A) loadAdmin(false);
     renderDemoBar();
@@ -1276,7 +1276,8 @@
     const p = curPerson;
     const editable = D.cols.some(c => canEdit(p, c, draftOwner) && c.who !== 'assign') || (isLead() && !ro());
     const canTake = !p.owner && D.me.name && !isLead() && !draftOwner && !ro();
-    const groups = GROUP_ORDER.filter(g => D.cols.some(c => c.g === g));
+    // 응대담당에게는 담당(담당자·2차검토 담당자) 칸을 보여주지 않는다
+    const groups = GROUP_ORDER.filter(g => D.cols.some(c => c.g === g) && !(g === '담당' && D.me.role === '응대담당' && !isLead()));
     const logs = D.logs.filter(l => l.empNo === p.empNo);
     const files = personFiles(p);
     $('#modal').classList.add('wide');
@@ -2181,7 +2182,7 @@
         <div style="margin-bottom:14px">${st.years.map(y => {
           const shut = (st.closed || []).indexOf(y) >= 0;
           return `<div class="year-row"><b>${esc(y)}년 귀속</b>
-            <span>${shut ? '<span class="chip plain">🔒 마감</span> 관리자만 수정 · 다른 사람은 조회만' : `<span class="chip ok">진행 중</span>${y === st.year ? ' 기본 연도' : ''}`}</span>
+            <span>${shut ? '<span class="chip plain">🔒 마감</span> 총괄·관리자만 수정 · 담당자는 조회만' : `<span class="chip ok">진행 중</span>${y === st.year ? ' 기본 연도' : ''}`}</span>
             <button class="btn small ${shut ? '' : 'danger'}" onclick="confirmCloseYear('${esc(y)}', ${!shut})">${shut ? '마감 풀기' : '마감하기'}</button></div>`;
         }).join('')}</div>
         <p class="hint" style="margin:0 0 12px">새 귀속연도를 시작하면 [대상자_연도]·[응대기록_연도]·[일정_연도] 시트를 새로 만듭니다. 지난 연도 자료는 그대로 남고, 왼쪽 위 연도 선택으로 언제든 볼 수 있습니다. 공지·기준·첨부도 연도별로 나뉘어 보입니다.</p>
@@ -2197,7 +2198,7 @@
   }
   function confirmCloseYear(y, close) {
     openModal(close
-      ? `<h3>${esc(y)}년 귀속을 마감할까요?</h3><p class="sub">마감하면 관리자를 뺀 모든 사람(총괄 포함)이 ${esc(y)}년 자료를 <b>조회만</b> 할 수 있습니다. 대상자·응대기록·일정·공지·기준·첨부 모두 해당됩니다. 시트의 [대상자_${esc(y)}]·[응대기록_${esc(y)}]·[일정_${esc(y)}]도 관리자만 고칠 수 있게 잠급니다.<br><br>언제든 「마감 풀기」로 되돌릴 수 있습니다.</p>
+      ? `<h3>${esc(y)}년 귀속을 마감할까요?</h3><p class="sub">마감하면 총괄·관리자를 뺀 담당자(응대담당·2차검토)는 ${esc(y)}년 자료를 <b>조회만</b> 할 수 있습니다. 대상자·응대기록·일정·공지·기준·첨부 모두 해당됩니다. 시트의 [대상자_${esc(y)}]·[응대기록_${esc(y)}]·[일정_${esc(y)}]도 총괄·관리자만 고칠 수 있게 잠급니다.<br><br>언제든 「마감 풀기」로 되돌릴 수 있습니다.</p>
         <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="ycOk">마감하기</button></div>`
       : `<h3>${esc(y)}년 마감을 풀까요?</h3><p class="sub">담당자들이 다시 ${esc(y)}년 자료를 입력·수정할 수 있고, 시트 잠금도 원래대로 돌아갑니다.</p>
         <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="ycOk">마감 풀기</button></div>`);

@@ -29,7 +29,7 @@ const CFG = {
   TEAM: '업무명',
   YEAR: '귀속연도',
   DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
-  CLOSED: '마감 연도',   // 예) 2024,2025 — 마감된 연도는 관리자만 고칠 수 있다
+  CLOSED: '마감 연도',   // 예) 2024,2025 — 마감된 연도는 총괄·관리자만 고칠 수 있다
 };
 
 /**
@@ -231,9 +231,9 @@ function closedYears_(cfg) {
   return String(cfg[CFG.CLOSED] || '').split(/[,\s]+/).filter(y => /^\d{4}$/.test(y));
 }
 
-/** 보고 있는 연도가 마감되었으면 관리자 말고는 아무것도 고칠 수 없다 */
+/** 보고 있는 연도가 마감되었으면 총괄·관리자 말고는 아무것도 고칠 수 없다 */
 function requireOpen_(ctx, me) {
-  if (!me.isAdmin && ctx.closed.indexOf(ctx.year) >= 0) {
+  if (!me.isAdmin && !me.isLeader && ctx.closed.indexOf(ctx.year) >= 0) {
     throw new Error(`${ctx.year}년 귀속은 마감되어 조회만 할 수 있습니다.`);
   }
 }
@@ -414,11 +414,11 @@ function applyProtections_(ctx) {
     if (sh) warnOnlyProtect_(sh);
   });
   // 연도별 시트(대상자_2026, 응대기록_2026, 일정_2026 …): 대상자·응대기록은 경고만, 일정은 총괄·관리자만
-  // 마감된 연도의 시트는 관리자만 고칠 수 있게 잠근다
+  // 마감된 연도의 시트는 총괄·관리자만 고칠 수 있게 잠근다
   const closed = new RegExp(`^(${YEAR_SHEETS.join('|')})_(${(ctx.closed || []).join('|') || 'x'})$`);
   ss.getSheets().forEach(sh => {
     const n = sh.getName();
-    if (closed.test(n)) protectSheet_(sh, admins);
+    if (closed.test(n)) protectSheet_(sh, leaders.concat(admins));
     else if (new RegExp(`^(${SHEET.PEOPLE}|${SHEET.LOGS})(_\\d{4})?$`).test(n)) warnOnlyProtect_(sh);
     else if (new RegExp(`^${SHEET.EVENTS}_\\d{4}$`).test(n)) protectSheet_(sh, leaders.concat(admins));
   });
@@ -1811,8 +1811,8 @@ function apiSaveSettings(s) {
 /* ---------- 연도 마감 ---------- */
 
 /**
- * 마감(close=true) / 마감 풀기(false). 마감된 연도는 관리자 말고는 조회만 할 수 있고,
- * 그 연도의 대상자·응대기록·일정 시트도 관리자만 고칠 수 있게 잠근다.
+ * 마감(close=true) / 마감 풀기(false). 마감된 연도는 총괄·관리자 말고는 조회만 할 수 있고,
+ * 그 연도의 대상자·응대기록·일정 시트도 총괄·관리자만 고칠 수 있게 잠근다.
  */
 function apiCloseYear(year, close) {
   const ctx = getContext();
