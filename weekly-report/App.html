@@ -1046,13 +1046,6 @@
       const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
       const monthAmt = s.monthReq.reduce((a, r) => a + r.amount, 0);
 
-      const memberRows = D.members.map(m => `
-        <div class="list-row tap" ${tapAttr(`showMember('${esc(m.name)}')`)}>
-          <span class="who">${esc(m.name)}</span>
-          ${m.done ? '<span class="chip ok">작성완료</span>' : '<span class="chip no">미작성</span>'}
-          <span class="meta">금주 ${m.thisWeek.length}건 · 차주 ${m.nextWeek.length}건${noteOf(m) ? ` · ${esc(noteOf(m))}` : ''}${m.pre && m.pre.exists ? ' · 다음 주 미리 작성' : ''}</span>
-        </div>`).join('');
-
       const dues = [];
       D.members.forEach(m => m.thisWeek.forEach(it => {
         if (it.dueIso && it.dueIso >= D.week.thisStart && it.dueIso <= D.week.thisEnd) dues.push({ who: m.name, ...it });
@@ -1061,13 +1054,6 @@
       const dueRows = dues.map(d => `
         <div class="due-row tap" ${tapAttr(`showMember('${esc(d.who)}')`)}><span class="d">${esc(d.due)}</span><span class="n">${esc(d.who)}</span><span>${esc(d.task)}</span></div>`).join('')
         || '<div class="empty">이번 주 기한이 있는 업무가 없습니다.</div>';
-
-      const recent = D.budget.requests.slice(0, 4).map(r => `
-        <div class="list-row tap" ${tapAttr(`showBudgetReq('${esc(r.id)}')`)}>
-          <span class="who">${esc(r.req)}</span>
-          <span class="chip plain">${esc(r.date.slice(5, 10))}</span>
-          <span class="meta">${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))} · <b>${won(r.amount)}원</b></span>
-        </div>`).join('') || '<div class="empty">신청 내역이 없습니다.</div>';
 
       const boardPreview = D.board.slice(0, 4).map(p => `
         <div class="list-row" style="cursor:pointer" onclick="openPost='${esc(p.id)}';go('board')">
@@ -1109,17 +1095,9 @@
 
       // 권한 있는 패널만 골라 두 칸씩 배치
       const panels = [
-        W && `<section class="panel">
-            <div class="panel-head"><h2>팀원 작성현황</h2><button class="btn small" onclick="setTab('weekly','team', true)">주간보고 보기</button></div>
-            <div class="list">${memberRows}</div>
-          </section>`,
         C && `<section class="panel">
             <div class="panel-head"><h2>다가오는 일정</h2><button class="btn small" onclick="go('calendar')">캘린더</button></div>
             <div class="agenda" id="upcoming">${upcomingHtml()}</div>
-          </section>`,
-        B && `<section class="panel">
-            <div class="panel-head"><h2>최근 예산전용</h2><button class="btn small ghost" onclick="setTab('budget','list', true)">전체 보기${ic('chev', 'sm')}</button></div>
-            <div class="list">${recent}</div>
           </section>`,
         W && `<section class="panel">
             <div class="panel-head"><h2>이번 주 기한 업무</h2><span>${esc(D.week.thisLabel)}</span></div>
