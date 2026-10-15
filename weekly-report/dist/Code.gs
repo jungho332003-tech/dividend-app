@@ -1470,8 +1470,38 @@ function apiCalendar(startIso, endIso, fresh) {
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
-    events: team.events.concat(mine.events.filter(e => !seen[e.id])), // 팀 일정에 초대된 것은 한 번만
+    // 팀 일정에 초대된 것은 한 번만, 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
+    events: dropHolidayDupes_(team.events.concat(mine.events.filter(e => !seen[e.id]))),
   };
+}
+
+/**
+ * 구글 캘린더에 공휴일이 일정으로 들어 있으면(공휴일 캘린더를 합쳐 둔 경우 등) [공휴일] 시트의 공휴일과 두 번 보인다.
+ * 같은 날의 종일 일정 중 이름이 공휴일과 같거나 서로 포함되면 빼고, 빨간 공휴일만 남긴다.
+ */
+function dropHolidayDupes_(events) {
+  const norm = t => String(t || '').replace(/[\s()\[\]·]/g, '');
+  const words = t => String(t || '').split(/[\s()\[\]·]+/).filter(Boolean);
+  // "개천절 대체공휴일" ↔ "대체공휴일(개천절)"처럼 순서가 달라도 같은 말이면 같은 공휴일로 본다
+  // 거의 같은 이름만 ("한글날 행사 준비" 같은 진짜 일정은 남긴다)
+  const EXTRA = ['', '공휴일', '휴일', '연휴', '대체공휴일', '대체휴일'];
+  const same = (h, t) => h === t || (t.indexOf(h) >= 0 && EXTRA.indexOf(t.replace(h, '')) >= 0) || (h.indexOf(t) >= 0 && EXTRA.indexOf(h.replace(t, '')) >= 0);
+  const dayOf = e => (/^\d{4}-\d{2}-\d{2}$/.test(e.start) ? e.start : ymd(new Date(e.start)));
+  const holi = {};
+  events.filter(e => e.kind === 'holiday').forEach(e => { (holi[e.start] = holi[e.start] || []).push(e.title); });
+  return events.filter(e => {
+    if (e.kind === 'holiday' || !e.allDay) return true;
+    const names = holi[dayOf(e)];
+    if (!names) return true;
+    const t = norm(e.title);
+    return !names.some(name => {
+      const h = norm(name);
+      if (!h || !t) return false;
+      if (same(h, t)) return true;
+      const ws = words(name);
+      return ws.length > 1 && ws.every(w => t.indexOf(w) >= 0) && t.length <= h.length + 2;
+    });
+  });
 }
 
 /**
@@ -2289,6 +2319,30 @@ function apiDeleteLeave(id) {
   }
   ctx._leaves = null;
   return leavePatch_(ctx, name);
+}
+
+/**
+ * 일정 화면에서 휴가 일정을 지운다. [휴가]에 그 일정으로 등록된 휴가가 있으면 휴가째 지우고(주간보고에서도 빠짐),
+ * 캘린더에만 있던 휴가 일정이면 캘린더에서 지운다. 본인 휴가만 (팀장·관리자는 모두).
+ */
+function apiDeleteLeaveEvent(eventId) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'calendar');
+  eventId = String(eventId || '');
+  const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
+  const rows = leaveRows_(sh);
+  const idx = rows.findIndex(r => String(r[LCOL.EVENT - 1]) === eventId && String(r[LCOL.DELETED - 1]).toUpperCase() !== 'Y');
+  if (idx >= 0) return apiDeleteLeave(rows[idx][0]);
+
+  const ev = getTeamCalendar_().getEventById(eventId);
+  if (!ev) throw new Error('일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
+  const title = ev.getTitle();
+  if (!isLeaveTitle_(title, ctx.members.map(m => m.name))) throw new Error('휴가 일정만 여기서 지울 수 있습니다.');
+  if (title.indexOf(me.name) < 0 && !me.isLeader && !me.isAdmin) throw new Error('본인 휴가만 지울 수 있습니다.');
+  try { ev.deleteEvent(); } catch (e) { throw new Error('캘린더에서 지울 권한이 없습니다. 팀 캘린더 "일정 변경" 권한을 확인하세요.'); }
+  bumpCalendar_();
+  return {};
 }
 
 /** 주간보고 작성 대상이면 그 사람 조각만 돌려준다 (팀장 등은 주간보고에 없으므로 생략) */

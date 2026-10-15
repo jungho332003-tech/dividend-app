@@ -152,6 +152,30 @@ function apiDeleteLeave(id) {
   return leavePatch_(ctx, name);
 }
 
+/**
+ * 일정 화면에서 휴가 일정을 지운다. [휴가]에 그 일정으로 등록된 휴가가 있으면 휴가째 지우고(주간보고에서도 빠짐),
+ * 캘린더에만 있던 휴가 일정이면 캘린더에서 지운다. 본인 휴가만 (팀장·관리자는 모두).
+ */
+function apiDeleteLeaveEvent(eventId) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'calendar');
+  eventId = String(eventId || '');
+  const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
+  const rows = leaveRows_(sh);
+  const idx = rows.findIndex(r => String(r[LCOL.EVENT - 1]) === eventId && String(r[LCOL.DELETED - 1]).toUpperCase() !== 'Y');
+  if (idx >= 0) return apiDeleteLeave(rows[idx][0]);
+
+  const ev = getTeamCalendar_().getEventById(eventId);
+  if (!ev) throw new Error('일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
+  const title = ev.getTitle();
+  if (!isLeaveTitle_(title, ctx.members.map(m => m.name))) throw new Error('휴가 일정만 여기서 지울 수 있습니다.');
+  if (title.indexOf(me.name) < 0 && !me.isLeader && !me.isAdmin) throw new Error('본인 휴가만 지울 수 있습니다.');
+  try { ev.deleteEvent(); } catch (e) { throw new Error('캘린더에서 지울 권한이 없습니다. 팀 캘린더 "일정 변경" 권한을 확인하세요.'); }
+  bumpCalendar_();
+  return {};
+}
+
 /** 주간보고 작성 대상이면 그 사람 조각만 돌려준다 (팀장 등은 주간보고에 없으므로 생략) */
 function leavePatch_(ctx, name) {
   return ctx.members.some(m => m.name === name && m.write) ? memberPatch_(ctx, name) : {};

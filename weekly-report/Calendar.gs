@@ -103,8 +103,38 @@ function apiCalendar(startIso, endIso, fresh) {
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
-    events: team.events.concat(mine.events.filter(e => !seen[e.id])), // 팀 일정에 초대된 것은 한 번만
+    // 팀 일정에 초대된 것은 한 번만, 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
+    events: dropHolidayDupes_(team.events.concat(mine.events.filter(e => !seen[e.id]))),
   };
+}
+
+/**
+ * 구글 캘린더에 공휴일이 일정으로 들어 있으면(공휴일 캘린더를 합쳐 둔 경우 등) [공휴일] 시트의 공휴일과 두 번 보인다.
+ * 같은 날의 종일 일정 중 이름이 공휴일과 같거나 서로 포함되면 빼고, 빨간 공휴일만 남긴다.
+ */
+function dropHolidayDupes_(events) {
+  const norm = t => String(t || '').replace(/[\s()\[\]·]/g, '');
+  const words = t => String(t || '').split(/[\s()\[\]·]+/).filter(Boolean);
+  // "개천절 대체공휴일" ↔ "대체공휴일(개천절)"처럼 순서가 달라도 같은 말이면 같은 공휴일로 본다
+  // 거의 같은 이름만 ("한글날 행사 준비" 같은 진짜 일정은 남긴다)
+  const EXTRA = ['', '공휴일', '휴일', '연휴', '대체공휴일', '대체휴일'];
+  const same = (h, t) => h === t || (t.indexOf(h) >= 0 && EXTRA.indexOf(t.replace(h, '')) >= 0) || (h.indexOf(t) >= 0 && EXTRA.indexOf(h.replace(t, '')) >= 0);
+  const dayOf = e => (/^\d{4}-\d{2}-\d{2}$/.test(e.start) ? e.start : ymd(new Date(e.start)));
+  const holi = {};
+  events.filter(e => e.kind === 'holiday').forEach(e => { (holi[e.start] = holi[e.start] || []).push(e.title); });
+  return events.filter(e => {
+    if (e.kind === 'holiday' || !e.allDay) return true;
+    const names = holi[dayOf(e)];
+    if (!names) return true;
+    const t = norm(e.title);
+    return !names.some(name => {
+      const h = norm(name);
+      if (!h || !t) return false;
+      if (same(h, t)) return true;
+      const ws = words(name);
+      return ws.length > 1 && ws.every(w => t.indexOf(w) >= 0) && t.length <= h.length + 2;
+    });
+  });
 }
 
 /**

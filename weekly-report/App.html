@@ -518,6 +518,9 @@
   .day-peek .ag { padding: 6px 0; }
   .more-peek { font-size: 12px; color: var(--muted); padding-top: 4px; }
   .cal-day { cursor: pointer; }
+  .ag.has-del { position: relative; padding-right: 34px; }
+  .ag .ag-del { position: absolute; right: 0; top: 8px; color: var(--muted); }
+  .ag .ag-del:hover { color: var(--warn-ink); }
   .memo-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
   .memo-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13.5px; }
   .memo-head b { display: inline-flex; align-items: center; gap: 6px; }
@@ -1503,9 +1506,14 @@
     });
     return res;
   }
+  /** 내 휴가(팀장·관리자는 모든 휴가) 일정이면 지우기 버튼을 단다 */
+  function canDelLeaveEv(ev) {
+    return ev.kind === 'leave' && !String(ev.id).startsWith('tmp-') && (D.me.isLeader || D.me.isAdmin || (D.me.name && String(ev.title).indexOf(D.me.name) >= 0));
+  }
   function agRow(ev) {
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
-    return `<div class="ag"><div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
+    const del = canDelLeaveEv(ev) ? `<button class="icon-btn ag-del" onclick="deleteLeaveEvent('${esc(ev.id)}')" title="휴가 지우기" aria-label="${esc(ev.title)} 지우기">${ic('x', 'sm')}</button>` : '';
+    return `<div class="ag${del ? ' has-del' : ''}">${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
   }
   function dayLabel(k) { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAY[d.getDay()]})`; }
 
@@ -2994,6 +3002,23 @@
         <button class="btn small" onclick="openLeaveForm()">${ic('plus', 'sm')}휴가 등록</button></div>
       ${chips ? `<div class="leave-chips">${chips}</div>` : `<p class="leave-empty">등록된 휴가 없음 · 팀 캘린더에 "${esc(D.me.name)} 연차"로 넣어도 자동 반영</p>`}
     </section>`;
+  }
+
+  /** 일정 화면에서 휴가 지우기: 화면에서 먼저 빼고, 서버에서 [휴가]·캘린더를 지운다 (실패하면 되돌린다) */
+  function deleteLeaveEvent(eventId) {
+    const ev = Object.values(calCache).concat(upcoming ? [upcoming] : []).map(c => (c && c.events || []).find(e => e.id === eventId)).find(Boolean);
+    if (!ev) return;
+    openModal(`<h3>휴가를 지울까요?</h3><p class="sub">${esc(ev.title)} · 캘린더 일정과 주간보고 휴무계획에서 함께 빠집니다.</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="lvDel">지우기</button></div>`);
+    $('#lvDel').onclick = () => {
+      const calBefore = JSON.stringify(calCache);
+      Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(e => e.id !== eventId); });
+      calForget(); upcoming = null;
+      closeModal(); render();
+      call('apiDeleteLeaveEvent', eventId)
+        .then(data => { applyData(data); if (page !== 'calendar') render(); toast('휴가를 지웠습니다.'); })
+        .catch(e => { calCache = JSON.parse(calBefore); render(); fail(e); });
+    };
   }
 
   /** "10/2(금) 연차" · "9/30(수)~10/7(수) 정기휴가(메모)" — 서버 leaveText_ 와 같은 모양 */
