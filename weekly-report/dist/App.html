@@ -2817,7 +2817,45 @@
     return `${label} · 그 주가 되면 표시`;
   }
 
+  /**
+   * 인사현황 저장·삭제를 화면에 먼저 반영한다. old: 고치거나 지울 항목, entry: 새 내용 (null 이면 삭제).
+   * 표(금주·차주·이후 예정)와 일정(팀 캘린더 "[구분] 대상")을 함께 고치고, 되돌리는 함수를 돌려준다.
+   */
+  function hrLocal(old, entry) {
+    const before = JSON.stringify(D.hr), calBefore = JSON.stringify(calCache), pendBefore = calPending.slice();
+    const h = D.hr = D.hr || { thisWeek: [], nextWeek: [], later: [] };
+    const lists = ['thisWeek', 'nextWeek', 'later'];
+    if (old) lists.forEach(k => { h[k] = (h[k] || []).filter(y => y.id !== old.id); });
+    const evOf = y => ({ title: `[${y.category}] ${y.target}`, start: y.start });
+    if (old) Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(e => !sameEv(e, evOf(old))); });
+    if (entry) {
+      const s0 = parseD(entry.start);
+      const mon = new Date(s0.getFullYear(), s0.getMonth(), s0.getDate() - ((s0.getDay() + 6) % 7));
+      const key = dkey(mon), nextKey = dkey(hrNextMonday());
+      const item = { id: old ? old.id : 'tmp-' + Date.now(), author: old ? old.author : D.me.name, category: entry.category, target: entry.target,
+        start: entry.start, end: entry.end || '', when: periodText(entry.start, entry.end), memo: entry.memo, week: key,
+        weekLabel: key > nextKey ? `${mon.getMonth() + 1}월 ${Math.ceil(mon.getDate() / 7)}주` : '' };
+      const k = key === D.week.key ? 'thisWeek' : key === nextKey ? 'nextWeek' : key > nextKey ? 'later' : null;
+      if (k) { h[k] = (h[k] || []).concat(item).sort((a, b) => (a.start || '9').localeCompare(b.start || '9')); }
+      // 일정에도 바로 (서버에서 진짜 일정이 오면 sameEv 로 바뀐다)
+      const ev = { id: 'tmp-hr-' + item.id, title: `[${entry.category}] ${entry.target}`, start: entry.start,
+        end: dkey(addD(parseD(entry.end || entry.start), 1)), allDay: true, location: '', desc: entry.memo, kind: 'event' };
+      calPending.push(ev);
+      Object.values(calCache).forEach(c => { if (c && c.events) c.events.push(ev); });
+    }
+    calForget(); upcoming = null;
+    return () => { D.hr = JSON.parse(before); calCache = JSON.parse(calBefore); calPending = pendBefore; };
+  }
+  /** "9/28(월)" · "10/1(목)~14(수)" — 서버 hrPeriod_ 와 같은 모양 */
+  function periodText(start, end) {
+    if (!start) return '';
+    const md = d => `${d.getMonth() + 1}/${d.getDate()}(${DAY[d.getDay()]})`;
+    const s = parseD(start), e = parseD(end || start);
+    return +e === +s ? md(s) : `${md(s)}~${e.getMonth() === s.getMonth() && e.getFullYear() === s.getFullYear() ? `${e.getDate()}(${DAY[e.getDay()]})` : md(e)}`;
+  }
+
   function openHrForm(id) {
+    if (String(id || '').indexOf('tmp-') === 0) return toast('방금 등록한 항목을 저장하는 중입니다. 잠시 후 다시 눌러 주세요.');
     const x = id ? hrFind(id) : null;
     if (id && !x) return;
     const cat = x ? x.category : hrCats()[0];
@@ -2849,16 +2887,19 @@
       if (!entry.target) return err('대상 및 내용을 입력해 주세요.');
       if (!entry.start) return err('일자를 골라 주세요. 날짜에 맞는 주에 들어갑니다.');
       if (entry.end && entry.start && entry.end < entry.start) return err('종료일이 시작일보다 빠릅니다.');
-      $('#hOk').disabled = true;
+      // 서버를 기다리지 않고 표·일정에 바로 반영한다 (실패하면 되돌린다)
+      const undo = hrLocal(x, entry);
+      closeModal(); render();
       call('apiSaveHr', entry)
-        .then(data => { applyData(data); calCache = {}; calForget(); upcoming = null; closeModal(); render(); toast(data && data.warning ? data.warning : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
-        .catch(e2 => { $('#hOk').disabled = false; err(e2.message || String(e2)); });
+        .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
+        .catch(e2 => { undo(); render(); fail(e2); });
     };
     if (x) $('#hDel').onclick = () => {
-      $('#hDel').disabled = true;
+      const undo = hrLocal(x, null);
+      closeModal(); render();
       call('apiDeleteHr', x.id)
-        .then(data => { applyData(data); calCache = {}; calForget(); upcoming = null; closeModal(); render(); toast('삭제했습니다.'); })
-        .catch(e2 => { $('#hDel').disabled = false; err(e2.message || String(e2)); });
+        .then(data => { applyData(data); if (page !== 'calendar') render(); toast('삭제했습니다.'); })
+        .catch(e2 => { undo(); render(); fail(e2); });
     };
   }
 
@@ -2879,10 +2920,7 @@
 
   /** "10/2(금) 연차" · "9/30(수)~10/7(수) 정기휴가(메모)" — 서버 leaveText_ 와 같은 모양 */
   function leaveTextOf(l) {
-    const md = d => `${d.getMonth() + 1}/${d.getDate()}(${DAY[d.getDay()]})`;
-    const s = parseD(l.start), e = parseD(l.end || l.start);
-    const when = +e === +s ? md(s) : `${md(s)}~${e.getMonth() === s.getMonth() && e.getFullYear() === s.getFullYear() ? `${e.getDate()}(${DAY[e.getDay()]})` : md(e)}`;
-    return `${when} ${l.type}${l.memo ? `(${l.memo})` : ''}`;
+    return `${periodText(l.start, l.end)} ${l.type}${l.memo ? `(${l.memo})` : ''}`;
   }
 
   /** 휴가 등록 = 일정 추가 창의 [휴가] 탭 */
