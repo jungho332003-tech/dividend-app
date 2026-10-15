@@ -314,13 +314,14 @@
   .t td.nowrap { white-space: nowrap; }
   .t td.strong { font-weight: 700; }
 
-  table.report { border-collapse: collapse; min-width: 980px; font-size: 13.5px; border: 1.5px solid var(--grid); }
-  .report thead tr:last-child th { border-bottom: 1.5px solid var(--grid); }
-  .report th, .report td { border: 1px solid var(--grid); padding: 8px 10px; vertical-align: middle; }
+  /* 다른 표와 같은 연한 칸 선 + 둥근 모서리 (칸마다 오른쪽·아래 선, 표는 위·왼쪽 선) */
+  table.report { border-collapse: separate; border-spacing: 0; min-width: 980px; font-size: 13.5px;
+    border-top: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .report th, .report td { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 8px 10px; vertical-align: middle; }
   .report td { text-align: center; } /* 모든 칸 가운데 정렬 */
-  .report th { background: var(--panel-2); text-align: center; font-weight: 800; white-space: nowrap; color: var(--ink); font-size: 13.5px; }
+  .report th { background: var(--panel-2); text-align: center; font-weight: 700; white-space: nowrap; color: var(--ink-2); font-size: 13px; }
   .report td.c { text-align: center; white-space: nowrap; color: var(--ink-2); }
-  .report tr.top td { border-top: 1.5px solid var(--grid); }
+  .report tr.top td { box-shadow: inset 0 1px 0 var(--line-strong); } /* 사람(구분)마다 조금 진한 선 */
   .report td.nm { text-align: center; font-weight: 600; white-space: nowrap; }
   .report td.nm.pending { background: var(--warn-bg); color: var(--warn-ink); }
   .report td.cm { background: var(--comment-bg); min-width: 220px; white-space: pre-wrap; }
@@ -397,7 +398,7 @@
   .wk { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 5px; font-size: 11.5px; font-weight: 700; margin-right: 6px; vertical-align: 1px; letter-spacing: 0; }
   .wk.this { background: var(--accent); color: var(--accent-ink); }
   .wk.next { background: var(--wk-next); color: var(--wk-next-ink); }
-  .report th.split, .report td.split { border-left: 1px solid var(--grid); }
+  .report th.split, .report td.split { }
   .report td.cat { text-align: center; font-weight: 800; white-space: nowrap; background: var(--panel-2); }
   .report td.hr-in.editable { cursor: pointer; }
   .report td.hr-in.editable:hover { background: var(--accent-soft); }
