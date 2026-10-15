@@ -153,6 +153,7 @@ function sendClosingMail_(ctx) {
  *  - 평일 업무시간엔 보고서 자동 새로고침 (바뀐 내용이 있을 때만)
  *  - 마감 N시간 전 미작성자 알림 (주 1회)
  *  - 마감 후 팀장에게 취합 메일 (주 1회)
+ *  - 화면 데이터 미리 캐시 (첫 접속 속도)
  */
 function hourlyCheck() {
   const now = new Date();
@@ -178,6 +179,8 @@ function hourlyCheck() {
     sendClosingMail_(ctx);
     props.setProperty(PROP.CLOSED, key);
   }
+
+  warmCaches_(ctx); // 다음 접속이 빠르도록 화면 데이터를 미리 캐시
 }
 
 // onBudgetEdit: 예전 버전(결재 기능)에서 만든 트리거도 정리한다

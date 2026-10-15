@@ -88,8 +88,18 @@ function apiAdminData(force) {
   return adminData_(ctx, !force);
 }
 
+/** 공유 상태만 (화면이 먼저 뜬 뒤 따로 부른다). force면 캐시를 무시하고 다시 확인한다. */
+function apiAdminStatus(force) {
+  const ctx = getContext();
+  requireAdmin_(ctx);
+  return force ? freshStatus_(ctx) : cached_('access', () => accessStatus_(ctx), ACCESS_TTL);
+}
+
+const ACCESS_TTL = 1800; // 공유 상태 캐시 30분 (권한 적용·팀원 저장 때는 바로 다시 확인)
+
 /**
- * useCache=true면 공유 상태(시트·폴더·캘린더 확인, 가장 느린 부분)를 5분 캐시에서 쓴다.
+ * useCache=true면 공유 상태(시트·폴더·캘린더 확인, 가장 느린 부분)는 캐시에 있을 때만 싣고,
+ * 없으면 null → 화면이 먼저 뜨고 apiAdminStatus 로 따로 받는다.
  */
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
@@ -106,14 +116,18 @@ function adminData_(ctx, useCache) {
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
-    status: useCache ? cached_('access', () => accessStatus_(ctx), 300) : freshStatus_(ctx),
+    status: useCache ? cachedOnly_('access') : freshStatus_(ctx),
   };
 }
 
 function freshStatus_(ctx) {
   const status = accessStatus_(ctx);
-  putCache_('access', status, 300);
+  putCache_('access', status, ACCESS_TTL);
   return status;
+}
+
+function cachedOnly_(key) {
+  try { const hit = cacheGet_(key); return hit ? JSON.parse(hit) : null; } catch (e) { return null; }
 }
 
 /**
@@ -171,15 +185,19 @@ function accessStatus_(ctx) {
   const level = (email, owner, editors, viewers) =>
     email === owner ? 'owner' : editors.indexOf(email) >= 0 ? 'editor' : viewers.indexOf(email) >= 0 ? 'viewer' : 'none';
 
+  // 시트 보호는 한 번에 읽는다 (팀원마다 따로 읽으면 느림)
+  const protectedFor = {};
+  ctx.ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => {
+    const name = p.getRange().getSheet().getName();
+    if (name.indexOf(SHEET.INPUT_PREFIX) === 0) protectedFor[name] = lower(p.getEditors());
+  });
+
   const people = {};
   ctx.members.filter(m => m.email).forEach(m => {
     const e = m.email.toLowerCase();
-    const sh = m.write ? ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + m.name) : null;
-    let inputProtected = false;
-    if (sh) {
-      const p = sh.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
-      inputProtected = !!p && p.getEditors().some(u => u.getEmail().toLowerCase() === e);
-    }
+    const title = SHEET.INPUT_PREFIX + m.name;
+    const sh = m.write ? ctx.ss.getSheetByName(title) : null;
+    const inputProtected = !!sh && (protectedFor[title] || []).indexOf(e) >= 0;
     people[m.name] = {
       sheet: level(e, fileOwner, fileEditors, fileViewers),
       input: !m.write ? 'n/a' : !sh ? 'missing' : inputProtected ? 'ok' : 'unprotected',

@@ -1549,6 +1549,8 @@
   }
   /** 앱을 열면 이번 달 일정을 미리 받아 둔다 → 일정 메뉴를 누르면 바로 보인다 */
   function prefetchCalendar() {
+    // 관리자는 관리 정보도 미리 받아 둔다
+    if (D.me.isAdmin && !A) setTimeout(() => { if (!A && !adminLoading) loadAdmin(false); }, 1500);
     if (!can('calendar')) return;
     setTimeout(() => loadMonth(false, new Date(now().getFullYear(), now().getMonth(), 1)), 400);
   }
@@ -1968,17 +1970,32 @@
 
   let adminLoading = false;
   /** force=true면 공유 상태를 새로 확인, 아니면 서버의 5분 캐시를 써서 빠르게 연다 */
+  /* 관리 화면: 팀원·설정은 바로 받고, 느린 공유 상태 확인은 따로 받아 나중에 채운다.
+     마지막으로 본 관리 정보는 이 기기에 저장해 두었다가 먼저 보여준다. */
+  const adminKey = () => `admin:${D.me.email}`;
   function loadAdmin(force) {
     if (adminLoading) return;
     adminLoading = true;
-    call('apiAdminData', !!force)
-      .then(d => { adminLoading = false; setAdmin(d); })
+    if (!A) { try { const st = JSON.parse(localStorage.getItem(adminKey()) || 'null'); if (st) setAdmin(st, true); } catch (e) { /* 저장소 없음 */ } }
+    call('apiAdminData', false)
+      .then(d => { adminLoading = false; const keep = A && A.status; setAdmin(d); if (!d.status || force) { if (keep && !force) A.status = keep; loadStatus(force); } })
       .catch(e => { adminLoading = false; fail(e); });
   }
+  function loadStatus(force) {
+    statusLoading = true;
+    if (page === 'admin') render();
+    call('apiAdminStatus', !!force)
+      .then(st => { statusLoading = false; if (A) { A.status = st; saveAdminLocal(); } if (page === 'admin') render(); })
+      .catch(e => { statusLoading = false; if (page === 'admin') render(); fail(e); });
+  }
+  let statusLoading = false;
+  function saveAdminLocal() { try { localStorage.setItem(adminKey(), JSON.stringify(A)); } catch (e) { /* 저장소 없음 */ } }
   /** 상태 새로고침 버튼 */
-  function refreshAdmin() { loadAdmin(true); A = null; render(); }
-  function setAdmin(data) {
+  function refreshAdmin() { loadStatus(true); }
+  function setAdmin(data, fromLocal) {
+    if (A && A.status && !data.status) data.status = A.status; // 상태를 아직 못 받았으면 이전 것 유지
     A = data;
+    if (!fromLocal) saveAdminLocal();
     aDraft = A.members.map(m => Object.assign({}, m));
     menuDraft = JSON.parse(JSON.stringify(A.menuAccess));
     aDirty = false;
@@ -1996,27 +2013,28 @@
     return `<span class="chip ${cls}">${cls === 'ok' ? ic('check') : cls === 'no' ? ic('x') : ''}${label}</span>`;
   }
   function needsAttention(name) {
-    const st = A && A.status.people[name];
+    if (!A || !A.status) return false;
+    const st = A.status.people[name];
     if (!st) return true;
     return ['sheet', 'input', 'folder', 'calendar'].some(k => { const c = (ACCESS[k][st[k]] || ['plain'])[0]; return c === 'no' || c === 'pend'; });
   }
 
   VIEWS.admin = function () {
-    if (!A) return '<div class="loading">관리 정보를 불러오는 중… (시트·폴더·캘린더 공유 상태를 확인합니다)</div>';
+    if (!A) return '<div class="loading">관리 정보를 불러오는 중…</div>';
     const tab = (k, label) => `<button role="tab" aria-selected="${adminTab === k}" onclick="adminTab='${k}';render()">${label}</button>`;
     const body = { members: adminMembers, menus: adminMenus, settings: adminSettings, guide: adminGuide }[adminTab]();
     return `<div class="subtabs" role="tablist">${tab('members', '팀원·권한')}${tab('menus', '메뉴 권한')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
   };
 
   function adminMembers() {
-    const res = A.status.resources;
+    const res = A.status ? A.status.resources : null;
     const resLine = (label, x) => `<span>${x.ok ? `<span class="chip ok">${ic('check')}</span>` : `<span class="chip pend">${ic('alert')}</span>`} <b>${label}</b> ${esc(x.ok ? x.name : x.error)}</span>`;
     const issues = aDraft.filter(m => m.email && needsAttention(m.name)).length;
     const noEmail = aDraft.filter(m => m.name && !m.email).length;
     const sel = (i, v) => `<select class="field-in" style="padding:5px 6px;min-width:76px" onchange="aEdit(${i},'role',this.value)">${A.roles.map(r => `<option ${r === v ? 'selected' : ''}>${r}</option>`).join('')}</select>`;
     const chk = (i, k, v, label) => `<label style="display:flex;justify-content:center"><input type="checkbox" class="check" ${v ? 'checked' : ''} onchange="aEdit(${i},'${k}',this.checked)" aria-label="${label}"></label>`;
     const rows = aDraft.map((m, i) => {
-      const st = A.status.people[m.name];
+      const st = A.status && A.status.people[m.name];
       const saved = A.members.some(x => x.name === m.name && x.email === m.email);
       return `<tr>
         <td data-label="이름"><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
@@ -2027,7 +2045,7 @@
         <td data-label="관리자">${chk(i, 'admin', m.admin, '관리자')}</td>
         <td data-label="예산담당">${chk(i, 'budget', m.budget, '예산담당')}</td>
         ${st && saved ? `<td data-label="스프레드시트">${accessChip('sheet', st.sheet)}</td><td data-label="입력시트">${accessChip('input', st.input)}</td><td data-label="첨부 폴더">${accessChip('folder', st.folder)}</td><td data-label="팀 캘린더">${accessChip('calendar', st.calendar)}</td>`
-          : `<td colspan="4" class="c-wide"><span style="color:var(--muted);font-size:12px">${m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
+          : `<td colspan="4" class="c-wide"><span style="color:var(--muted);font-size:12px">${!A.status && saved ? '확인 중…' : m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
         <td class="c-x"><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">${ic('x', 'sm')}</button></td>
       </tr>`;
     }).join('');
@@ -2035,15 +2053,15 @@
       <div class="head">
         <div><h1>팀원·권한</h1><p>등록 후 [권한 한 번에 적용] → 시트·폴더·캘린더 공유와 잠금 자동 처리</p></div>
         <div class="head-actions">
-          <button class="btn" onclick="refreshAdmin()">${ic('refresh', 'sm')}상태 새로고침</button>
+          <button class="btn" onclick="refreshAdmin()" ${statusLoading ? 'disabled' : ''}>${ic('refresh', 'sm')}${statusLoading ? '확인 중…' : '상태 새로고침'}</button>
           <button class="btn primary" onclick="applyAll()">${ic('shield', 'sm')}권한 한 번에 적용</button>
         </div>
       </div>
       <section class="panel">
-        <div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px">${resLine('스프레드시트', res.sheet)}${resLine('첨부 폴더', res.folder)}${resLine('팀 캘린더', res.calendar)}</div>
+        ${res ? `<div style="display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px">${resLine('스프레드시트', res.sheet)}${resLine('첨부 폴더', res.folder)}${resLine('팀 캘린더', res.calendar)}</div>
         <p style="margin:10px 0 0;font-size:13px;color:${issues || noEmail ? 'var(--warn-ink)' : 'var(--ok-ink)'}">
           ${issues || noEmail ? `확인이 필요한 사람 ${issues}명${noEmail ? ` · 이메일 없는 사람 ${noEmail}명` : ''}. "권한 한 번에 적용"을 누르면 대부분 해결됩니다.` : '✓ 모든 팀원의 권한이 정상입니다.'}
-        </p>
+        </p>` : '<p style="margin:0;font-size:13px;color:var(--muted)">시트·폴더·캘린더 공유 상태를 확인하는 중… (팀원 목록은 바로 고칠 수 있습니다)</p>'}
       </section>
       <section class="panel">
         <div class="table-wrap">
@@ -2132,8 +2150,8 @@
   }
 
   function adminSettings() {
-    const st = A.settings, res = A.status.resources;
-    const status = x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ 연결됨: ${esc(x.name)}` : esc(x.error)}</div>`;
+    const st = A.settings, res = A.status ? A.status.resources : { calendar: null, folder: null };
+    const status = x => !x ? '<div class="hint">연결 상태 확인 중…</div>' : `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ 연결됨: ${esc(x.name)}` : esc(x.error)}</div>`;
     return `
       <div class="head"><div><h1>설정</h1></div></div>
       <section class="panel" style="max-width:640px">

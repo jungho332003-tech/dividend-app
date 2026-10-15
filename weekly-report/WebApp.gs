@@ -24,12 +24,13 @@ function doGet() {
 }
 
 /* ---------- 캐시 ----------
- * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 60초간 캐시한다 (팀 전체가 공유).
- * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
+ * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 30분간 캐시한다 (팀 전체가 공유).
+ * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 30분 뒤 반영된다.
+ * (매시간 자동 실행이 캐시를 미리 채워 두어, 아침 첫 접속도 빠르다)
  * 캐시 한 칸은 100KB까지라, 팀원·게시글·예산 내역이 쌓여 커지면 여러 칸에 나눠 담는다.
  */
 
-const CACHE_TTL = 60;
+const CACHE_TTL = 1800; // 30분. 웹앱에서 저장하면 바로 고치므로, 시트를 직접 고친 내용만 늦게 보인다
 const CACHE_CHUNK = 30000; // 글자 수 (한글 3바이트 기준 90KB)
 const CK = {
   members: ctx => 'members:' + ctx.thisWeek.key,
@@ -73,6 +74,20 @@ function cacheGet_(key) {
   for (let i = 0, n = Number(head.slice(8)); i < n; i++) keys.push(key + '#' + i);
   const got = cache.getAll(keys);
   return keys.every(k => got[k] != null) ? keys.map(k => got[k]).join('') : null;
+}
+
+/** 매시간 자동 실행 때 화면 데이터를 미리 읽어 캐시에 넣는다 → 아침 첫 접속도 시트를 읽지 않고 바로 뜬다 */
+function warmCaches_(ctx) {
+  const ss = ctx.ss, ttl = 3600;
+  [
+    [CK.members(ctx), () => readMembers_(ctx)],
+    [CK.hr(ctx), () => readHr_(ctx)],
+    [CK.budget, () => readBudget_(ss)],
+    [CK.board, () => readBoard_(ss)],
+    [CK.rules, () => readRules_(ss)],
+  ].forEach(([key, read]) => {
+    try { putCache_(key, read(), ttl); } catch (e) { /* 한 부분이 실패해도 나머지는 채운다 */ }
+  });
 }
 
 /* ---------- 조회 ---------- */

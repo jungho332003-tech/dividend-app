@@ -889,6 +889,7 @@ function sendClosingMail_(ctx) {
  *  - 평일 업무시간엔 보고서 자동 새로고침 (바뀐 내용이 있을 때만)
  *  - 마감 N시간 전 미작성자 알림 (주 1회)
  *  - 마감 후 팀장에게 취합 메일 (주 1회)
+ *  - 화면 데이터 미리 캐시 (첫 접속 속도)
  */
 function hourlyCheck() {
   const now = new Date();
@@ -914,6 +915,8 @@ function hourlyCheck() {
     sendClosingMail_(ctx);
     props.setProperty(PROP.CLOSED, key);
   }
+
+  warmCaches_(ctx); // 다음 접속이 빠르도록 화면 데이터를 미리 캐시
 }
 
 // onBudgetEdit: 예전 버전(결재 기능)에서 만든 트리거도 정리한다
@@ -2488,8 +2491,18 @@ function apiAdminData(force) {
   return adminData_(ctx, !force);
 }
 
+/** 공유 상태만 (화면이 먼저 뜬 뒤 따로 부른다). force면 캐시를 무시하고 다시 확인한다. */
+function apiAdminStatus(force) {
+  const ctx = getContext();
+  requireAdmin_(ctx);
+  return force ? freshStatus_(ctx) : cached_('access', () => accessStatus_(ctx), ACCESS_TTL);
+}
+
+const ACCESS_TTL = 1800; // 공유 상태 캐시 30분 (권한 적용·팀원 저장 때는 바로 다시 확인)
+
 /**
- * useCache=true면 공유 상태(시트·폴더·캘린더 확인, 가장 느린 부분)를 5분 캐시에서 쓴다.
+ * useCache=true면 공유 상태(시트·폴더·캘린더 확인, 가장 느린 부분)는 캐시에 있을 때만 싣고,
+ * 없으면 null → 화면이 먼저 뜨고 apiAdminStatus 로 따로 받는다.
  */
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
@@ -2506,14 +2519,18 @@ function adminData_(ctx, useCache) {
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
-    status: useCache ? cached_('access', () => accessStatus_(ctx), 300) : freshStatus_(ctx),
+    status: useCache ? cachedOnly_('access') : freshStatus_(ctx),
   };
 }
 
 function freshStatus_(ctx) {
   const status = accessStatus_(ctx);
-  putCache_('access', status, 300);
+  putCache_('access', status, ACCESS_TTL);
   return status;
+}
+
+function cachedOnly_(key) {
+  try { const hit = cacheGet_(key); return hit ? JSON.parse(hit) : null; } catch (e) { return null; }
 }
 
 /**
@@ -2571,15 +2588,19 @@ function accessStatus_(ctx) {
   const level = (email, owner, editors, viewers) =>
     email === owner ? 'owner' : editors.indexOf(email) >= 0 ? 'editor' : viewers.indexOf(email) >= 0 ? 'viewer' : 'none';
 
+  // 시트 보호는 한 번에 읽는다 (팀원마다 따로 읽으면 느림)
+  const protectedFor = {};
+  ctx.ss.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(p => {
+    const name = p.getRange().getSheet().getName();
+    if (name.indexOf(SHEET.INPUT_PREFIX) === 0) protectedFor[name] = lower(p.getEditors());
+  });
+
   const people = {};
   ctx.members.filter(m => m.email).forEach(m => {
     const e = m.email.toLowerCase();
-    const sh = m.write ? ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + m.name) : null;
-    let inputProtected = false;
-    if (sh) {
-      const p = sh.getProtections(SpreadsheetApp.ProtectionType.SHEET)[0];
-      inputProtected = !!p && p.getEditors().some(u => u.getEmail().toLowerCase() === e);
-    }
+    const title = SHEET.INPUT_PREFIX + m.name;
+    const sh = m.write ? ctx.ss.getSheetByName(title) : null;
+    const inputProtected = !!sh && (protectedFor[title] || []).indexOf(e) >= 0;
     people[m.name] = {
       sheet: level(e, fileOwner, fileEditors, fileViewers),
       input: !m.write ? 'n/a' : !sh ? 'missing' : inputProtected ? 'ok' : 'unprotected',
@@ -2821,12 +2842,13 @@ function doGet() {
 }
 
 /* ---------- 캐시 ----------
- * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 60초간 캐시한다 (팀 전체가 공유).
- * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 60초 뒤 반영된다.
+ * 화면을 열 때마다 시트 전체를 다시 읽지 않도록 30분간 캐시한다 (팀 전체가 공유).
+ * 웹앱에서 저장하면 해당 부분 캐시를 바로 갱신하고, 시트를 직접 고친 내용은 최대 30분 뒤 반영된다.
+ * (매시간 자동 실행이 캐시를 미리 채워 두어, 아침 첫 접속도 빠르다)
  * 캐시 한 칸은 100KB까지라, 팀원·게시글·예산 내역이 쌓여 커지면 여러 칸에 나눠 담는다.
  */
 
-const CACHE_TTL = 60;
+const CACHE_TTL = 1800; // 30분. 웹앱에서 저장하면 바로 고치므로, 시트를 직접 고친 내용만 늦게 보인다
 const CACHE_CHUNK = 30000; // 글자 수 (한글 3바이트 기준 90KB)
 const CK = {
   members: ctx => 'members:' + ctx.thisWeek.key,
@@ -2870,6 +2892,20 @@ function cacheGet_(key) {
   for (let i = 0, n = Number(head.slice(8)); i < n; i++) keys.push(key + '#' + i);
   const got = cache.getAll(keys);
   return keys.every(k => got[k] != null) ? keys.map(k => got[k]).join('') : null;
+}
+
+/** 매시간 자동 실행 때 화면 데이터를 미리 읽어 캐시에 넣는다 → 아침 첫 접속도 시트를 읽지 않고 바로 뜬다 */
+function warmCaches_(ctx) {
+  const ss = ctx.ss, ttl = 3600;
+  [
+    [CK.members(ctx), () => readMembers_(ctx)],
+    [CK.hr(ctx), () => readHr_(ctx)],
+    [CK.budget, () => readBudget_(ss)],
+    [CK.board, () => readBoard_(ss)],
+    [CK.rules, () => readRules_(ss)],
+  ].forEach(([key, read]) => {
+    try { putCache_(key, read(), ttl); } catch (e) { /* 한 부분이 실패해도 나머지는 채운다 */ }
+  });
 }
 
 /* ---------- 조회 ---------- */
