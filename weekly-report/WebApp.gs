@@ -179,9 +179,8 @@ function memberPatch_(ctx, name, comment) {
   return { memberPatch: forViewer_(currentMember_(ctx.members), [patch])[0] };
 }
 
-/** 팀장 코멘트는 팀장에게만 보낸다 (팀원 화면에는 내용 자체가 가지 않는다) */
+/** 팀장 코멘트는 지금 쓰지 않으므로 누구에게도 보내지 않는다 */
 function forViewer_(me, list) {
-  if (me && me.isLeader) return list;
   return list.map(m => Object.assign({}, m, { comment: '' }));
 }
 

@@ -140,7 +140,7 @@ function sendClosingMail_(ctx) {
     subject: `[${ctx.cfg[CFG.TEAM]}] 주간업무 취합 완료 - ${ctx.thisWeek.label}`,
     htmlBody:
       `${ctx.thisWeek.label} 주간업무가 취합되었습니다.<br><br>` +
-      `<a href="${sheetUrl(ctx.ss, report)}">주간보고 열기</a> (팀장 코멘트 칸에 의견을 남길 수 있습니다)<br><br>` +
+      `<a href="${sheetUrl(ctx.ss, report)}">주간보고 열기</a><br><br>` +
       (pending.length ? `⚠️ 작성완료 미체크: ${pending.join(', ')}` : '✅ 전원 작성완료'),
   });
 }

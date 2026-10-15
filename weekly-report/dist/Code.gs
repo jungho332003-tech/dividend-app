@@ -712,6 +712,7 @@ function buildReport_(ctx, onlyIfChanged) {
 
   [110, 330, 95, 330, 95, 170, 240].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.setFrozenRows(h + 1);
+  sh.hideColumns(REPORT.COMMENT_COL); // 팀장 코멘트 칸은 쓰지 않으므로 숨긴다
 
   const saved = {};
   saved[PROP.REPORT_WEEK] = ctx.thisWeek.key;
@@ -878,7 +879,7 @@ function sendClosingMail_(ctx) {
     subject: `[${ctx.cfg[CFG.TEAM]}] 주간업무 취합 완료 - ${ctx.thisWeek.label}`,
     htmlBody:
       `${ctx.thisWeek.label} 주간업무가 취합되었습니다.<br><br>` +
-      `<a href="${sheetUrl(ctx.ss, report)}">주간보고 열기</a> (팀장 코멘트 칸에 의견을 남길 수 있습니다)<br><br>` +
+      `<a href="${sheetUrl(ctx.ss, report)}">주간보고 열기</a><br><br>` +
       (pending.length ? `⚠️ 작성완료 미체크: ${pending.join(', ')}` : '✅ 전원 작성완료'),
   });
 }
@@ -3303,9 +3304,8 @@ function memberPatch_(ctx, name, comment) {
   return { memberPatch: forViewer_(currentMember_(ctx.members), [patch])[0] };
 }
 
-/** 팀장 코멘트는 팀장에게만 보낸다 (팀원 화면에는 내용 자체가 가지 않는다) */
+/** 팀장 코멘트는 지금 쓰지 않으므로 누구에게도 보내지 않는다 */
 function forViewer_(me, list) {
-  if (me && me.isLeader) return list;
   return list.map(m => Object.assign({}, m, { comment: '' }));
 }
 

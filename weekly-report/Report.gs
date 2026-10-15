@@ -110,6 +110,7 @@ function buildReport_(ctx, onlyIfChanged) {
 
   [110, 330, 95, 330, 95, 170, 240].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.setFrozenRows(h + 1);
+  sh.hideColumns(REPORT.COMMENT_COL); // 팀장 코멘트 칸은 쓰지 않으므로 숨긴다
 
   const saved = {};
   saved[PROP.REPORT_WEEK] = ctx.thisWeek.key;
