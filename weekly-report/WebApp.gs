@@ -38,6 +38,7 @@ const CK = {
   budget: 'budget',
   board: 'board',
   rules: 'rules',
+  minutes: 'minutes',
   owner: 'owner',
 };
 
@@ -85,6 +86,7 @@ function warmCaches_(ctx) {
     [CK.budget, () => readBudget_(ss)],
     [CK.board, () => readBoard_(ss)],
     [CK.rules, () => readRules_(ss)],
+    [CK.minutes, () => readMinutes_(ss)],
   ].forEach(([key, read]) => {
     try { putCache_(key, read(), ttl); } catch (e) { /* 한 부분이 실패해도 나머지는 채운다 */ }
   });
@@ -105,6 +107,7 @@ function apiBootstrap() {
     budget: can('budget') ? cached_(CK.budget, () => readBudget_(ss)) : { accounts: [], requests: [] },
     board: can('board') ? cached_(CK.board, () => readBoard_(ss)) : [],
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
+    minutes: can('weekly') ? cached_(CK.minutes, () => readMinutes_(ss)) : [],
   });
 }
 

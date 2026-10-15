@@ -7,7 +7,7 @@
 import json, os, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ORDER = ['Config', 'Setup', 'Report', 'Automation', 'Budget', 'Calendar', 'Board', 'Rules', 'Personnel', 'Leave', 'Files', 'Admin', 'WebApp']
+ORDER = ['Config', 'Setup', 'Report', 'Automation', 'Budget', 'Calendar', 'Board', 'Rules', 'Personnel', 'Minutes', 'Leave', 'Files', 'Admin', 'WebApp']
 
 def read(name):
     with open(os.path.join(HERE, name), encoding='utf-8') as f:

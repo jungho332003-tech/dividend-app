@@ -154,7 +154,7 @@ function applyProtections_(ctx) {
   setupHrSheet_(ss); // 예전 버전에서 업데이트한 경우
   setupLeaveSheet_(ss);
   // 게시판·인사현황·휴가: 누구나 등록 (직접 수정 시 경고만)
-  [BOARD.SHEET, BOARD.COMMENTS, HR.SHEET, LEAVE.SHEET, MARK.SHEET].forEach(name => {
+  [BOARD.SHEET, BOARD.COMMENTS, HR.SHEET, LEAVE.SHEET, MARK.SHEET, MINUTES.SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
     if (sh) warnOnlyProtect_(sh);
   });
