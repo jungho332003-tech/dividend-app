@@ -317,6 +317,7 @@
   table.report { border-collapse: collapse; min-width: 980px; font-size: 13.5px; border: 1.5px solid var(--grid); }
   .report thead tr:last-child th { border-bottom: 1.5px solid var(--grid); }
   .report th, .report td { border: 1px solid var(--grid); padding: 8px 10px; vertical-align: middle; }
+  .report td { text-align: center; } /* 모든 칸 가운데 정렬 */
   .report th { background: var(--panel-2); text-align: center; font-weight: 800; white-space: nowrap; color: var(--ink); font-size: 13.5px; }
   .report td.c { text-align: center; white-space: nowrap; color: var(--ink-2); }
   .report tr.top td { border-top: 1.5px solid var(--grid); }
@@ -450,7 +451,8 @@
     table.t thead tr + tr > :last-child { border-right: 1px solid var(--line) !important; } /* 2줄 머리글: 아래 줄 끝 칸 뒤에도 칸이 있다 */
     table.t thead th { color: var(--ink-2); font-weight: 700; font-size: 12.5px; vertical-align: middle; text-align: center; background: var(--panel-2); }
     table.t tfoot td { border-top: 1px solid var(--line-strong) !important; }
-    table.t td { vertical-align: middle; }
+    table.t td, table.t td.num, table.t th.num { vertical-align: middle; text-align: center; }
+    table.t td .mv { justify-content: center; }
   }
   @media (max-width: 760px) {
     table.t:not(.cards) { border-collapse: separate; border-spacing: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
