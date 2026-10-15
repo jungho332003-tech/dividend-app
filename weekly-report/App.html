@@ -436,7 +436,11 @@
   .month-sum b { color: var(--ink); }
   .chip.month { background: var(--panel-2); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
   /* 월별 정리 (복사) */
-  .copy-t { min-width: 940px; }
+  .copy-t { min-width: 860px; }
+  @media (min-width: 761px) {
+    .budget-cards th, .budget-cards td, .copy-t th, .copy-t td, .budget-cards td.num, .copy-t td.num, .budget-cards th.num, .copy-t th.num { text-align: center; vertical-align: middle; }
+    .budget-cards .c-move .mv { justify-content: center; }
+  }
   .copy-t th { white-space: nowrap; vertical-align: middle; }
   .copy-t th, .copy-t td { padding-left: 7px; padding-right: 7px; }
   .copy-t th.g-out { color: var(--ink-2); }
@@ -1312,7 +1316,7 @@
       const rows = list.map(r => {
         const canCancel = r.req === D.me.name || D.me.isLeader || D.me.isAdmin;
         return `<tr>
-          <td class="nowrap c-id"><span class="chip month">${monthName(reqMonth(r))}분</span> ${esc(r.id)}<br><span style="color:var(--muted);font-size:12px">신청 ${esc(r.date)}</span></td>
+          <td class="nowrap c-id"><span class="chip month">${monthName(reqMonth(r))}분</span><br><span style="color:var(--muted);font-size:12px">신청 ${esc(r.date)}</span></td>
           <td class="nowrap strong c-who">${esc(r.req)}</td>
           <td class="c-move"><span class="mv"><b class="tag out">변경전</b>${esc(bLabel(r.fromCost, r.fromCode, r.from))}</span><span class="mv"><b class="tag in">변경후</b>${esc(bLabel(r.toCost, r.toCode, r.to))}</span></td>
           <td class="num strong c-amt">${won(r.amount)}<span class="unit">원</span></td>
@@ -1333,7 +1337,7 @@
           <div class="month-sum">${bm === 'all' ? '전체 기간' : monthName(bm, true)} 합계 <b>${list.length}건 · ${won(total)}원</b></div>
           <div class="table-wrap">
             <table class="t cards budget-cards">
-              <thead><tr><th>적용월 · 신청번호</th><th>신청자</th><th>변경전 → 변경후</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
+              <thead><tr><th>적용월</th><th>신청자</th><th>변경전 → 변경후</th><th class="num">금액(원)</th><th>사유</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -1400,11 +1404,11 @@
       const rows = list.map((r, i) => `
         <tr class="${copied(r.id + ':done') ? 'row-done' : ''}">
           <td class="c">${i + 1}</td>
-          <td class="nowrap">${esc(r.id)}<br><small class="ph">${esc(r.req)} · ${monthName(reqMonth(r))}분</small></td>
+          <td class="nowrap">${esc(r.req)}<br><small class="ph">${monthName(reqMonth(r))}분</small></td>
           ${cell(r, 'fc', r.fromCost, 'g-out')}${cell(r, 'fa', r.fromCode, 'g-out')}<td class="g-out nm">${esc(r.from)}</td>
           ${cell(r, 'tc', r.toCost, 'g-in')}${cell(r, 'ta', r.toCode, 'g-in')}<td class="g-in nm">${esc(r.to)}</td>
           ${cell(r, 'amt', String(r.amount), 'num')}
-          <td class="c"><input type="checkbox" class="check" ${copied(r.id + ':done') ? 'checked' : ''} onchange="markDone('${esc(r.id)}', this.checked)" aria-label="${esc(r.id)} 처리 완료"></td>
+          <td class="c"><input type="checkbox" class="check" ${copied(r.id + ':done') ? 'checked' : ''} onchange="markDone('${esc(r.id)}', this.checked)" aria-label="${i + 1}번 처리 완료"></td>
           <td class="reason">${esc(r.reason)}</td>
         </tr>`).join('') || `<tr><td colspan="11" class="empty">${bm === 'all' ? '' : monthName(bm, true) + ' '}신청 내역이 없습니다.</td></tr>`;
       return `
@@ -1420,7 +1424,7 @@
           <div class="table-wrap">
             <table class="t copy-t">
               <thead>
-                <tr><th rowspan="2">No</th><th rowspan="2">신청번호</th><th colspan="3" class="g-out">변경전 (감액)</th><th colspan="3" class="g-in">변경후 (증액)</th><th rowspan="2" class="num">금액</th><th rowspan="2">완료</th><th rowspan="2">사유</th></tr>
+                <tr><th rowspan="2">No</th><th rowspan="2">신청자</th><th colspan="3" class="g-out">변경전 (감액)</th><th colspan="3" class="g-in">변경후 (증액)</th><th rowspan="2" class="num">금액</th><th rowspan="2">완료</th><th rowspan="2">사유</th></tr>
                 <tr><th class="g-out">코스트센터</th><th class="g-out">계정코드</th><th class="g-out">계정과목</th><th class="g-in">코스트센터</th><th class="g-in">계정코드</th><th class="g-in">계정과목</th></tr>
               </thead>
               <tbody>${rows}</tbody>
@@ -2346,8 +2350,8 @@
     const bm = curBudgetMonth();
     const list = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm).slice().reverse();
     const clean = v => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
-    const lines = [['적용월', '신청번호', '신청일시', '신청자', '변경전 코스트센터', '변경전 계정코드', '변경전 계정과목', '변경후 코스트센터', '변경후 계정코드', '변경후 계정과목', '금액', '사유']]
-      .concat(list.map(r => [reqMonth(r), r.id, r.date, r.req, r.fromCost, r.fromCode, r.from, r.toCost, r.toCode, r.to, r.amount, r.reason]));
+    const lines = [['적용월', '신청일시', '신청자', '변경전 코스트센터', '변경전 계정코드', '변경전 계정과목', '변경후 코스트센터', '변경후 계정코드', '변경후 계정과목', '금액', '사유']]
+      .concat(list.map(r => [reqMonth(r), r.date, r.req, r.fromCost, r.fromCode, r.from, r.toCost, r.toCode, r.to, r.amount, r.reason]));
     toClipboard(lines.map(l => l.map(clean).join('\t')).join('\n'))
       .then(() => toast(`${list.length}건을 복사했습니다. 엑셀에 붙여넣으세요.`), () => toast('복사하지 못했습니다.'));
   }
@@ -2719,7 +2723,7 @@
     const r = D.budget.requests.find(x => x.id === id);
     if (!r) return;
     openModal(`
-      <h3>${esc(r.id)} <span class="chip month">${monthName(reqMonth(r))}분</span></h3>
+      <h3>예산전용 신청 <span class="chip month">${monthName(reqMonth(r))}분</span></h3>
       <p class="sub">${esc(r.req)} · 신청 ${esc(r.date)}</p>
       <dl class="dd-dl">
         <dt>변경전</dt><dd>${esc(bLabel(r.fromCost, r.fromCode, r.from))}</dd>
@@ -3049,7 +3053,7 @@
       const undo = budgetLocal(form);
       closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; budgetMonth = form.month; render();
       call('apiSubmitBudget', form)
-        .then(data => { applyData(data); render(); toast(`${monthName(form.month)}분 ${data.newId || D.budget.requests[0].id} 신청 완료`); })
+        .then(data => { applyData(data); render(); toast(`${monthName(form.month)}분 신청 완료`); })
         .catch(e2 => { undo(); render(); fail(e2); });
     };
   }
@@ -3057,13 +3061,13 @@
   function cancelBudget(row, id) {
     const r = D.budget.requests.find(x => x.row === row);
     if (!r || r.pending) return toast('신청을 저장하는 중입니다. 잠시 후 다시 눌러 주세요.');
-    openModal(`<h3>${esc(id)} 신청을 취소할까요?</h3>
+    openModal(`<h3>이 신청을 취소할까요?</h3>
       <p class="sub">${esc(r.req)} · ${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
       <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" id="cxOk">신청 취소</button></div>`);
     $('#cxOk').onclick = () => {
       const undo = budgetLocal(r, true);
       closeModal(); render();
-      call('apiCancelBudget', row, id).then(data => { applyData(data); render(); toast(`${id} 신청을 취소했습니다.`); }).catch(e => { undo(); render(); fail(e); });
+      call('apiCancelBudget', row, id).then(data => { applyData(data); render(); toast('신청을 취소했습니다.'); }).catch(e => { undo(); render(); fail(e); });
     };
   }
 
