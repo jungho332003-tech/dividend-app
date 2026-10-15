@@ -2811,9 +2811,21 @@
     openModal(`<h3>휴가를 지울까요?</h3><p class="sub">${l ? esc(l.text) + ' · ' : ''}팀 캘린더의 일정도 함께 지워집니다.</p>
       <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="lDel">지우기</button></div>`);
     $('#lDel').onclick = () => {
-      $('#lDel').disabled = true;
-      call('apiDeleteLeave', id).then(data => { applyData(data); closeModal(); calCache = {}; calForget(); upcoming = null; render(); toast('지웠습니다.'); })
-        .catch(e => { closeModal(); fail(e); });
+      if (String(id).indexOf('tmp-') === 0) { closeModal(); toast('방금 등록한 휴가를 저장하는 중입니다. 잠시 후 지워 주세요.'); return; }
+      // 서버를 기다리지 않고 화면에서 먼저 지운다 (실패하면 되돌린다)
+      const before = { leaves: m.leaves, preLeaves: m.preLeaves };
+      const cal = JSON.stringify(calCache);
+      m.leaves = (m.leaves || []).filter(x => x.id !== id);
+      m.preLeaves = (m.preLeaves || []).filter(x => x.id !== id);
+      if (l) {
+        const title = `[${l.type}] ${D.me.name}`;
+        Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(e => !(e.kind === 'leave' && e.title === title && String(e.start).slice(0, 10) === l.start)); });
+      }
+      calForget(); upcoming = null;
+      closeModal(); render();
+      call('apiDeleteLeave', id)
+        .then(data => { applyData(data); if (page !== 'calendar') render(); toast('지웠습니다.'); })
+        .catch(e => { m.leaves = before.leaves; m.preLeaves = before.preLeaves; calCache = JSON.parse(cal); render(); fail(e); });
     };
   }
 
