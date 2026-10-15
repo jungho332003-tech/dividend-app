@@ -1330,15 +1330,21 @@ function apiCalendar(startIso, endIso, fresh) {
 }
 
 /**
- * 캘린더에 직접 넣은 휴가 일정을 주간보고에 반영 (팀 캘린더가 설정된 경우).
+ * 캘린더에 넣은/지운 휴가 일정을 주간보고에 반영.
  * 달력을 그린 뒤 화면이 따로 부른다 → 달력 표시를 늦추지 않는다. 매시간 자동 실행 때도 맞춘다.
  */
-function apiSyncLeaves(startIso, endIso) {
+function apiSyncLeaves() {
   const ctx = getContext();
-  requireMenu_(currentMember_(ctx.members), 'calendar');
-  if (!teamCalendarSet_(ctx)) return { changed: false };
-  const start = new Date(startIso), end = new Date(endIso);
-  const changed = syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(start, end), start, end);
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'calendar');
+  let changed;
+  if (teamCalendarSet_(ctx)) {
+    // 이번 주~다다음 주 (주간보고에 나오는 범위)를 읽어 맞춘다
+    const start = ctx.thisWeek.monday, end = addDays(ctx.afterWeek.monday, 7);
+    changed = syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(start, end), start, end);
+  } else {
+    changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
+  }
   if (!changed) return { changed: false };
   return { changed: true, members: cached_(CK.members(ctx), () => readMembers_(ctx)) };
 }
@@ -2083,6 +2089,31 @@ function syncLeaveEvents_(ctx, events, from, to) {
   } finally {
     lock.releaseLock();
   }
+  ctx._leaves = null;
+  try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
+  return true;
+}
+
+/**
+ * 팀 캘린더를 안 정했을 때: 웹앱에서 등록한 내 휴가는 내 기본 캘린더에 만들어진다.
+ * 그 일정을 내가 캘린더에서 지웠으면 [휴가]에서도 지운다. (남의 기본 캘린더는 볼 수 없으므로 본인 것만)
+ */
+function syncMyLeaves_(ctx, me) {
+  const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
+  if (!sh || !me.name) return false;
+  const lo = ctx.thisWeek.monday, hi = addDays(ctx.afterWeek.monday, 7);
+  const present = {};
+  CalendarApp.getDefaultCalendar().getEvents(lo, hi).forEach(e => { present[e.getId()] = true; });
+  const gone = [];
+  leaveRows_(sh).forEach((r, i) => {
+    const eid = String(r[LCOL.EVENT - 1] || '');
+    const s = r[LCOL.START - 1];
+    if (!eid || String(r[LCOL.NAME - 1]).trim() !== me.name || String(r[LCOL.SOURCE - 1]) === '캘린더'
+      || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y' || !(s instanceof Date) || s < lo || s >= hi) return;
+    if (!present[eid]) gone.push(i + 2);
+  });
+  if (!gone.length) return false;
+  gone.forEach(row => sh.getRange(row, LCOL.DELETED).setValue('Y'));
   ctx._leaves = null;
   try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
   return true;

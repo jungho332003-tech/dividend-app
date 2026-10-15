@@ -108,15 +108,21 @@ function apiCalendar(startIso, endIso, fresh) {
 }
 
 /**
- * 캘린더에 직접 넣은 휴가 일정을 주간보고에 반영 (팀 캘린더가 설정된 경우).
+ * 캘린더에 넣은/지운 휴가 일정을 주간보고에 반영.
  * 달력을 그린 뒤 화면이 따로 부른다 → 달력 표시를 늦추지 않는다. 매시간 자동 실행 때도 맞춘다.
  */
-function apiSyncLeaves(startIso, endIso) {
+function apiSyncLeaves() {
   const ctx = getContext();
-  requireMenu_(currentMember_(ctx.members), 'calendar');
-  if (!teamCalendarSet_(ctx)) return { changed: false };
-  const start = new Date(startIso), end = new Date(endIso);
-  const changed = syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(start, end), start, end);
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'calendar');
+  let changed;
+  if (teamCalendarSet_(ctx)) {
+    // 이번 주~다다음 주 (주간보고에 나오는 범위)를 읽어 맞춘다
+    const start = ctx.thisWeek.monday, end = addDays(ctx.afterWeek.monday, 7);
+    changed = syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(start, end), start, end);
+  } else {
+    changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
+  }
   if (!changed) return { changed: false };
   return { changed: true, members: cached_(CK.members(ctx), () => readMembers_(ctx)) };
 }

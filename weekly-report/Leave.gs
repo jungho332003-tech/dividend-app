@@ -231,6 +231,31 @@ function syncLeaveEvents_(ctx, events, from, to) {
   return true;
 }
 
+/**
+ * 팀 캘린더를 안 정했을 때: 웹앱에서 등록한 내 휴가는 내 기본 캘린더에 만들어진다.
+ * 그 일정을 내가 캘린더에서 지웠으면 [휴가]에서도 지운다. (남의 기본 캘린더는 볼 수 없으므로 본인 것만)
+ */
+function syncMyLeaves_(ctx, me) {
+  const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
+  if (!sh || !me.name) return false;
+  const lo = ctx.thisWeek.monday, hi = addDays(ctx.afterWeek.monday, 7);
+  const present = {};
+  CalendarApp.getDefaultCalendar().getEvents(lo, hi).forEach(e => { present[e.getId()] = true; });
+  const gone = [];
+  leaveRows_(sh).forEach((r, i) => {
+    const eid = String(r[LCOL.EVENT - 1] || '');
+    const s = r[LCOL.START - 1];
+    if (!eid || String(r[LCOL.NAME - 1]).trim() !== me.name || String(r[LCOL.SOURCE - 1]) === '캘린더'
+      || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y' || !(s instanceof Date) || s < lo || s >= hi) return;
+    if (!present[eid]) gone.push(i + 2);
+  });
+  if (!gone.length) return false;
+  gone.forEach(row => sh.getRange(row, LCOL.DELETED).setValue('Y'));
+  ctx._leaves = null;
+  try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
+  return true;
+}
+
 /** 매시간 자동 실행: 이번 주~다다음 주 캘린더를 읽어 맞춘다 */
 function syncLeavesFromCalendar_(ctx) {
   if (!teamCalendarSet_(ctx)) return false;

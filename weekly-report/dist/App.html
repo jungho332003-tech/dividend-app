@@ -1471,13 +1471,14 @@
         calCache[k] = res;
       })
       .catch(e => { if (!calCache[k] || calCache[k].error || !calCache[k].events.length) calCache[k] = { error: e.message || String(e), events: [] }; })
-      .then(() => { calLoading[k] = false; redraw(); syncLeaves(k, r); });
+      .then(() => { calLoading[k] = false; redraw(); syncLeaves(); });
   }
-  /** 캘린더에 직접 넣은 휴가 → 주간보고 반영. 달력을 그린 뒤 뒤에서 (달마다 한 번) */
-  function syncLeaves(k, r) {
-    if (!D.teamCalendar || calSynced[k]) return;
-    calSynced[k] = true;
-    call('apiSyncLeaves', r.start.toISOString(), r.end.toISOString())
+  /** 캘린더에서 넣거나 지운 휴가 → 주간보고·대시보드 반영. 앱을 열 때와 일정 화면을 열 때 뒤에서 */
+  function syncLeaves() {
+    if (calSynced.busy || Date.now() - (calSynced.at || 0) < 60000) return;
+    calSynced.busy = true;
+    call('apiSyncLeaves')
+      .then(x => { calSynced.at = Date.now(); calSynced.busy = false; return x; }, e => { calSynced.busy = false; throw e; })
       .then(x => { if (x && x.changed) { applyData(x); if (page === 'dash' || (page === 'weekly' && weeklyTab !== 'mine' && weeklyTab !== 'pre')) render(); } })
       .catch(() => { /* 매시간 자동 실행 때 다시 맞춘다 */ });
   }
