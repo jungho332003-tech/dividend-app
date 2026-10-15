@@ -2392,9 +2392,11 @@ function getMenuAccess_() {
 /** 접속자가 볼 수 있는 메뉴 키 목록 */
 function allowedMenus_(me) {
   if (me.isAdmin) return MENUS.map(m => m.key).concat('admin');
-  if (!me.role) return [];
-  const access = getMenuAccess_()[me.role] || {};
-  return MENUS.map(m => m.key).filter(k => access[k] !== false);
+  const access = me.role ? getMenuAccess_()[me.role] || {} : null;
+  const keys = access ? MENUS.map(m => m.key).filter(k => access[k] !== false) : [];
+  // 예산 담당자는 역할 메뉴 권한과 상관없이 예산전용 메뉴를 쓴다 (관리 메뉴·다른 권한은 늘지 않음)
+  if (me.budgetManager && keys.indexOf('budget') < 0) keys.push('budget');
+  return keys;
 }
 
 function requireMenu_(me, key) {
@@ -2922,7 +2924,7 @@ function currentMember_(members) {
     writer: !!(m && m.write),
     isLeader: !!(m && m.role === '팀장'),
     isAdmin: isAdmin,
-    // 예산담당자: 예산전용 [월별 정리] 탭을 본다
+    // 예산담당자: 예산 메뉴 + [월별 정리]·[예산 설정] 탭 (관리 메뉴·스프레드시트 바로가기는 관리자만)
     budgetManager: !!(m && m.budget),
   };
   me.menus = allowedMenus_(me);

@@ -194,7 +194,7 @@ function currentMember_(members) {
     writer: !!(m && m.write),
     isLeader: !!(m && m.role === '팀장'),
     isAdmin: isAdmin,
-    // 예산담당자: 예산전용 [월별 정리] 탭을 본다
+    // 예산담당자: 예산 메뉴 + [월별 정리]·[예산 설정] 탭 (관리 메뉴·스프레드시트 바로가기는 관리자만)
     budgetManager: !!(m && m.budget),
   };
   me.menus = allowedMenus_(me);
