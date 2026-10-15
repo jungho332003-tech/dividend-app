@@ -528,14 +528,23 @@
   .memo-row:hover { background: var(--panel-2); }
   .memo-row b { font-size: 13px; white-space: nowrap; }
   .memo-row span { white-space: pre-line; font-size: 13px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  table.report.minutes-head { min-width: 0; width: 100%; margin-bottom: 12px; }
-  .minutes-head th { width: 110px; }
-  .m-vision { white-space: pre-line; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; line-height: 1.6; font-size: 13.5px; }
-  table.report.minutes { min-width: 760px; width: 100%; table-layout: fixed; }
+  /* 팀 주간보고 | 회의록 나란히 (좁으면 위아래로) */
+  .report-split { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(400px, 1fr); gap: 16px; align-items: start; }
+  .report-split .report.team { min-width: 700px; font-size: 13.5px; }
+  .report-split .report.team th, .report-split .report.team td { padding: 8px 8px; }
+  @media (max-width: 1450px) { .report-split { grid-template-columns: minmax(0, 1fr); } }
+  .min-top { flex-wrap: wrap; gap: 8px; }
+  .min-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .min-actions select { width: auto; padding: 5px 8px; font-size: 12.5px; }
+  .min-meta { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: right; }
+  table.report.minutes-head { min-width: 0; width: 100%; margin-bottom: 10px; font-size: 12.5px; }
+  .m-vision { white-space: pre-line; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; line-height: 1.6; font-size: 12.5px; }
+  table.report.minutes { min-width: 0; width: 100%; table-layout: fixed; font-size: 12.5px; }
+  .report.minutes th, .report.minutes td { padding: 6px 6px; }
   .report.minutes td { word-break: keep-all; overflow-wrap: anywhere; }
   .report.minutes td.m-cat, .report.minutes td.m-sub { font-weight: 700; background: var(--panel-2); }
   .report.minutes td.m-content { white-space: pre-line; }
-  .report.minutes td.m-due { font-weight: 600; white-space: nowrap; }
+  .report.minutes td.m-due { font-weight: 600; }
   .report.minutes tr.m-done td:not(.m-cat):not(.m-sub) { background: var(--panel-2); color: var(--muted); }
   .m-st { font-weight: 700; }
   .m-st.ing { color: var(--wk-next); }
@@ -1066,7 +1075,7 @@
 
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
-    weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', minutes: '회의록', hr: '인사현황' })[weeklyTab],
+    weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
     budget: () => (budgetTab === 'copy' && D.me.budgetManager ? '월별 정리' : budgetTab === 'setup' && canBudgetSetup() ? '예산 설정' : '신청 내역'),
     admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', settings: '설정', guide: '접속 안내' })[adminTab],
   };
@@ -1204,10 +1213,9 @@
         <button role="tab" aria-selected="${weeklyTab === 'mine'}" onclick="setTab('weekly','mine')">내 주간업무 ${mine ? (mine.done ? '<span class="chip ok">완료</span>' : '<span class="chip no">작성 전</span>') : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'pre'}" onclick="setTab('weekly','pre')">다음 주 미리 쓰기 ${mine && mine.pre && mine.pre.exists ? '<span class="chip ok">✓</span>' : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'team'}" onclick="setTab('weekly','team')">팀 주간보고 <span class="chip plain">${s.done}/${s.total}</span></button>
-        <button role="tab" aria-selected="${weeklyTab === 'minutes'}" onclick="setTab('weekly','minutes')">회의록</button>
         <button role="tab" aria-selected="${weeklyTab === 'hr'}" onclick="setTab('weekly','hr')">인사현황 ${hrCount() ? `<span class="chip plain">${hrCount()}</span>` : ''}</button>
       </div>`;
-      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : weeklyTab === 'hr' ? VIEWS.hr() : weeklyTab === 'minutes' ? VIEWS.minutes() : VIEWS.report());
+      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : weeklyTab === 'hr' ? VIEWS.hr() : VIEWS.report());
     },
 
     budget() {
@@ -1307,6 +1315,7 @@
     },
 
     report() {
+      if (minDraft) return minEditorHtml(); // 회의록 작성·수정은 넓게
       const s = stats();
       let rows = '';
       D.members.forEach((m, mi) => {
@@ -1333,6 +1342,7 @@
             <button class="btn primary" onclick="openMeeting()">${ic('users', 'sm')}회의 모드</button>
           </div>
         </div>
+        <div class="report-split">
         <section class="panel">
           <p class="report-title">■ ${esc(D.week.title)}</p>
           <p class="report-note">${D.me.isLeader ? '업무 클릭: 굵게 표시/해제 · 코멘트 칸 클릭: 작성' : '굵은 글씨: 팀장 강조 업무'}</p>
@@ -1352,7 +1362,9 @@
             <div class="mcards">${hrCards(false)}</div>
             <div class="table-wrap desk">${hrTableHtml(false)}</div>
           </div>
-        </section>`;
+        </section>
+        ${minPanelHtml()}
+        </div>`;
     },
 
     hr() {
@@ -1522,20 +1534,20 @@
   }
   const minStatusCls = s => s === '완료' ? 'done' : s === '진행중' ? 'ing' : s === '진행예정' ? 'plan' : s === '보류' ? 'hold' : '';
 
-  VIEWS.minutes = function () {
-    if (minDraft) return minEditorHtml();
+  /** 팀 주간보고 오른쪽 회의록 패널 */
+  function minPanelHtml() {
     const m = minCur();
     const opts = minList().map(x => `<option value="${esc(x.id)}" ${m && x.id === m.id ? 'selected' : ''}>${esc(minDateText(x.date, ''))}${x.place ? ' · ' + esc(x.place) : ''}</option>`).join('');
     const head = `
-      <div class="head">
-        <div><h1>회의록</h1>${m ? `<p>마지막 수정 ${esc(m.editor)} · ${esc(m.updated)}</p>` : ''}</div>
-        <div class="head-actions">
-          ${minList().length ? `<select class="field-in" style="width:auto" onchange="minSel=this.value;render()" aria-label="회의 고르기">${opts}</select>` : ''}
-          ${m ? `<button class="btn" onclick="minEdit(false)">${ic('pencil', 'sm')}수정</button>` : ''}
-          <button class="btn primary" onclick="minEdit(true)">${ic('plus', 'sm')}새 회의록</button>
+      <div class="panel-head min-top">
+        <h2>■ 회의록</h2>
+        <div class="min-actions">
+          ${minList().length > 1 ? `<select class="field-in" onchange="minSel=this.value;render()" aria-label="회의 고르기">${opts}</select>` : ''}
+          ${m ? `<button class="btn small" onclick="minEdit(false)">${ic('pencil', 'sm')}수정</button>` : ''}
+          <button class="btn small primary" onclick="minEdit(true)">${ic('plus', 'sm')}새 회의록</button>
         </div>
       </div>`;
-    if (!m) return head + '<div class="notice">아직 회의록이 없습니다. [새 회의록]을 눌러 시작하세요.</div>';
+    if (!m) return `<section class="panel min-side">${head}<div class="empty">아직 회의록이 없습니다. [새 회의록]을 눌러 시작하세요.</div></section>`;
     const sp = minSpans(m.items);
     // 구분 안에 세부가 하나도 없으면 구분 칸을 두 칸 너비로
     const noSub = [];
@@ -1546,25 +1558,23 @@
         <td class="m-content">${esc(x.content)}</td><td>${esc(x.owner)}</td><td class="m-due">${esc(x.due || '-')}</td>
         <td><span class="m-st ${minStatusCls(x.status)}">${esc(x.status)}</span></td></tr>`).join('')
       || '<tr><td colspan="6" class="empty">항목이 없습니다.</td></tr>';
-    return head + `
-      <section class="panel">
-        <div class="table-wrap">
-          <table class="report minutes-head">
-            <colgroup><col style="width:110px"><col><col style="width:110px"><col></colgroup>
-            <tr><th>일 시</th><td>${esc(minDateText(m.date, m.time))}</td><th>장 소</th><td>${esc(m.place)}</td></tr>
-            <tr><th>참석자</th><td colspan="3">${esc(m.attendees)}</td></tr>
-          </table>
-        </div>
+    return `<section class="panel min-side">${head}
+        <table class="report minutes-head">
+          <colgroup><col style="width:64px"><col><col style="width:64px"><col></colgroup>
+          <tr><th>일 시</th><td>${esc(minDateText(m.date, m.time))}</td><th>장 소</th><td>${esc(m.place)}</td></tr>
+          <tr><th>참석자</th><td colspan="3">${esc(m.attendees)}</td></tr>
+        </table>
         ${m.vision ? `<div class="m-vision">${esc(m.vision)}</div>` : ''}
         <div class="table-wrap">
           <table class="report minutes">
-            <colgroup><col style="width:120px"><col style="width:120px"><col><col style="width:100px"><col style="width:120px"><col style="width:100px"></colgroup>
+            <colgroup><col style="width:17%"><col style="width:15%"><col><col style="width:11%"><col style="width:15%"><col style="width:13%"></colgroup>
             <thead><tr><th colspan="2">구분</th><th>내용</th><th>담당</th><th>기한</th><th>진행상태</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
+        <p class="min-meta">마지막 수정 ${esc(m.editor)} · ${esc(m.updated)}</p>
       </section>`;
-  };
+  }
 
   /** fresh=true: 새 회의록 (가장 최근 회의록을 이어받고 완료 항목은 뺀다) */
   function minEdit(fresh) {
@@ -1654,7 +1664,7 @@
     D.minutes = [local].concat((D.minutes || []).filter(x => x.id !== local.id)).sort((a, b) => b.date.localeCompare(a.date));
     minSel = local.id; minDraft = null; render();
     call('apiSaveMinutes', draft)
-      .then(data => { applyData(data); minSel = data.savedId; if (page === 'weekly' && weeklyTab === 'minutes' && !minDraft) render(); toast('회의록을 저장했습니다.'); })
+      .then(data => { applyData(data); minSel = data.savedId; if (page === 'weekly' && weeklyTab === 'team' && !minDraft) render(); toast('회의록을 저장했습니다.'); })
       .catch(e => { D.minutes = JSON.parse(before); minDraft = draft; render(); fail(e); });
   }
   function minDelete() {
