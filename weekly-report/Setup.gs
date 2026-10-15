@@ -128,9 +128,12 @@ function applyProtections_(ctx) {
     const sh = ss.getSheetByName(name);
     if (sh) protectSheet_(sh, admins);
   });
-  // 예산과목: 관리자 + 예산 담당자 (웹앱 [예산 설정]에서 고친다)
-  const accounts = ss.getSheetByName(BUDGET.ACCOUNTS);
-  if (accounts) protectSheet_(accounts, admins.concat(ctx.members.filter(m => m.budget && m.email).map(m => m.email)));
+  // 예산과목·코스트센터·계정과목: 관리자 + 예산 담당자 (웹앱 [예산 설정]에서 고친다)
+  const budgetEditors = admins.concat(ctx.members.filter(m => m.budget && m.email).map(m => m.email));
+  [BUDGET.ACCOUNTS, BUDGET.COSTS, BUDGET.ACCT_LIST].forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (sh) protectSheet_(sh, budgetEditors);
+  });
 
   // 주간보고: 관리자만, 단 팀장 코멘트 칸은 팀장 편집 가능
   const report = ss.getSheetByName(SHEET.REPORT) || ss.insertSheet(SHEET.REPORT, 0);

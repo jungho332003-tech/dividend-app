@@ -293,6 +293,7 @@
   .c-move .tag.out { background: var(--panel-2); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .c-move .tag.in { background: var(--panel-2); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .t.acct-t td { padding: 6px 8px; vertical-align: middle; }
+  .grid-2.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .acct-t .acct-in { padding: 6px 9px; width: 100%; min-width: 0; }
   fieldset.b-side { border: 1px solid var(--line); border-radius: 10px; padding: 6px 14px 12px; margin: 0; min-width: 0; }
   fieldset.b-side legend { padding: 0 6px; }
@@ -1340,42 +1341,52 @@
     },
 
     /** 담당자용: 한 달 신청 내역의 코스트센터·계정코드를 하나씩 눌러 복사 (ERP 입력 등) */
-    /** 예산 설정: 코스트·계정코드·계정과목·편성액 (관리자·예산 담당자) */
+    /** 예산 설정: 코스트센터 목록 · 계정과목 목록 · 조합별 편성 예산 (관리자·예산 담당자) */
     budgetSetup() {
-      if (!acctDraft) acctDraft = D.budget.accounts.map(a => ({ cost: a.cost, code: a.code, name: a.name, budget: a.budget }));
-      const live = (a) => D.budget.accounts.find(x => x.cost === a.cost.trim() && x.name === a.name.trim());
-      const inp = (i, f, v, ph, extra) => `<input class="field-in acct-in" data-i="${i}" data-f="${f}" value="${esc(v)}" placeholder="${ph}" ${extra || ''} aria-label="${ph}">`;
-      const rows = acctDraft.map((a, i) => {
-        const x = live(a);
-        return `<tr>
-          <td>${inp(i, 'cost', a.cost, '코스트', 'inputmode="numeric"')}</td>
-          <td>${inp(i, 'code', a.code, '계정코드', 'inputmode="numeric"')}</td>
-          <td>${inp(i, 'name', a.name, '계정과목')}</td>
-          <td>${inp(i, 'budget', a.budget ? won(a.budget) : '', '편성액', 'inputmode="numeric" style="text-align:right"')}</td>
-          <td class="num ph">${x ? won(x.inAmt) : '-'}</td><td class="num ph">${x ? won(x.outAmt) : '-'}</td>
-          <td class="num strong">${x ? won(x.current) : '-'}</td>
-          <td class="c"><button class="icon-btn" onclick="acctDel(${i})" aria-label="${i + 1}번째 줄 지우기" title="지우기">${ic('x', 'sm')}</button></td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="8" class="empty">등록된 예산이 없습니다. [줄 추가]를 누르세요.</td></tr>';
-      const sum = acctDraft.reduce((t, a) => t + (Number(a.budget) || 0), 0);
+      if (!acctDraft) acctDraft = acctDraftFrom(D.budget);
+      const d = acctDraft;
+      const inp = (l, i, f, v, ph, extra) => `<input class="field-in acct-in" data-l="${l}" data-i="${i}" data-f="${f}" value="${esc(v)}" placeholder="${ph}" ${extra || ''} aria-label="${ph}">`;
+      const del = (l, i, what) => `<td class="c"><button class="icon-btn" onclick="acctDel('${l}', ${i})" aria-label="${what} 지우기" title="지우기">${ic('x', 'sm')}</button></td>`;
+      const costRows = d.costs.map((c, i) => `<tr><td>${inp('costs', i, 'code', c.code, '코드', 'inputmode="numeric"')}</td><td>${inp('costs', i, 'name', c.name, '이름 (선택)')}</td>${del('costs', i, '코스트센터')}</tr>`).join('')
+        || '<tr><td colspan="3" class="empty">코스트센터가 없습니다.</td></tr>';
+      const acctRows = d.accts.map((a, i) => `<tr><td>${inp('accts', i, 'code', a.code, '계정코드', 'inputmode="numeric"')}</td><td>${inp('accts', i, 'name', a.name, '계정과목')}</td>${del('accts', i, '계정과목')}</tr>`).join('')
+        || '<tr><td colspan="3" class="empty">계정과목이 없습니다.</td></tr>';
+      const sum = d.rows.reduce((t, r) => t + (Number(r.budget) || 0), 0);
       return `
         <div class="head">
-          <div><h1>예산 설정</h1><p>코스트·계정과목 한 쌍마다 한 줄 · 전입·전출·현재예산은 신청 내역으로 자동 계산</p></div>
+          <div><h1>예산 설정</h1><p>코스트센터·계정과목 목록을 따로 관리하고, 편성 예산은 두 목록에서 골라 조합별로 입력</p></div>
           <div class="head-actions">
             <button class="btn" onclick="acctReset()">되돌리기</button>
             <button class="btn primary" id="acctSave" onclick="acctSave()">저장</button>
           </div>
         </div>
+        <div class="grid-2 even">
+          <section class="panel">
+            <div class="panel-head"><h2>코스트센터 <small class="ph">${d.costs.length}개</small></h2></div>
+            <div class="table-wrap"><table class="t acct-t">
+              <colgroup><col style="width:38%"><col><col style="width:48px"></colgroup>
+              <thead><tr><th>코드</th><th>이름</th><th></th></tr></thead><tbody>${costRows}</tbody></table></div>
+            <button class="btn small add" onclick="acctAdd('costs')" style="margin-top:12px">${ic('plus', 'sm')}코스트센터 추가</button>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>계정과목 <small class="ph">${d.accts.length}개</small></h2></div>
+            <div class="table-wrap"><table class="t acct-t">
+              <colgroup><col style="width:38%"><col><col style="width:48px"></colgroup>
+              <thead><tr><th>계정코드</th><th>계정과목</th><th></th></tr></thead><tbody>${acctRows}</tbody></table></div>
+            <button class="btn small add" onclick="acctAdd('accts')" style="margin-top:12px">${ic('plus', 'sm')}계정과목 추가</button>
+          </section>
+        </div>
         <section class="panel">
+          <div class="panel-head"><h2>편성 예산 <small class="ph">(코스트센터 × 계정과목)</small></h2></div>
           <div class="table-wrap">
             <table class="t acct-t">
-              <colgroup><col style="width:120px"><col style="width:120px"><col><col style="width:160px"><col style="width:120px"><col style="width:120px"><col style="width:130px"><col style="width:48px"></colgroup>
-              <thead><tr><th>코스트</th><th>계정코드</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th><th></th></tr></thead>
-              <tbody>${rows}</tbody>
-              <tfoot><tr><td colspan="3" class="strong">합계 ${acctDraft.length}줄</td><td class="num strong">${won(sum)}</td><td colspan="4"></td></tr></tfoot>
+              <colgroup><col style="width:22%"><col style="width:26%"><col style="width:150px"><col style="width:110px"><col style="width:110px"><col style="width:130px"><col style="width:48px"></colgroup>
+              <thead><tr><th>코스트센터</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th><th></th></tr></thead>
+              <tbody id="acctRows">${acctRowsHtml()}</tbody>
+              <tfoot><tr><td colspan="2" class="strong">합계 ${d.rows.length}줄</td><td class="num strong" id="acctSum">${won(sum)}</td><td colspan="4"></td></tr></tfoot>
             </table>
           </div>
-          <button class="btn small add" onclick="acctAdd()" style="margin-top:12px">${ic('plus', 'sm')}줄 추가</button>
+          <button class="btn small add" onclick="acctAdd('rows')" style="margin-top:12px">${ic('plus', 'sm')}편성 예산 추가</button>
         </section>`;
     },
 
@@ -1384,7 +1395,7 @@
       const list = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm).slice().reverse(); // 신청 순서대로
       const doneN = list.filter(r => copied(r.id + ':done')).length;
       const cell = (r, field, value, cls) => value
-        ? `<td class="${cls || ''}"><button class="cp ${copied(r.id + ':' + field) ? 'done' : ''}" onclick="copyCell(this, '${esc(r.id)}', '${field}')" data-v="${esc(value)}" title="눌러서 복사">${esc(value)}${ic('copy', 'sm')}</button></td>`
+        ? `<td class="${cls || ''}"><button class="cp ${copied(r.id + ':' + field) ? 'done' : ''}" onclick="copyCell(this, '${esc(r.id)}', '${field}')" data-v="${esc(value)}" title="눌러서 복사">${esc(value)}</button></td>`
         : '<td class="ph">-</td>';
       const rows = list.map((r, i) => `
         <tr class="${copied(r.id + ':done') ? 'row-done' : ''}">
@@ -2918,7 +2929,7 @@
   function budgetCosts() { return D.budget.accounts.map(a => a.cost || '').filter((c, i, all) => all.indexOf(c) === i); }
 
   function openBudgetForm() {
-    const costOpts = budgetCosts().map(c => `<option value="${esc(c)}">${esc(c || '(코스트 없음)')}</option>`).join('');
+    const costOpts = budgetCosts().map(c => `<option value="${esc(c)}">${esc(c ? costText((D.budget.costs || []).find(x => x.code === c) || { code: c }) : '(코스트 없음)')}</option>`).join('');
     const reqField = D.me.name
       ? `<div class="fld"><label>신청자</label><input class="field-in" value="${esc(D.me.name)}" disabled></div>`
       : `<div class="fld"><label for="bReq">신청자</label><select class="field-in" id="bReq"><option value="">선택</option>${D.members.map(m => `<option>${esc(m.name)}</option>`).join('')}</select></div>`;
@@ -2998,31 +3009,86 @@
   /* ================= 기타 동작 ================= */
   function go(p) { page = p; render(); window.scrollTo(0, 0); }
   /* ---------- 예산 설정 ---------- */
-  let acctDraft = null;
+  // acctDraft = { costs: [{_id, code, name}], accts: [{_id, code, name}], rows: [{cost, acct: 계정 _id, budget}] }
+  let acctDraft = null, acctSeq = 0;
   function canBudgetSetup() { return !!(D.me.isAdmin || D.me.budgetManager); }
-  document.addEventListener('input', e => {
-    const el = e.target;
+  function acctDraftFrom(b) {
+    const nid = () => 'a' + (++acctSeq);
+    const costs = (b.costs || []).map(c => ({ _id: nid(), code: c.code, name: c.name }));
+    const accts = (b.acctList || []).map(a => ({ _id: nid(), code: a.code, name: a.name }));
+    const rows = (b.accounts || []).map(x => {
+      if (x.cost && !costs.some(c => c.code === x.cost)) costs.push({ _id: nid(), code: x.cost, name: '' });
+      let a = accts.find(y => y.code === x.code && y.name === x.name) || accts.find(y => y.name === x.name);
+      if (!a) { a = { _id: nid(), code: x.code, name: x.name }; accts.push(a); }
+      return { cost: x.cost, acct: a._id, budget: x.budget };
+    });
+    return { costs, accts, rows };
+  }
+  const costText = c => [c.code, c.name].filter(Boolean).join(' ');
+  const acctText = a => [a.code, a.name].filter(Boolean).join(' ');
+  function acctRowsHtml() {
+    const d = acctDraft;
+    const live = (r) => { const a = d.accts.find(x => x._id === r.acct); return a && D.budget.accounts.find(x => x.cost === r.cost && x.name === a.name); };
+    return d.rows.map((r, i) => {
+      const x = live(r);
+      const costSel = `<select class="field-in acct-in" data-l="rows" data-i="${i}" data-f="cost" aria-label="코스트센터"><option value="">선택</option>${d.costs.filter(c => c.code).map(c => `<option value="${esc(c.code)}" ${c.code === r.cost ? 'selected' : ''}>${esc(costText(c))}</option>`).join('')}</select>`;
+      const acctSel = `<select class="field-in acct-in" data-l="rows" data-i="${i}" data-f="acct" aria-label="계정과목"><option value="">선택</option>${d.accts.filter(a => a.name).map(a => `<option value="${a._id}" ${a._id === r.acct ? 'selected' : ''}>${esc(acctText(a))}</option>`).join('')}</select>`;
+      return `<tr><td>${costSel}</td><td>${acctSel}</td>
+        <td><input class="field-in acct-in" data-l="rows" data-i="${i}" data-f="budget" value="${r.budget ? won(r.budget) : ''}" placeholder="편성액" inputmode="numeric" style="text-align:right" aria-label="편성액"></td>
+        <td class="num ph">${x ? won(x.inAmt) : '-'}</td><td class="num ph">${x ? won(x.outAmt) : '-'}</td><td class="num strong">${x ? won(x.current) : '-'}</td>
+        <td class="c"><button class="icon-btn" onclick="acctDel('rows', ${i})" aria-label="편성 예산 지우기" title="지우기">${ic('x', 'sm')}</button></td></tr>`;
+    }).join('') || '<tr><td colspan="7" class="empty">편성 예산이 없습니다. [편성 예산 추가]를 누르세요.</td></tr>';
+  }
+  function acctEdit(el) {
     if (!el.classList || !el.classList.contains('acct-in') || !acctDraft) return;
-    const a = acctDraft[Number(el.dataset.i)];
-    if (!a) return;
+    const item = acctDraft[el.dataset.l][Number(el.dataset.i)];
+    if (!item) return;
     if (el.dataset.f === 'budget') {
       const n = Number(el.value.replace(/[^\d]/g, '')) || 0;
-      a.budget = n;
+      item.budget = n;
       el.value = n ? won(n) : '';
-    } else a[el.dataset.f] = el.value;
-  });
-  function acctAdd() {
-    const last = acctDraft[acctDraft.length - 1];
-    acctDraft.push({ cost: last ? last.cost : '', code: '', name: '', budget: 0 }); // 코스트는 윗줄과 같게 시작
-    render();
-    const ins = document.querySelectorAll(`.acct-in[data-i="${acctDraft.length - 1}"]`);
-    if (ins[1]) ins[1].focus();
+      const t = $('#acctSum'); if (t) t.textContent = won(acctDraft.rows.reduce((s2, r) => s2 + (Number(r.budget) || 0), 0));
+      return;
+    }
+    // 코스트 코드를 바꾸면 그 코스트를 쓰던 편성 예산도 같이 바꾼다
+    if (el.dataset.l === 'costs' && el.dataset.f === 'code') acctDraft.rows.forEach(r => { if (r.cost === item.code) r.cost = el.value.trim(); });
+    item[el.dataset.f] = el.dataset.l === 'rows' ? el.value : el.value;
   }
-  function acctDel(i) { acctDraft.splice(i, 1); render(); }
+  document.addEventListener('input', e => { if (e.target.tagName === 'INPUT') acctEdit(e.target); });
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (!el.classList || !el.classList.contains('acct-in')) return;
+    if (el.tagName === 'SELECT') acctEdit(el);
+    // 목록을 고치면 편성 예산의 선택지를 다시 그린다 (입력 중인 칸은 그대로)
+    if (el.dataset.l !== 'rows') { const tb = $('#acctRows'); if (tb) tb.innerHTML = acctRowsHtml(); }
+  });
+  function acctAdd(l) {
+    const d = acctDraft;
+    if (l === 'rows') {
+      const last = d.rows[d.rows.length - 1];
+      d.rows.push({ cost: last ? last.cost : '', acct: '', budget: 0 }); // 코스트는 윗줄과 같게 시작
+    } else d[l].push({ _id: 'a' + (++acctSeq), code: '', name: '' });
+    render();
+    const ins = document.querySelectorAll(`.acct-in[data-l="${l}"][data-i="${d[l].length - 1}"]`);
+    if (ins[l === 'rows' ? 1 : 0]) ins[l === 'rows' ? 1 : 0].focus();
+  }
+  function acctDel(l, i) {
+    const d = acctDraft, item = d[l][i];
+    if (l === 'costs' && item.code && d.rows.some(r => r.cost === item.code)) return toast(`편성 예산에서 ${item.code} 코스트를 먼저 지우거나 바꿔 주세요.`);
+    if (l === 'accts' && d.rows.some(r => r.acct === item._id)) return toast(`편성 예산에서 ${acctText(item)}을(를) 먼저 지우거나 바꿔 주세요.`);
+    d[l].splice(i, 1);
+    render();
+  }
   function acctReset() { acctDraft = null; render(); }
   function acctSave(force) {
+    const d = acctDraft;
+    const payload = {
+      costs: d.costs.map(c => ({ code: c.code, name: c.name })),
+      accts: d.accts.map(a => ({ code: a.code, name: a.name })),
+      rows: d.rows.map(r => { const a = d.accts.find(x => x._id === r.acct) || {}; return { cost: r.cost, code: a.code || '', name: a.name || '', budget: r.budget }; }),
+    };
     const btn = $('#acctSave'); if (btn) btn.disabled = true;
-    call('apiSaveAccounts', acctDraft, !!force).then(res => {
+    call('apiSaveAccounts', payload, !!force).then(res => {
       if (res && res.needConfirm) {
         if (btn) btn.disabled = false;
         openModal(`<h3>신청 내역이 있는 예산이 빠집니다</h3>

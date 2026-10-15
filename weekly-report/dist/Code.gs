@@ -414,9 +414,12 @@ function applyProtections_(ctx) {
     const sh = ss.getSheetByName(name);
     if (sh) protectSheet_(sh, admins);
   });
-  // 예산과목: 관리자 + 예산 담당자 (웹앱 [예산 설정]에서 고친다)
-  const accounts = ss.getSheetByName(BUDGET.ACCOUNTS);
-  if (accounts) protectSheet_(accounts, admins.concat(ctx.members.filter(m => m.budget && m.email).map(m => m.email)));
+  // 예산과목·코스트센터·계정과목: 관리자 + 예산 담당자 (웹앱 [예산 설정]에서 고친다)
+  const budgetEditors = admins.concat(ctx.members.filter(m => m.budget && m.email).map(m => m.email));
+  [BUDGET.ACCOUNTS, BUDGET.COSTS, BUDGET.ACCT_LIST].forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (sh) protectSheet_(sh, budgetEditors);
+  });
 
   // 주간보고: 관리자만, 단 팀장 코멘트 칸은 팀장 편집 가능
   const report = ss.getSheetByName(SHEET.REPORT) || ss.insertSheet(SHEET.REPORT, 0);
@@ -938,7 +941,9 @@ function setupTriggers() {
 /**
  * 예산전용 신청 (결재 없이 신청 내역만 기록)
  *
- * [예산과목]  코스트 | 계정코드 | 계정과목 | 편성액 | 전입 | 전출 | 현재예산
+ * [코스트센터] 코드 | 이름          ← 코스트센터 목록
+ * [계정과목]   계정코드 | 계정과목  ← 계정 목록
+ * [예산과목]  코스트 | 계정코드 | 계정과목 | 편성액 | 전입 | 전출 | 현재예산   ← 코스트 × 계정 조합별 예산
  * [예산전용]  신청번호 | 신청일시 | 신청자 | 변경전 코스트 | 변경전 계정코드 | 변경전 계정과목
  *             | 변경후 코스트 | 변경후 계정코드 | 변경후 계정과목 | 금액 | 사유 | 취소(Y) | 적용월
  *
@@ -951,6 +956,8 @@ function setupTriggers() {
 const BUDGET = {
   SHEET: '예산전용',
   ACCOUNTS: '예산과목',
+  COSTS: '코스트센터',   // 코드 | 이름
+  ACCT_LIST: '계정과목', // 계정코드 | 계정과목
   ACCOUNT_ROWS: 100,
 };
 
@@ -1132,23 +1139,83 @@ function budgetLabel_(cost, code, account) {
   return cost ? `${cost} / ${acc}` : acc;
 }
 
+/* ---------- 코스트센터·계정과목 목록 ---------- */
+
+/** [코스트센터]·[계정과목] 시트 목록. 시트가 아직 없으면 [예산과목]에 쓰인 것으로 만든다 (읽기만). */
+function readBudgetLists_(ss) {
+  const read = name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return null;
+    return sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues()
+      .map(r => ({ code: String(r[0]).trim(), name: String(r[1]).trim() }))
+      .filter(x => x.code || x.name);
+  };
+  const accounts = getAccounts_();
+  const uniq = (list, key) => list.filter((x, i, all) => all.findIndex(y => key(y) === key(x)) === i);
+  return {
+    costs: read(BUDGET.COSTS) || uniq(accounts.filter(a => a.cost).map(a => ({ code: a.cost, name: '' })), x => x.code),
+    acctList: read(BUDGET.ACCT_LIST) || uniq(accounts.map(a => ({ code: a.code, name: a.name })), x => x.code + '|' + x.name),
+  };
+}
+
+function writeBudgetList_(ss, name, header, rows) {
+  const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+  if (sh.getLastRow() < 1 || String(sh.getRange(1, 1).getValue()) !== header[0]) {
+    sh.getRange(1, 1, 1, 2).setValues([header]);
+    styleHeader_(sh.getRange(1, 1, 1, 2));
+    sh.setColumnWidth(1, 110).setColumnWidth(2, 180);
+    sh.setFrozenRows(1);
+  }
+  const n = Math.max(sh.getLastRow() - 1, rows.length, 1);
+  if (sh.getMaxRows() < n + 1) sh.insertRowsAfter(sh.getMaxRows(), n + 1 - sh.getMaxRows());
+  sh.getRange(2, 1, n, 2).setNumberFormat('@').clearContent(); // 0으로 시작하는 코드도 그대로
+  if (rows.length) sh.getRange(2, 1, rows.length, 2).setValues(rows);
+}
+
 /**
- * 웹앱 [예산 설정]: 코스트·계정코드·계정과목·편성액 목록을 통째로 저장한다 (관리자·예산 담당자).
- * list: [{ cost, code, name, budget }]. 전입·전출·현재예산은 시트 수식이 계산한다.
- * 신청 내역이 있는 코스트·계정과목을 빼거나 이름을 바꾸면 그 신청이 예산에 안 잡히므로, force 없이는 막고 알려준다.
+ * 웹앱 [예산 설정] 저장 (관리자·예산 담당자).
+ * data: { costs: [{code, name}], accts: [{code, name}], rows: [{cost, code, name, budget}] }
+ *  - costs → [코스트센터], accts → [계정과목], rows(코스트 × 계정 조합별 편성액) → [예산과목] A:D
+ *  - 전입·전출·현재예산은 시트 수식이 계산한다.
+ * 신청 내역이 있는 조합을 빼면 그 신청이 예산에 안 잡히므로, force 없이는 막고 알려준다.
  */
-function apiSaveAccounts(list, force) {
+function apiSaveAccounts(data, force) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
   requireMenu_(me, 'budget');
   if (!me.isAdmin && !me.budgetManager) throw new Error('예산 설정은 관리자와 예산 담당자만 할 수 있습니다.');
+  data = data || {};
 
-  const rows = [];
-  const seen = {};
-  (list || []).forEach((a, i) => {
+  // 코스트센터 목록
+  const costs = [], costSeen = {};
+  (data.costs || []).forEach((c, i) => {
+    const code = String(c.code || '').trim(), name = String(c.name || '').trim();
+    if (!code && !name) return;
+    if (!code) throw new Error(`코스트센터 ${i + 1}번째 줄: 코드를 입력해 주세요.`);
+    if (costSeen[code]) throw new Error(`코스트센터 코드가 두 번 있습니다: ${code}`);
+    costSeen[code] = true;
+    costs.push([code, name]);
+  });
+  // 계정과목 목록
+  const accts = [], acctSeen = {}, codeSeen = {};
+  (data.accts || []).forEach((a, i) => {
+    const code = String(a.code || '').trim(), name = String(a.name || '').trim();
+    if (!code && !name) return;
+    if (!name) throw new Error(`계정과목 ${i + 1}번째 줄: 계정과목 이름을 입력해 주세요.`);
+    if (code && codeSeen[code]) throw new Error(`계정코드가 두 번 있습니다: ${code}`);
+    if (acctSeen[code + '|' + name]) throw new Error(`계정과목이 두 번 있습니다: ${budgetLabel_('', code, name)}`);
+    if (code) codeSeen[code] = true;
+    acctSeen[code + '|' + name] = true;
+    accts.push([code, name]);
+  });
+  // 조합별 편성액
+  const rows = [], seen = {};
+  (data.rows || []).forEach((a, i) => {
     const cost = String(a.cost || '').trim(), code = String(a.code || '').trim(), name = String(a.name || '').trim();
-    if (!cost && !code && !name && !Number(a.budget)) return; // 빈 줄
-    if (!name) throw new Error(`${i + 1}번째 줄: 계정과목을 입력해 주세요.`);
+    if (!cost && !name && !Number(a.budget)) return; // 빈 줄
+    if (!name) throw new Error(`편성 예산 ${i + 1}번째 줄: 계정과목을 골라 주세요.`);
+    if (costs.length && cost && !costSeen[cost]) throw new Error(`편성 예산 ${i + 1}번째 줄: 코스트센터 목록에 없는 코드입니다 (${cost}).`);
+    if (accts.length && !acctSeen[code + '|' + name]) throw new Error(`편성 예산 ${i + 1}번째 줄: 계정과목 목록에 없는 계정입니다 (${budgetLabel_('', code, name)}).`);
     const key = cost + '|' + name;
     if (seen[key]) throw new Error(`같은 코스트·계정과목이 두 번 있습니다: ${budgetLabel_(cost, code, name)}`);
     seen[key] = true;
@@ -1157,7 +1224,7 @@ function apiSaveAccounts(list, force) {
     rows.push([cost, code, name, budget]);
   });
 
-  // 지금 신청 내역에서 쓰는 코스트·계정과목이 사라지는지 확인
+  // 지금 [예산과목]에 있던 조합 중 신청 내역이 있는 것이 사라지는지 확인
   if (!force) {
     const used = {};
     const req = ctx.ss.getSheetByName(BUDGET.SHEET);
@@ -1169,7 +1236,6 @@ function apiSaveAccounts(list, force) {
         });
       });
     }
-    // 지금 [예산과목]에 있던 것만 본다 (원래부터 짝이 없던 예전 신청은 상관없음)
     const before = {};
     getAccounts_().forEach(a => { before[a.cost + '|' + a.name] = true; });
     const lost = Object.keys(used).filter(k => before[k] && !seen[k]).map(k => used[k]);
@@ -1177,20 +1243,21 @@ function apiSaveAccounts(list, force) {
   }
 
   const ss = ctx.ss;
-  const sh = ss.getSheetByName(BUDGET.ACCOUNTS) || (setupBudgetSheets_(ss), ss.getSheetByName(BUDGET.ACCOUNTS));
   try { migrateBudgetSheets_(ss); } catch (e) { /* 권한 없음 → 아래에서 알린다 */ }
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
+    writeBudgetList_(ss, BUDGET.COSTS, ['코드', '이름'], costs);
+    writeBudgetList_(ss, BUDGET.ACCT_LIST, ['계정코드', '계정과목'], accts);
+    const sh = ss.getSheetByName(BUDGET.ACCOUNTS) || (setupBudgetSheets_(ss), ss.getSheetByName(BUDGET.ACCOUNTS));
     const n = Math.max(BUDGET.ACCOUNT_ROWS, rows.length + 20);
     if (sh.getMaxRows() < n + 1) sh.insertRowsAfter(sh.getMaxRows(), n + 1 - sh.getMaxRows());
     sh.getRange(2, 1, n, 2).setNumberFormat('@'); // 0으로 시작하는 코드도 그대로
     sh.getRange(2, 1, n, 4).clearContent();
     if (rows.length) sh.getRange(2, 1, rows.length, 4).setValues(rows);
-    // 전입·전출·현재예산 수식 (줄이 늘었으면 그만큼 더)
-    formatAccountSheet_(sh, n);
+    formatAccountSheet_(sh, n); // 전입·전출·현재예산 수식 (줄이 늘었으면 그만큼 더)
   } catch (e) {
-    throw new Error('[예산과목] 시트를 고칠 권한이 없습니다. 관리자가 [관리 → 팀원·권한 → 권한 한 번에 적용]을 한 번 눌러 주세요.');
+    throw new Error('예산 시트를 고칠 권한이 없습니다. 관리자가 [관리 → 팀원·권한 → 권한 한 번에 적용]을 한 번 눌러 주세요.');
   } finally {
     lock.releaseLock();
   }
@@ -2943,8 +3010,11 @@ function readBudget_(ss) {
   // 계정코드가 비어 있는 예전 신청은 [예산과목]의 코드로 보여준다
   const codeOf = (cost, name, v) => String(v || '').trim()
     || (accounts.find(a => a.cost === String(cost).trim() && a.name === String(name).trim()) || {}).code || '';
+  const lists = readBudgetLists_(ss);
   return {
     accounts: accounts,
+    costs: lists.costs,       // 코스트센터 목록 [{code, name}]
+    acctList: lists.acctList, // 계정과목 목록 [{code, name}]
     requests: reqRows
       .map((r, i) => ({ r: r, row: i + 2 }))
       .filter(x => String(x.r[0]).trim() && String(x.r[BCOL.CANCELED - 1]).toUpperCase() !== 'Y')

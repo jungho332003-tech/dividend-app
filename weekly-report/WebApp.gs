@@ -213,8 +213,11 @@ function readBudget_(ss) {
   // 계정코드가 비어 있는 예전 신청은 [예산과목]의 코드로 보여준다
   const codeOf = (cost, name, v) => String(v || '').trim()
     || (accounts.find(a => a.cost === String(cost).trim() && a.name === String(name).trim()) || {}).code || '';
+  const lists = readBudgetLists_(ss);
   return {
     accounts: accounts,
+    costs: lists.costs,       // 코스트센터 목록 [{code, name}]
+    acctList: lists.acctList, // 계정과목 목록 [{code, name}]
     requests: reqRows
       .map((r, i) => ({ r: r, row: i + 2 }))
       .filter(x => String(x.r[0]).trim() && String(x.r[BCOL.CANCELED - 1]).toUpperCase() !== 'Y')
