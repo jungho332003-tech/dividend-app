@@ -440,11 +440,19 @@
   @media (min-width: 761px) {
     .budget-cards th, .budget-cards td, .copy-t th, .copy-t td, .budget-cards td.num, .copy-t td.num, .budget-cards th.num, .copy-t th.num { text-align: center; vertical-align: middle; }
     .budget-cards .c-move .mv { justify-content: center; }
-    /* 칸 선을 또렷하게 (팀 주간보고 표와 같은 검은 선) */
-    table.t.copy-t, table.t.budget-cards { border-collapse: collapse; border: 1.5px solid var(--grid); }
-    .copy-t th, .copy-t td, .budget-cards th, .budget-cards td { border: 1px solid var(--grid) !important; border-radius: 0 !important; box-shadow: none !important; }
-    .copy-t thead th, .budget-cards thead th { color: var(--ink); font-weight: 700; font-size: 12.5px; }
-    .copy-t thead tr:last-child th, .budget-cards thead tr:last-child th { border-bottom-width: 1.5px !important; }
+  }
+  /* 모든 표: 칸 선을 또렷하게 (팀 주간보고 표와 같은 검은 선). 휴대폰 카드 모양 표는 제외 */
+  @media (min-width: 761px) {
+    table.t { border-collapse: collapse; border: 1.5px solid var(--grid); }
+    table.t th, table.t td { border: 1px solid var(--grid) !important; border-radius: 0 !important; box-shadow: none !important; }
+    table.t thead th { color: var(--ink); font-weight: 700; font-size: 12.5px; vertical-align: middle; text-align: center; }
+    table.t thead tr:last-child th { border-bottom-width: 1.5px !important; }
+    table.t tfoot td { border-top-width: 1.5px !important; }
+    table.t td { vertical-align: middle; }
+  }
+  @media (max-width: 760px) {
+    table.t:not(.cards) { border-collapse: collapse; border: 1.5px solid var(--grid); }
+    table.t:not(.cards) th, table.t:not(.cards) td { border: 1px solid var(--grid) !important; border-radius: 0 !important; }
   }
   .copy-t th { white-space: nowrap; vertical-align: middle; }
   .copy-t th, .copy-t td { padding-left: 7px; padding-right: 7px; }
