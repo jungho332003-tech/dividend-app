@@ -1143,7 +1143,7 @@
             <div class="agenda" id="upcoming">${upcomingHtml()}</div>
           </section>`,
         D.me.name && `<section class="panel memo-box">
-            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}오늘 내 메모 <small class="ph">${dayLabel(dkey(now()))} · 나만 보기</small></h2>
+            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}오늘 내 메모 <small class="ph">${dayLabel(dkey(now()))}</small></h2>
               <span class="memo-st" id="memoSt"></span><button class="btn small ghost" onclick="openMemoHistory()">지난 메모${ic('chev', 'sm')}</button></div>
             ${memoBoxHtml(dkey(now()))}
           </section>`,
@@ -1629,7 +1629,7 @@
     const days = Object.keys(memos || {}).filter(d => memos[d] && (!q || memos[d].toLowerCase().indexOf(q.toLowerCase()) >= 0)).sort().reverse();
     const rows = days.map(d => `<button type="button" class="memo-row" onclick="closeModal();openMemoDay('${d}')">
         <b>${esc(d.slice(0, 4))}. ${dayLabel(d)}</b><span>${esc(memos[d])}</span>${ic('chev', 'sm')}</button>`).join('');
-    openModal(`<h3>지난 메모 <small class="ph" style="font-size:13px;font-weight:500">${Object.keys(memos || {}).length}개 · 나만 보기</small></h3>
+    openModal(`<h3>지난 메모 <small class="ph" style="font-size:13px;font-weight:500">${Object.keys(memos || {}).length}개</small></h3>
       <input class="field-in" id="memoQ" type="search" placeholder="메모 검색" value="${esc(q)}" style="margin:6px 0 10px">
       <div class="memo-list">${rows || `<p class="dd-empty">${q ? '찾는 메모가 없습니다.' : '아직 쓴 메모가 없습니다.'}</p>`}</div>
       <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button></div>`);
@@ -1735,7 +1735,7 @@
             <div class="agenda">${selEvents.map(agRow).join('') || '<div class="empty">일정이 없습니다.</div>'}</div>
           </section>
           <section class="panel memo-box">
-            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}내 메모 <small class="ph">${dayLabel(calSel)} · 나만 보기</small></h2>
+            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}내 메모 <small class="ph">${dayLabel(calSel)}</small></h2>
               <span class="memo-st" id="memoSt"></span><button class="btn small ghost" onclick="openMemoHistory()">지난 메모${ic('chev', 'sm')}</button></div>
             ${memoBoxHtml(calSel)}
           </section>
