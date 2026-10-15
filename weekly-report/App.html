@@ -554,10 +554,24 @@
   .m-grid { display: grid; grid-template-columns: 180px 160px minmax(0, 1fr); gap: 12px; }
   .m-edit td { padding: 5px 6px; vertical-align: middle; }
   .m-edit .m-in { width: 100%; min-width: 0; padding: 6px 8px; }
-  .m-edit textarea.m-in { resize: none; overflow: hidden; min-height: 34px; line-height: 1.5; }
+  .m-edit textarea.m-in, .m-edit textarea.mm-in { resize: none; overflow: hidden; min-height: 34px !important; line-height: 1.5; }
+  .m-edit .mm-in { width: 100%; min-width: 0; padding: 6px 8px; }
   .m-edit td.m-act { white-space: nowrap; }
   .m-edit td.m-act .icon-btn { width: 28px; height: 28px; }
   @media (max-width: 760px) { .m-grid { grid-template-columns: 1fr 1fr; } .m-grid .fld:last-child { grid-column: 1 / -1; } }
+  .meet-min { display: flex; flex-direction: column; gap: 10px; }
+  .meet-min-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .meet-min-head h2 { margin: 0 auto 0 0; }
+  .mm-top { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .8em; }
+  .mm-top label { display: flex; align-items: center; gap: 6px; font-weight: 700; white-space: nowrap; }
+  .mm-top label.wide { flex: 1 1 320px; }
+  .mm-top label.wide input { flex: 1; }
+  .mm-top input { font-size: inherit; padding: 6px 8px; }
+  .mm-table { font-size: .78em; }
+  .mm-table .mm-in { font-size: inherit; }
+  .mm-table tr.m-done td { background: var(--panel-2); }
+  .mm-table select.st-ing { color: var(--wk-next); font-weight: 700; }
+  .mm-table select.st-done { color: var(--accent); font-weight: 700; }
   .cal-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .memo-head h2 { display: inline-flex; align-items: center; gap: 6px; }
   .memo-head small.ph { font-size: 12px; font-weight: 500; }
@@ -1071,7 +1085,10 @@
     if (page === 'admin' && !A) loadAdmin(false);
     if (page === 'calendar') loadMonth();
     renderDemoBar();
+    fitAreas();
   }
+  /** 여러 줄 입력칸 높이를 내용에 맞춘다 (회의록 편집) */
+  function fitAreas() { document.querySelectorAll('textarea.m-in, textarea.mm-in').forEach(t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }); }
 
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
@@ -1106,7 +1123,7 @@
         <div class="msec wk-this"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek, m, 'this')}</div>
         <div class="msec wk-next"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek, m, 'next')}</div>
         ${noteOf(m) ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(noteOf(m))}</span></p>` : ''}
-        ${m.comment || D.me.isLeader ? `<div class="cm mcm ${D.me.isLeader ? 'editable' : ''}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" role="button"' : ''}>${m.comment ? esc(m.comment) : '<span class="ph">팀장 코멘트 남기기</span>'}</div>` : ''}
+        ${D.me.isLeader ? `<div class="cm mcm ${D.me.isLeader ? 'editable' : ''}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" role="button"' : ''}>${m.comment ? esc(m.comment) : '<span class="ph">팀장 코멘트 남기기</span>'}</div>` : ''}
       </article>`).join('');
   }
 
@@ -1328,7 +1345,8 @@
           rows += `${taskCell(m, 'this', i, a, '')}<td class="c">${dueHtml(a, true)}</td>${taskCell(m, 'next', i, b, 'split')}<td class="c">${dueHtml(b, false)}</td>`;
           if (i === 0) {
             rows += `<td rowspan="${n}" class="split note">${esc(noteOf(m))}</td>`;
-            rows += `<td class="cm ${D.me.isLeader ? 'editable' : ''}" rowspan="${n}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" title="눌러서 코멘트 작성"' : ''}>${esc(m.comment)}</td>`;
+            // 팀장 코멘트는 팀장에게만
+            if (D.me.isLeader) rows += `<td class="cm ${D.me.isLeader ? 'editable' : ''}" rowspan="${n}" data-name="${esc(m.name)}" ${D.me.isLeader ? 'tabindex="0" title="눌러서 코멘트 작성"' : ''}>${esc(m.comment)}</td>`;
           }
           rows += '</tr>';
         }
@@ -1349,9 +1367,9 @@
           <div class="mcards">${reportCards()}</div>
           <div class="table-wrap desk">
             <table class="report team">
-              <colgroup><col style="width:92px"><col><col style="width:96px"><col><col style="width:96px"><col style="width:15%"><col style="width:18%"></colgroup>
+              <colgroup><col style="width:92px"><col><col style="width:96px"><col><col style="width:96px"><col style="width:15%">${D.me.isLeader ? '<col style="width:18%">' : ''}</colgroup>
               <thead>
-                <tr><th rowspan="2">이 름</th><th colspan="2" class="th-this"><span class="wk this">금주</span>${esc(D.week.thisLabel)}</th><th colspan="2" class="th-next split"><span class="wk next">차주</span>${esc(D.week.nextLabel)}</th><th rowspan="2" class="split">휴무계획/특이사항</th><th rowspan="2">팀장 코멘트</th></tr>
+                <tr><th rowspan="2">이 름</th><th colspan="2" class="th-this"><span class="wk this">금주</span>${esc(D.week.thisLabel)}</th><th colspan="2" class="th-next split"><span class="wk next">차주</span>${esc(D.week.nextLabel)}</th><th rowspan="2" class="split">휴무계획/특이사항</th>${D.me.isLeader ? '<th rowspan="2">팀장 코멘트</th>' : ''}</tr>
                 <tr><th class="th-this">금주 주요업무</th><th class="th-this">기한</th><th class="th-next split">차주 주요업무</th><th class="th-next">기한</th></tr>
               </thead>
               <tbody id="reportBody">${rows}</tbody>
@@ -2872,19 +2890,21 @@
   try { meetScale = Number(localStorage.getItem('meetScale')) || 1; } catch (e) { /* 저장소 없음 */ }
 
   function openMeeting(i) {
-    meetIdx = Math.max(0, Math.min(i || 0, D.members.length));
+    meetIdx = Math.max(0, Math.min(i || 0, D.members.length + 1));
+    meetMin = null;
     $('#meet').hidden = false;
     document.body.classList.add('meeting');
     try { if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); } catch (e) { /* 전체화면 불가 */ }
     drawMeeting();
   }
   function closeMeeting() {
+    meetMinFlush();
     $('#meet').hidden = true;
     document.body.classList.remove('meeting');
     try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* 무시 */ }
     render();
   }
-  function meetGo(i) { meetIdx = Math.max(0, Math.min(i, D.members.length)); drawMeeting(); }
+  function meetGo(i) { meetMinFlush(); meetIdx = Math.max(0, Math.min(i, D.members.length + 1)); drawMeeting(); }
   function meetZoom(d) {
     meetScale = Math.max(0.8, Math.min(1.6, Math.round((meetScale + d) * 10) / 10));
     try { localStorage.setItem('meetScale', String(meetScale)); } catch (e) { /* 저장소 없음 */ }
@@ -2893,15 +2913,18 @@
 
   function drawMeeting() {
     const total = D.members.length;
-    const onHr = meetIdx >= total;
+    const onHr = meetIdx === total, onMin = meetIdx > total;
     const pills = D.members.map((m, i) => `<button class="mp ${i === meetIdx ? 'on' : ''} ${m.done ? '' : 'pending'}" onclick="meetGo(${i})">${esc(m.name)}</button>`).join('')
-      + `<button class="mp hr ${onHr ? 'on' : ''}" onclick="meetGo(${total})">인사현황</button>`;
+      + `<button class="mp hr ${onHr ? 'on' : ''}" onclick="meetGo(${total})">인사현황</button>`
+      + `<button class="mp hr ${onMin ? 'on' : ''}" onclick="meetGo(${total + 1})">회의록</button>`;
     const mm = D.members[meetIdx];
     const list = (items, isThis) => items.length
       ? `<ol>${items.map((it, i) => `<li class="${isMarked(mm, isThis ? 'this' : 'next', it.task) ? 'mk' : ''} ${D.me.isLeader ? 'markable' : ''}" ${D.me.isLeader ? `data-mk="${esc(mm.name)}|${isThis ? 'this' : 'next'}|${i}" title="눌러서 굵게 표시"` : ''}><span class="t">${esc(it.task)}</span><span class="d">${dueHtml(it, isThis)}</span></li>`).join('')}</ol>`
       : '<p class="none">작성한 업무가 없습니다.</p>';
     let body;
-    if (onHr) {
+    if (onMin) {
+      body = meetMinHtml();
+    } else if (onHr) {
       body = `<div class="meet-hr"><h2>■ 인사 현황</h2><div class="table-wrap">${hrTableHtml(false)}</div></div>`;
     } else {
       const m = D.members[meetIdx];
@@ -2916,10 +2939,10 @@
           <section class="msec wk-this"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek, true)}</section>
           <section class="msec wk-next"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek, false)}</section>
         </div>
-        <div class="meet-cm">
+        ${D.me.isLeader ? `<div class="meet-cm">
           <div class="lbl">팀장 코멘트 ${D.me.isLeader ? `<button class="btn small" onclick="meetComment()">${ic('pencil', 'sm')}${m.comment ? '수정' : '작성'}</button>` : ''}</div>
           <div class="txt">${m.comment ? esc(m.comment) : '<span class="ph">코멘트 없음</span>'}</div>
-        </div>`;
+        </div>` : ''}`;
     }
     $('#meet').innerHTML = `
       <div class="meet-top">
@@ -2934,10 +2957,108 @@
       <div class="meet-body" style="font-size:${Math.round(meetScale * 18)}px">${body}</div>
       <div class="meet-nav">
         <button class="btn" onclick="meetGo(${meetIdx - 1})" ${meetIdx === 0 ? 'disabled' : ''}>${ic('chevL', 'sm')}이전</button>
-        <span>${onHr ? '인사현황' : `${meetIdx + 1} / ${total}`} · ← → 이동</span>
-        <button class="btn primary" onclick="meetGo(${meetIdx + 1})" ${onHr ? 'disabled' : ''}>다음${ic('chev', 'sm')}</button>
-      </div>`;
+        <span>${onMin ? '회의록' : onHr ? '인사현황' : `${meetIdx + 1} / ${total}`} · ← → 이동</span>
+        <button class="btn primary" onclick="meetGo(${meetIdx + 1})" ${onMin ? 'disabled' : ''}>다음${ic('chev', 'sm')}</button>
+      </div>`;    fitAreas();
   }
+
+  /* ---------- 회의 모드: 회의록 바로 고치기 (자동 저장) ---------- */
+  let meetMin = null, meetMinTimer = null, meetMinBusy = false, meetMinAgain = false;
+  function meetMinHtml() {
+    if (!meetMin) { const cur = minCur(); meetMin = cur ? JSON.parse(JSON.stringify(cur)) : null; }
+    const m = meetMin;
+    if (!m) return `<div class="meet-hr"><h2>■ 회의록</h2><p class="none">아직 회의록이 없습니다.</p>
+      <button class="btn primary" onclick="meetMinNew()">${ic('plus', 'sm')}새 회의록 시작</button></div>`;
+    const inp = (i, f, v, ph) => `<input class="field-in mm-in" data-i="${i}" data-f="${f}" value="${esc(v)}" placeholder="${ph}" aria-label="${ph}">`;
+    const rows = m.items.map((x, i) => `<tr class="${x.status === '완료' ? 'm-done' : ''}">
+        <td>${inp(i, 'cat', x.cat, '구분')}</td><td>${inp(i, 'sub', x.sub, '세부')}</td>
+        <td><textarea class="field-in mm-in" data-i="${i}" data-f="content" rows="1" placeholder="내용" aria-label="내용">${esc(x.content)}</textarea></td>
+        <td>${inp(i, 'owner', x.owner, '담당')}</td><td>${inp(i, 'due', x.due, '기한')}</td>
+        <td><select class="field-in mm-in st-${minStatusCls(x.status)}" data-i="${i}" data-f="status" aria-label="진행상태">${MIN_STATUS.map(s2 => `<option ${s2 === x.status ? 'selected' : ''}>${s2}</option>`).join('')}</select></td>
+        <td class="m-act"><button class="icon-btn" onclick="meetMinRow(${i},-1)" aria-label="위로">↑</button><button class="icon-btn" onclick="meetMinRow(${i},1)" aria-label="아래로">↓</button><button class="icon-btn" onclick="meetMinRow(${i},0)" aria-label="지우기">${ic('x', 'sm')}</button></td>
+      </tr>`).join('');
+    const others = minList().length > 1 ? `<select class="field-in" style="width:auto" onchange="meetMinFlush();minSel=this.value;meetMin=null;drawMeeting()" aria-label="회의 고르기">${minList().map(x => `<option value="${esc(x.id)}" ${x.id === m.id ? 'selected' : ''}>${esc(minDateText(x.date, ''))}</option>`).join('')}</select>` : '';
+    return `<div class="meet-min">
+      <div class="meet-min-head"><h2>■ 회의록</h2>${others}
+        <span class="memo-st" id="mmSt">${String(m.id).startsWith('tmp-') ? '' : ''}</span>
+        <button class="btn small" onclick="meetMinNew()">${ic('plus', 'sm')}새 회의록</button></div>
+      <div class="mm-top">
+        <label>일시 <input class="field-in mm-top" type="date" data-f="date" value="${esc(m.date)}"><input class="field-in mm-top" data-f="time" value="${esc(m.time)}" placeholder="13:30~" style="width:110px"></label>
+        <label>장소 <input class="field-in mm-top" data-f="place" value="${esc(m.place)}" placeholder="장소"></label>
+        <label class="wide">참석자 <input class="field-in mm-top" data-f="attendees" value="${esc(m.attendees)}" placeholder="참석자"></label>
+      </div>
+      <div class="table-wrap"><table class="t m-edit mm-table">
+        <colgroup><col style="width:13%"><col style="width:11%"><col><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:96px"></colgroup>
+        <thead><tr><th>구분</th><th>세부</th><th>내용</th><th>담당</th><th>기한</th><th>진행상태</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <button class="btn small add" onclick="meetMinAdd()" style="margin-top:10px">${ic('plus', 'sm')}항목 추가</button>
+      <p class="min-meta">고치면 자동으로 저장됩니다.</p>
+    </div>`;
+  }
+  function meetMinQueue() {
+    const st = $('#mmSt'); if (st) st.textContent = '';
+    clearTimeout(meetMinTimer);
+    meetMinTimer = setTimeout(meetMinSave, 1200); // 쓰다가 잠깐 쉬면 저장
+  }
+  function meetMinFlush() { if (meetMinTimer) meetMinSave(); }
+  function meetMinSave() {
+    clearTimeout(meetMinTimer); meetMinTimer = null;
+    if (!meetMin) return;
+    // 저장이 끝나기 전에 또 고치면, 끝난 뒤 한 번 더 저장한다 (새 회의록이 두 개 생기지 않도록)
+    if (meetMinBusy) { meetMinAgain = true; return; }
+    meetMinBusy = true;
+    const draft = JSON.parse(JSON.stringify(meetMin));
+    if (String(draft.id).startsWith('tmp-')) draft.id = '';
+    const st = $('#mmSt'); if (st) st.textContent = '저장 중…';
+    // 화면 목록에도 바로 반영
+    const local = Object.assign({}, meetMin, { editor: D.me.name, items: meetMin.items.filter(x => x.cat || x.sub || x.content) });
+    D.minutes = [local].concat((D.minutes || []).filter(x => x.id !== local.id)).sort((a, b) => b.date.localeCompare(a.date));
+    minSel = local.id;
+    call('apiSaveMinutes', draft).then(data => {
+      applyData(data);
+      if (meetMin && meetMin.id === local.id) { meetMin.id = data.savedId; minSel = data.savedId; }
+      meetMinBusy = false;
+      if (meetMinAgain) { meetMinAgain = false; meetMinSave(); return; }
+      const s2 = $('#mmSt'); if (s2) s2.textContent = '저장됨';
+    }).catch(e => { meetMinBusy = false; meetMinAgain = false; const s2 = $('#mmSt'); if (s2) s2.textContent = ''; fail(e); });
+  }
+  function meetMinNew() {
+    meetMinFlush();
+    const base = minCur();
+    meetMin = base
+      ? { id: 'tmp-' + Date.now(), date: dkey(now()), time: base.time, place: base.place, attendees: base.attendees, vision: base.vision, items: JSON.parse(JSON.stringify(base.items)).filter(x => x.status !== '완료') }
+      : { id: 'tmp-' + Date.now(), date: dkey(now()), time: '', place: '', attendees: '', vision: '', items: [{ cat: '', sub: '', content: '', owner: '', due: '', status: '진행중' }] };
+    drawMeeting(); meetMinSave();
+  }
+  function meetMinAdd() {
+    const last = meetMin.items[meetMin.items.length - 1];
+    meetMin.items.push({ cat: last ? last.cat : '', sub: last ? last.sub : '', content: '', owner: '', due: '', status: '진행중' });
+    drawMeeting();
+    const t = document.querySelectorAll(`#meet textarea.mm-in[data-i="${meetMin.items.length - 1}"]`); if (t[0]) t[0].focus();
+  }
+  function meetMinRow(i, dir) {
+    const it = meetMin.items;
+    if (dir === 0) it.splice(i, 1); else if (it[i + dir]) { const t = it[i]; it[i] = it[i + dir]; it[i + dir] = t; }
+    drawMeeting(); meetMinQueue();
+  }
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (!meetMin || !el.classList || $('#meet').hidden) return;
+    if (el.classList.contains('mm-top')) { meetMin[el.dataset.f] = el.value; meetMinQueue(); }
+    else if (el.classList.contains('mm-in') && el.tagName !== 'SELECT') {
+      meetMin.items[Number(el.dataset.i)][el.dataset.f] = el.value;
+      if (el.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+      meetMinQueue();
+    }
+  });
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (!meetMin || !el.classList || !el.classList.contains('mm-in') || el.tagName !== 'SELECT') return;
+    meetMin.items[Number(el.dataset.i)].status = el.value;
+    el.className = `field-in mm-in st-${minStatusCls(el.value)}`;
+    el.closest('tr').classList.toggle('m-done', el.value === '완료');
+    meetMinQueue();
+  });
 
   function meetComment() {
     const m = D.members[meetIdx];
@@ -2956,6 +3077,7 @@
 
   document.addEventListener('keydown', e => {
     if ($('#meet').hidden || !$('#scrim').hidden) return;
+    if (e.target.closest && e.target.closest('input, textarea, select')) { if (e.key === 'Escape') e.target.blur(); return; } // 회의록을 쓰는 중에는 화살표로 넘기지 않는다
     if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); meetGo(meetIdx + 1); }
     else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); meetGo(meetIdx - 1); }
     else if (e.key === 'Escape') closeMeeting();
@@ -3038,7 +3160,7 @@
       ${note ? `<p class="mnote">${ic('leave', 'sm')}<span><b>휴무·특이사항</b> ${esc(note)}</span></p>` : ''}
       <div class="msec wk-this" style="margin-top:12px"><h4><span class="wk this">금주</span>${esc(D.week.thisLabel)}</h4>${list(m.thisWeek, true)}</div>
       <div class="msec wk-next" style="margin-top:10px"><h4><span class="wk next">차주</span>${esc(D.week.nextLabel)}</h4>${list(m.nextWeek, false)}</div>
-      ${m.comment ? `<div class="dd-cm"><b>팀장 코멘트</b>${esc(m.comment)}</div>` : ''}
+      ${D.me.isLeader && m.comment ? `<div class="dd-cm"><b>팀장 코멘트</b>${esc(m.comment)}</div>` : ''}
       <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button>
         <button type="button" class="btn primary" onclick="closeModal();openMeeting(${D.members.indexOf(m)})">크게 보기</button></div>`);
   }

@@ -154,7 +154,7 @@ function apiSyncLeaves() {
     changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
   }
   if (!changed) return { changed: false };
-  return { changed: true, members: cached_(CK.members(ctx), () => readMembers_(ctx)) };
+  return { changed: true, members: forViewer_(currentMember_(ctx.members), cached_(CK.members(ctx), () => readMembers_(ctx))) };
 }
 
 /**

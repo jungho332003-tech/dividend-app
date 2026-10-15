@@ -1521,7 +1521,7 @@ function apiSyncLeaves() {
     changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
   }
   if (!changed) return { changed: false };
-  return { changed: true, members: cached_(CK.members(ctx), () => readMembers_(ctx)) };
+  return { changed: true, members: forViewer_(currentMember_(ctx.members), cached_(CK.members(ctx), () => readMembers_(ctx))) };
 }
 
 /**
@@ -3226,7 +3226,7 @@ function apiBootstrap() {
   const can = k => base.me.menus.indexOf(k) >= 0;
   // 권한 없는 메뉴의 데이터는 아예 보내지 않는다
   return Object.assign(base, {
-    members: can('weekly') ? cached_(CK.members(ctx), () => readMembers_(ctx)) : [],
+    members: can('weekly') ? forViewer_(base.me, cached_(CK.members(ctx), () => readMembers_(ctx))) : [],
     hr: can('weekly') ? cached_(CK.hr(ctx), () => readHr_(ctx)) : { thisWeek: [], nextWeek: [] },
     budget: can('budget') ? cached_(CK.budget, () => readBudget_(ss)) : { accounts: [], requests: [] },
     board: can('board') ? cached_(CK.board, () => readBoard_(ss)) : [],
@@ -3300,7 +3300,13 @@ function memberPatch_(ctx, name, comment) {
   const i = list.findIndex(m => m.name === name);
   if (i >= 0) list[i] = patch; else list.push(patch);
   putCache_(key, list);
-  return { memberPatch: patch };
+  return { memberPatch: forViewer_(currentMember_(ctx.members), [patch])[0] };
+}
+
+/** 팀장 코멘트는 팀장에게만 보낸다 (팀원 화면에는 내용 자체가 가지 않는다) */
+function forViewer_(me, list) {
+  if (me && me.isLeader) return list;
+  return list.map(m => Object.assign({}, m, { comment: '' }));
 }
 
 /** 저장 후 바뀐 부분만 새로 읽어 캐시에 넣고 화면에 돌려준다 */
