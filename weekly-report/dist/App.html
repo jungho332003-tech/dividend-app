@@ -521,6 +521,13 @@
   .ag.has-del { position: relative; padding-right: 34px; }
   .ag .ag-del { position: absolute; right: 0; top: 8px; color: var(--muted); }
   .ag .ag-del:hover { color: var(--warn-ink); }
+  .memo-head .btn.ghost { margin-left: 4px; }
+  .memo-list { display: flex; flex-direction: column; max-height: 55vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .memo-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 10px; align-items: start; text-align: left; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line); background: var(--panel); color: inherit; font: inherit; cursor: pointer; }
+  .memo-row:last-child { border-bottom: 0; }
+  .memo-row:hover { background: var(--panel-2); }
+  .memo-row b { font-size: 13px; white-space: nowrap; }
+  .memo-row span { white-space: pre-line; font-size: 13px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .cal-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .memo-head h2 { display: inline-flex; align-items: center; gap: 6px; }
   .memo-head small.ph { font-size: 12px; font-weight: 500; }
@@ -1135,6 +1142,11 @@
             <div class="panel-head"><h2>다가오는 일정</h2><button class="btn small" onclick="go('calendar')">캘린더</button></div>
             <div class="agenda" id="upcoming">${upcomingHtml()}</div>
           </section>`,
+        D.me.name && `<section class="panel memo-box">
+            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}오늘 내 메모 <small class="ph">${dayLabel(dkey(now()))} · 나만 보기</small></h2>
+              <span class="memo-st" id="memoSt"></span><button class="btn small ghost" onclick="openMemoHistory()">지난 메모${ic('chev', 'sm')}</button></div>
+            ${memoBoxHtml(dkey(now()))}
+          </section>`,
         W && `<section class="panel">
             <div class="panel-head"><h2>이번 주 중요 업무</h2><button class="btn small" onclick="setTab('weekly','team', true)">팀 주간보고</button></div>
             <div>${dueRows}</div>
@@ -1607,15 +1619,41 @@
    * 서버의 내 계정 전용 저장소에 둔다 (시트에 남지 않음). 이 기기에도 저장해 두었다가 먼저 보여준다. */
   let memos = null, memoTimer = null;
   const memoKey = () => `memos:${D.me.email}`;
+  function memoBoxHtml(day) {
+    return `<textarea class="field-in" id="memoIn" data-day="${day}" placeholder="${memos ? '이 날의 메모 (나만 보입니다)' : '메모를 불러오는 중…'}" ${memos ? '' : 'disabled'}>${esc((memos && memos[day]) || '')}</textarea>`;
+  }
+  /** 지난 메모: 날짜순으로 모아 보고, 검색하고, 누르면 그날 일정 화면으로 */
+  function openMemoHistory(q) {
+    memoFlush();
+    q = q || '';
+    const days = Object.keys(memos || {}).filter(d => memos[d] && (!q || memos[d].toLowerCase().indexOf(q.toLowerCase()) >= 0)).sort().reverse();
+    const rows = days.map(d => `<button type="button" class="memo-row" onclick="closeModal();openMemoDay('${d}')">
+        <b>${esc(d.slice(0, 4))}. ${dayLabel(d)}</b><span>${esc(memos[d])}</span>${ic('chev', 'sm')}</button>`).join('');
+    openModal(`<h3>지난 메모 <small class="ph" style="font-size:13px;font-weight:500">${Object.keys(memos || {}).length}개 · 나만 보기</small></h3>
+      <input class="field-in" id="memoQ" type="search" placeholder="메모 검색" value="${esc(q)}" style="margin:6px 0 10px">
+      <div class="memo-list">${rows || `<p class="dd-empty">${q ? '찾는 메모가 없습니다.' : '아직 쓴 메모가 없습니다.'}</p>`}</div>
+      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button></div>`);
+    const qi = $('#memoQ');
+    if (qi) { qi.oninput = () => { const v = qi.value; openMemoHistory(v); const n = $('#memoQ'); if (n) { n.focus(); n.setSelectionRange(v.length, v.length); } }; }
+  }
+  function openMemoDay(d) {
+    calMonth = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, 1);
+    calSel = d;
+    go('calendar');
+    setTimeout(() => { const b = $('#memoIn'); if (b) b.focus(); }, 50);
+  }
   function loadMemos() {
-    if (!can('calendar')) return;
+    if (!D.me.email) return;
     try { const st = JSON.parse(localStorage.getItem(memoKey()) || 'null'); if (st && !memos) memos = st; } catch (e) { /* 저장소 없음 */ }
     call('apiMemos').then(m => {
       // 그사이 고친 메모(저장 대기 중)는 지우지 않는다
       const box = $('#memoIn');
       memos = Object.assign(m || {}, memoTimer && box ? { [box.dataset.day]: box.value } : {});
       memoLocal();
-      if (page === 'calendar' && !(box && document.activeElement === box)) $('#main').innerHTML = PAGES.calendar();
+      if (!(box && document.activeElement === box)) {
+        if (page === 'calendar') $('#main').innerHTML = PAGES.calendar();
+        else if (box) { box.disabled = false; box.placeholder = '이 날의 메모 (나만 보입니다)'; box.value = memos[box.dataset.day] || ''; }
+      }
     }).catch(() => { if (!memos) memos = {}; });
   }
   function memoLocal() { try { localStorage.setItem(memoKey(), JSON.stringify(memos)); } catch (e) { /* 저장소 없음 */ } }
@@ -1697,8 +1735,9 @@
             <div class="agenda">${selEvents.map(agRow).join('') || '<div class="empty">일정이 없습니다.</div>'}</div>
           </section>
           <section class="panel memo-box">
-            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}내 메모 <small class="ph">${dayLabel(calSel)} · 나만 보기</small></h2><span class="memo-st" id="memoSt"></span></div>
-            <textarea class="field-in" id="memoIn" data-day="${calSel}" placeholder="${memos ? '이 날의 메모 (나만 보입니다)' : '메모를 불러오는 중…'}" ${memos ? '' : 'disabled'}>${esc((memos && memos[calSel]) || '')}</textarea>
+            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}내 메모 <small class="ph">${dayLabel(calSel)} · 나만 보기</small></h2>
+              <span class="memo-st" id="memoSt"></span><button class="btn small ghost" onclick="openMemoHistory()">지난 메모${ic('chev', 'sm')}</button></div>
+            ${memoBoxHtml(calSel)}
           </section>
         </div>
       </div>`;
