@@ -292,6 +292,8 @@
   .c-move .tag { font-size: 10.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; line-height: 18px; }
   .c-move .tag.out { background: var(--panel-2); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .c-move .tag.in { background: var(--panel-2); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+  .t.acct-t td { padding: 6px 8px; vertical-align: middle; }
+  .acct-t .acct-in { padding: 6px 9px; width: 100%; min-width: 0; }
   fieldset.b-side { border: 1px solid var(--line); border-radius: 10px; padding: 6px 14px 12px; margin: 0; min-width: 0; }
   fieldset.b-side legend { padding: 0 6px; }
   .wk.out { background: var(--next); color: #fff; }
@@ -1001,7 +1003,7 @@
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
     weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
-    budget: () => (budgetTab === 'copy' && D.me.budgetManager ? '월별 정리' : '신청 내역'),
+    budget: () => (budgetTab === 'copy' && D.me.budgetManager ? '월별 정리' : budgetTab === 'setup' && canBudgetSetup() ? '예산 설정' : '신청 내역'),
     admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', settings: '설정', guide: '접속 안내' })[adminTab],
   };
   /** 위쪽 줄: 현재 위치(경로) · 이번 주 · 내 이름 */
@@ -1142,9 +1144,10 @@
       const tabs = `<div class="subtabs" role="tablist">
         <button role="tab" aria-selected="${budgetTab === 'list'}" onclick="setTab('budget','list')">신청 내역</button>
         ${D.me.budgetManager ? `<button role="tab" aria-selected="${budgetTab === 'copy'}" onclick="setTab('budget','copy')">월별 정리</button>` : ''}
+        ${canBudgetSetup() ? `<button role="tab" aria-selected="${budgetTab === 'setup'}" onclick="setTab('budget','setup')">예산 설정</button>` : ''}
       </div>`;
       // 월별 정리는 예산담당자만
-      return tabs + (budgetTab === 'copy' && D.me.budgetManager ? VIEWS.budgetCopy() : VIEWS.budgetList());
+      return tabs + (budgetTab === 'copy' && D.me.budgetManager ? VIEWS.budgetCopy() : budgetTab === 'setup' && canBudgetSetup() ? VIEWS.budgetSetup() : VIEWS.budgetList());
     },
 
     calendar() { return VIEWS.calendar(); },
@@ -1337,6 +1340,45 @@
     },
 
     /** 담당자용: 한 달 신청 내역의 코스트센터·계정코드를 하나씩 눌러 복사 (ERP 입력 등) */
+    /** 예산 설정: 코스트·계정코드·계정과목·편성액 (관리자·예산 담당자) */
+    budgetSetup() {
+      if (!acctDraft) acctDraft = D.budget.accounts.map(a => ({ cost: a.cost, code: a.code, name: a.name, budget: a.budget }));
+      const live = (a) => D.budget.accounts.find(x => x.cost === a.cost.trim() && x.name === a.name.trim());
+      const inp = (i, f, v, ph, extra) => `<input class="field-in acct-in" data-i="${i}" data-f="${f}" value="${esc(v)}" placeholder="${ph}" ${extra || ''} aria-label="${ph}">`;
+      const rows = acctDraft.map((a, i) => {
+        const x = live(a);
+        return `<tr>
+          <td>${inp(i, 'cost', a.cost, '코스트', 'inputmode="numeric"')}</td>
+          <td>${inp(i, 'code', a.code, '계정코드', 'inputmode="numeric"')}</td>
+          <td>${inp(i, 'name', a.name, '계정과목')}</td>
+          <td>${inp(i, 'budget', a.budget ? won(a.budget) : '', '편성액', 'inputmode="numeric" style="text-align:right"')}</td>
+          <td class="num ph">${x ? won(x.inAmt) : '-'}</td><td class="num ph">${x ? won(x.outAmt) : '-'}</td>
+          <td class="num strong">${x ? won(x.current) : '-'}</td>
+          <td class="c"><button class="icon-btn" onclick="acctDel(${i})" aria-label="${i + 1}번째 줄 지우기" title="지우기">${ic('x', 'sm')}</button></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="8" class="empty">등록된 예산이 없습니다. [줄 추가]를 누르세요.</td></tr>';
+      const sum = acctDraft.reduce((t, a) => t + (Number(a.budget) || 0), 0);
+      return `
+        <div class="head">
+          <div><h1>예산 설정</h1><p>코스트·계정과목 한 쌍마다 한 줄 · 전입·전출·현재예산은 신청 내역으로 자동 계산</p></div>
+          <div class="head-actions">
+            <button class="btn" onclick="acctReset()">되돌리기</button>
+            <button class="btn primary" id="acctSave" onclick="acctSave()">저장</button>
+          </div>
+        </div>
+        <section class="panel">
+          <div class="table-wrap">
+            <table class="t acct-t">
+              <colgroup><col style="width:120px"><col style="width:120px"><col><col style="width:160px"><col style="width:120px"><col style="width:120px"><col style="width:130px"><col style="width:48px"></colgroup>
+              <thead><tr><th>코스트</th><th>계정코드</th><th>계정과목</th><th class="num">편성액</th><th class="num">전입</th><th class="num">전출</th><th class="num">현재예산</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+              <tfoot><tr><td colspan="3" class="strong">합계 ${acctDraft.length}줄</td><td class="num strong">${won(sum)}</td><td colspan="4"></td></tr></tfoot>
+            </table>
+          </div>
+          <button class="btn small add" onclick="acctAdd()" style="margin-top:12px">${ic('plus', 'sm')}줄 추가</button>
+        </section>`;
+    },
+
     budgetCopy() {
       const bm = curBudgetMonth();
       const list = D.budget.requests.filter(r => bm === 'all' || reqMonth(r) === bm).slice().reverse(); // 신청 순서대로
@@ -2955,9 +2997,47 @@
 
   /* ================= 기타 동작 ================= */
   function go(p) { page = p; render(); window.scrollTo(0, 0); }
+  /* ---------- 예산 설정 ---------- */
+  let acctDraft = null;
+  function canBudgetSetup() { return !!(D.me.isAdmin || D.me.budgetManager); }
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (!el.classList || !el.classList.contains('acct-in') || !acctDraft) return;
+    const a = acctDraft[Number(el.dataset.i)];
+    if (!a) return;
+    if (el.dataset.f === 'budget') {
+      const n = Number(el.value.replace(/[^\d]/g, '')) || 0;
+      a.budget = n;
+      el.value = n ? won(n) : '';
+    } else a[el.dataset.f] = el.value;
+  });
+  function acctAdd() {
+    const last = acctDraft[acctDraft.length - 1];
+    acctDraft.push({ cost: last ? last.cost : '', code: '', name: '', budget: 0 }); // 코스트는 윗줄과 같게 시작
+    render();
+    const ins = document.querySelectorAll(`.acct-in[data-i="${acctDraft.length - 1}"]`);
+    if (ins[1]) ins[1].focus();
+  }
+  function acctDel(i) { acctDraft.splice(i, 1); render(); }
+  function acctReset() { acctDraft = null; render(); }
+  function acctSave(force) {
+    const btn = $('#acctSave'); if (btn) btn.disabled = true;
+    call('apiSaveAccounts', acctDraft, !!force).then(res => {
+      if (res && res.needConfirm) {
+        if (btn) btn.disabled = false;
+        openModal(`<h3>신청 내역이 있는 예산이 빠집니다</h3>
+          <p class="sub">아래 코스트·계정과목에 신청 내역이 있습니다. 빼거나 이름을 바꾸면 그 신청은 예산 계산에 잡히지 않습니다.</p>
+          <ul style="margin:8px 0 0;padding-left:18px">${res.lost.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+          <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="closeModal();acctSave(true)">그래도 저장</button></div>`);
+        return;
+      }
+      applyData(res); acctDraft = null; render(); toast('예산 설정을 저장했습니다.');
+    }).catch(e => { if (btn) btn.disabled = false; fail(e); });
+  }
+
   function setTab(p, tab, nav) {
     if (p === 'weekly') weeklyTab = tab;
-    if (p === 'budget') budgetTab = tab;
+    if (p === 'budget') { budgetTab = tab; if (tab === 'setup') acctDraft = null; }
     if (nav) go(p); else render();
   }
   function setFilter(f) { budgetFilter = f; render(); }

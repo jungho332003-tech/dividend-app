@@ -124,10 +124,13 @@ function applyProtections_(ctx) {
   });
 
   // 관리 시트: 관리자만
-  [SHEET.CONFIG, SHEET.MEMBERS, SHEET.HOLIDAYS, BUDGET.ACCOUNTS, MENU_SHEET].forEach(name => {
+  [SHEET.CONFIG, SHEET.MEMBERS, SHEET.HOLIDAYS, MENU_SHEET].forEach(name => {
     const sh = ss.getSheetByName(name);
     if (sh) protectSheet_(sh, admins);
   });
+  // 예산과목: 관리자 + 예산 담당자 (웹앱 [예산 설정]에서 고친다)
+  const accounts = ss.getSheetByName(BUDGET.ACCOUNTS);
+  if (accounts) protectSheet_(accounts, admins.concat(ctx.members.filter(m => m.budget && m.email).map(m => m.email)));
 
   // 주간보고: 관리자만, 단 팀장 코멘트 칸은 팀장 편집 가능
   const report = ss.getSheetByName(SHEET.REPORT) || ss.insertSheet(SHEET.REPORT, 0);
