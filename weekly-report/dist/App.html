@@ -560,8 +560,11 @@
   .m-edit td.m-act .icon-btn { width: 28px; height: 28px; }
   @media (max-width: 760px) { .m-grid { grid-template-columns: 1fr 1fr; } .m-grid .fld:last-child { grid-column: 1 / -1; } }
   .meet-min { display: flex; flex-direction: column; gap: 10px; }
+  input[data-date].field-in { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; background-size: 15px; font-variant-numeric: tabular-nums; }
+  input[data-date].field-in:disabled { background-image: none; }
   .due-box { display: flex; flex-direction: column; gap: 4px; }
   .m-edit .due-box .field-in { width: 100%; min-width: 0; padding: 5px 6px; font-size: inherit; }
+  .m-edit .due-box input[data-date].field-in { padding-right: 28px; background-position: right 7px center; }
   .own-btn { width: 100%; min-height: 34px; padding: 6px 8px; text-align: center; cursor: pointer; background: var(--panel); font-size: inherit; line-height: 1.4; word-break: keep-all; }
   .own-btn .ph { color: var(--muted); }
   .own-pop { position: fixed; z-index: 1000; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; max-height: 320px; overflow: auto; display: flex; flex-direction: column; }
@@ -1635,7 +1638,7 @@
   function minDueCell(s, i, x) {
     const mode = x._dm || minDueMode(x.due);
     const o = (v, t) => `<option value="${v}" ${mode === v ? 'selected' : ''}>${t}</option>`;
-    const box = mode === 'date' ? `<input class="field-in due-val" type="date" data-s="${s}" data-i="${i}" value="${DUE_ISO.test(x.due || '') ? x.due : ''}" aria-label="기한 날짜">`
+    const box = mode === 'date' ? `<input class="field-in due-val" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-s="${s}" data-i="${i}" value="${DUE_ISO.test(x.due || '') ? x.due : ''}" aria-label="기한 날짜">`
       : mode === 'text' ? `<input class="field-in due-val" data-s="${s}" data-i="${i}" value="${esc(x.due)}" placeholder="예) 10월 중" aria-label="기한 직접입력">` : '';
     return `<div class="due-box"><select class="field-in due-mode" data-s="${s}" data-i="${i}" aria-label="기한 입력 방식">${o('date', '날짜')}${o('dash', '-')}${o('text', '직접입력')}</select>${box}</div>`;
   }
@@ -1656,7 +1659,7 @@
     const box = el.closest('.due-box');
     box.outerHTML = minDueCell(el.dataset.s, el.dataset.i, x);
     const v = document.querySelector(`.due-val[data-s="${el.dataset.s}"][data-i="${el.dataset.i}"]`);
-    if (v) { v.focus(); if (mode === 'date' && v.showPicker) try { v.showPicker(); } catch (er) { /* 일부 브라우저 */ } }
+    if (v) v.focus();
     minTouched(el.dataset.s);
   });
   document.addEventListener('input', e => {
@@ -1701,6 +1704,84 @@
   document.addEventListener('mousedown', e => { const p = $('#ownPop'); if (p && !p.contains(e.target) && !e.target.closest('.own-btn')) ownClose(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#ownPop')) { ownClose(); e.stopPropagation(); } }, true);
 
+  /* ---------- 날짜 칸: 직접 입력(20261001 → 2026-10-01) + 달력 아이콘 + ↑↓ 칸 이동 ---------- */
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function parseDateText(v) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    let y, m, d, r;
+    if ((r = /^(\d{4})(\d{2})(\d{2})$/.exec(v)) || (r = /^(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D*$/.exec(v))) [y, m, d] = [+r[1], +r[2], +r[3]];
+    else if ((r = /^(\d{2})(\d{2})$/.exec(v)) || (r = /^(\d{1,2})\D+(\d{1,2})\D*$/.exec(v))) [y, m, d] = [now().getFullYear(), +r[1], +r[2]]; // 1001, 10/1 → 올해
+    else return null;
+    const t = new Date(y, m - 1, d);
+    if (t.getFullYear() !== y || t.getMonth() !== m - 1 || t.getDate() !== d) return null;
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+  const fireDate = el => { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+  // 다 쓰기 전(2026…)에는 다른 곳에 알리지 않는다. 8자리를 다 치면 바로 날짜로 바꾼다.
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (!el.matches || !el.matches('input[data-date]') || el.value === '' || DATE_RE.test(el.value)) return;
+    if (/^\d{8}$/.test(el.value)) { const iso = parseDateText(el.value); if (iso) { el.value = iso; return; } }
+    e.stopPropagation();
+  }, true);
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (!el.matches || !el.matches('input[data-date]') || el.value === '' || DATE_RE.test(el.value)) return;
+    e.stopPropagation();
+    const iso = parseDateText(el.value);
+    if (iso) { el.value = iso; fireDate(el); }
+    else { el.value = ''; fireDate(el); toast('날짜는 20261001 처럼 숫자 8자리로 입력해 주세요.'); }
+  }, true);
+  // 오른쪽 달력 아이콘을 누르면 달력을 띄운다
+  document.addEventListener('click', e => {
+    const el = e.target;
+    if (!el.matches || !el.matches('input[data-date]') || el.disabled || el.readOnly) return;
+    const r = el.getBoundingClientRect();
+    if (e.clientX < r.right - 32) return;
+    let pk = $('#datePick');
+    if (!pk) {
+      pk = document.createElement('input'); pk.type = 'date'; pk.id = 'datePick'; pk.tabIndex = -1; pk.setAttribute('aria-hidden', 'true');
+      pk.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;border:0;padding:0;z-index:2000';
+      document.body.appendChild(pk);
+      pk.addEventListener('change', () => { const t = pk._for; if (t && pk.value) { t.value = pk.value; fireDate(t); t.focus(); } });
+    }
+    pk._for = el;
+    pk.value = DATE_RE.test(el.value) ? el.value : (parseDateText(el.value) || '');
+    pk.style.left = Math.max(0, r.right - 32) + 'px'; pk.style.top = r.bottom + 'px';
+    try { pk.showPicker(); } catch (er) { pk.focus(); }
+  });
+  // ↑↓: 날짜를 바꾸지 않고 위·아래 칸으로 옮긴다
+  function moveVert(el, dir) {
+    const td = el.closest('td'), tr = el.closest('tr');
+    if (td && tr) {
+      const col = [...tr.children].indexOf(td);
+      let row = dir > 0 ? tr.nextElementSibling : tr.previousElementSibling;
+      while (row) {
+        const cell = row.children[col];
+        const f = cell && cell.querySelector('input:not([type=checkbox]):not(:disabled), select:not(:disabled), textarea:not(:disabled), button.own-btn');
+        if (f) return f;
+        row = dir > 0 ? row.nextElementSibling : row.previousElementSibling;
+      }
+      return null;
+    }
+    if (el.dataset.i == null) return null;
+    const list = [...document.querySelectorAll(`input[data-date]${el.dataset.k ? `[data-k="${el.dataset.k}"]` : ''}:not(:disabled)`)];
+    const at = list.indexOf(el);
+    return list[at + dir] || null;
+  }
+  document.addEventListener('keydown', e => {
+    const el = e.target;
+    if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || e.altKey || e.ctrlKey || e.metaKey || !el.matches) return;
+    if (!el.matches('input[data-date], table.m-edit input:not([type=checkbox])')) return;
+    e.preventDefault();
+    const to = moveVert(el, e.key === 'ArrowDown' ? 1 : -1);
+    if (!to) return;
+    if (el.matches('input[data-date]') && el.value && !DATE_RE.test(el.value)) el.dispatchEvent(new Event('change', { bubbles: true }));
+    to.focus();
+    if (to.select && to.tagName === 'INPUT') to.select();
+  });
+
   /** fresh=true: 새 회의록 (가장 최근 회의록을 이어받고 완료 항목은 뺀다) */
   function minEdit(fresh) {
     const base = minCur();
@@ -1735,7 +1816,7 @@
       <section class="panel">
         <div class="form m-form">
           <div class="m-grid">
-            <div class="fld"><label>일자</label><input class="field-in m-top" type="date" data-f="date" value="${esc(d.date)}"></div>
+            <div class="fld"><label>일자</label><input class="field-in m-top" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-f="date" value="${esc(d.date)}"></div>
             <div class="fld"><label>시간</label><input class="field-in m-top" data-f="time" value="${esc(d.time)}" placeholder="예) 13:30~"></div>
             <div class="fld"><label>장소</label><input class="field-in m-top" data-f="place" value="${esc(d.place)}" placeholder="예) 10층 1번 회의실"></div>
           </div>
@@ -2100,7 +2181,7 @@
             </div></div>` : ''}
           <div class="fld"><label for="eTitle">제목</label><input class="field-in" id="eTitle" placeholder="예) 노사협의회 4분기 회의"></div>
           <div class="two">
-            <div class="fld"><label for="eDate">날짜</label><input class="field-in" type="date" id="eDate" value="${esc(d)}"></div>
+            <div class="fld"><label for="eDate">날짜</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="eDate" value="${esc(d)}"></div>
             <div class="fld"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="check" id="eAll"> 종일</label></div>
           </div>
           <div class="two" id="eTimes">
@@ -2113,8 +2194,8 @@
         <div class="pane" id="paneLeave">
           <div class="fld"><label for="lType">종류</label><select class="field-in" id="lType">${LEAVE_TYPES.map(t => `<option>${t}</option>`).join('')}</select></div>
           <div class="two">
-            <div class="fld"><label for="lStart">시작일</label><input class="field-in" type="date" id="lStart" value="${esc(d)}"></div>
-            <div class="fld"><label for="lEnd">종료일 (하루면 비워두기)</label><input class="field-in" type="date" id="lEnd"></div>
+            <div class="fld"><label for="lStart">시작일</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="lStart" value="${esc(d)}"></div>
+            <div class="fld"><label for="lEnd">종료일 (하루면 비워두기)</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="lEnd"></div>
           </div>
           <div class="fld"><label for="lMemo">메모 (선택)</label><input class="field-in" id="lMemo" placeholder="예) 가족 행사"></div>
         </div>
@@ -2375,7 +2456,7 @@
       <form class="form" id="rForm" novalidate>
         <div class="two">
           <div class="fld"><label for="rCat">분류</label><select class="field-in" id="rCat">${D.ruleCategories.map(c => `<option ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
-          <div class="fld"><label for="rEff">시행일</label><input class="field-in" type="date" id="rEff" value="${esc(r.effective)}"></div>
+          <div class="fld"><label for="rEff">시행일</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="rEff" value="${esc(r.effective)}"></div>
         </div>
         <div class="fld"><label for="rTitle">제목</label><input class="field-in" id="rTitle" value="${esc(r.title)}"></div>
         <div class="fld"><label for="rBody">내용</label><textarea class="field-in" id="rBody" style="min-height:200px">${esc(r.body)}</textarea></div>
@@ -2818,7 +2899,7 @@
     return draft[key].map((it, i) => `
       <div class="item">
         <textarea class="field-in task-in" rows="1" data-k="${key}" data-i="${i}" data-f="task" placeholder="업무 내용" aria-label="업무 내용">${esc(it.task)}</textarea>
-        <input class="field-in date-in" type="date" data-k="${key}" data-i="${i}" data-f="dueIso" value="${esc(it.dueIso)}" ${it.cont ? 'disabled' : ''} aria-label="기한">
+        <input class="field-in date-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-k="${key}" data-i="${i}" data-f="dueIso" value="${esc(it.dueIso)}" ${it.cont ? 'disabled' : ''} aria-label="기한">
         <button class="toggle" data-k="${key}" data-i="${i}" data-f="cont" aria-pressed="${it.cont}">지속</button>
         <button class="icon-btn" data-k="${key}" data-i="${i}" data-f="del" aria-label="삭제">${ic('x', 'sm')}</button>
       </div>`).join('');
@@ -3097,7 +3178,7 @@
         <span class="memo-st" id="mmSt">${String(m.id).startsWith('tmp-') ? '' : ''}</span>
         <button class="btn small" onclick="meetMinNew()">${ic('plus', 'sm')}새 회의록</button></div>
       <div class="mm-top">
-        <label>일시 <input class="field-in mm-top" type="date" data-f="date" value="${esc(m.date)}"><input class="field-in mm-top" data-f="time" value="${esc(m.time)}" placeholder="13:30~" style="width:110px"></label>
+        <label>일시 <input class="field-in mm-top" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-f="date" value="${esc(m.date)}"><input class="field-in mm-top" data-f="time" value="${esc(m.time)}" placeholder="13:30~" style="width:110px"></label>
         <label>장소 <input class="field-in mm-top" data-f="place" value="${esc(m.place)}" placeholder="장소"></label>
         <label class="wide">참석자 <input class="field-in mm-top" data-f="attendees" value="${esc(m.attendees)}" placeholder="참석자"></label>
       </div>
@@ -3429,8 +3510,8 @@
         <div class="fld"><label for="hCat">구분</label><select class="field-in" id="hCat">${hrCats().map(c => `<option ${c === cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="fld"><label for="hTarget">대상 및 내용</label><input class="field-in" id="hTarget" value="${x ? esc(x.target) : ''}" placeholder="예) 홍길동(인사팀) 신규 입사"></div>
         <div class="two">
-          <div class="fld"><label for="hStart">일자 (발령일)</label><input class="field-in" type="date" id="hStart" value="${x ? esc(x.start) : ''}"></div>
-          <div class="fld"><label for="hEnd">종료일 (기간일 때)</label><input class="field-in" type="date" id="hEnd" value="${x ? esc(x.end) : ''}"></div>
+          <div class="fld"><label for="hStart">일자 (발령일)</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="hStart" value="${x ? esc(x.start) : ''}"></div>
+          <div class="fld"><label for="hEnd">종료일 (기간일 때)</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="hEnd" value="${x ? esc(x.end) : ''}"></div>
         </div>
         <div class="fld"><label for="hMemo">비고 (선택)</label><input class="field-in" id="hMemo" value="${x ? esc(x.memo) : ''}" placeholder="예) 10/7(수) 입사자 간략 OJT 진행"></div>
         <p class="sub" id="hWeekHint"></p>
