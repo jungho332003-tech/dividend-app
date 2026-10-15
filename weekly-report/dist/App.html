@@ -441,18 +441,22 @@
     .budget-cards th, .budget-cards td, .copy-t th, .copy-t td, .budget-cards td.num, .copy-t td.num, .budget-cards th.num, .copy-t th.num { text-align: center; vertical-align: middle; }
     .budget-cards .c-move .mv { justify-content: center; }
   }
-  /* 모든 표: 칸 선을 또렷하게 (팀 주간보고 표와 같은 검은 선). 휴대폰 카드 모양 표는 제외 */
+  /* 모든 표: 일정 캘린더처럼 연한 칸 선 + 둥근 모서리. 휴대폰 카드 모양 표는 제외 */
   @media (min-width: 761px) {
-    table.t { border-collapse: collapse; border: 1.5px solid var(--grid); }
-    table.t th, table.t td { border: 1px solid var(--grid) !important; border-radius: 0 !important; box-shadow: none !important; }
-    table.t thead th { color: var(--ink); font-weight: 700; font-size: 12.5px; vertical-align: middle; text-align: center; }
-    table.t thead tr:last-child th { border-bottom-width: 1.5px !important; }
-    table.t tfoot td { border-top-width: 1.5px !important; }
+    table.t { border-collapse: separate; border-spacing: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    table.t th, table.t td { border: 0 !important; border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important; box-shadow: none !important; }
+    table.t tr > :last-child { border-right: 0 !important; }
+    table.t tbody tr:last-child td, table.t tfoot tr:last-child td { border-bottom: 0 !important; }
+    table.t thead tr + tr > :last-child { border-right: 1px solid var(--line) !important; } /* 2줄 머리글: 아래 줄 끝 칸 뒤에도 칸이 있다 */
+    table.t thead th { color: var(--ink-2); font-weight: 700; font-size: 12.5px; vertical-align: middle; text-align: center; background: var(--panel-2); }
+    table.t tfoot td { border-top: 1px solid var(--line-strong) !important; }
     table.t td { vertical-align: middle; }
   }
   @media (max-width: 760px) {
-    table.t:not(.cards) { border-collapse: collapse; border: 1.5px solid var(--grid); }
-    table.t:not(.cards) th, table.t:not(.cards) td { border: 1px solid var(--grid) !important; border-radius: 0 !important; }
+    table.t:not(.cards) { border-collapse: separate; border-spacing: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    table.t:not(.cards) th, table.t:not(.cards) td { border: 0 !important; border-right: 1px solid var(--line) !important; border-bottom: 1px solid var(--line) !important; border-radius: 0 !important; }
+    table.t:not(.cards) tr > :last-child { border-right: 0 !important; }
+    table.t:not(.cards) tbody tr:last-child td { border-bottom: 0 !important; }
   }
   .copy-t th { white-space: nowrap; vertical-align: middle; }
   .copy-t th, .copy-t td { padding-left: 7px; padding-right: 7px; }
