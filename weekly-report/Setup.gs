@@ -84,6 +84,7 @@ function initialize() {
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 8, '알림메일');
+  ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 9, '채용담당(Y/N)');
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');

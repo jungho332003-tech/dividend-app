@@ -156,7 +156,7 @@ function setConfigValue(key, value) {
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -167,6 +167,7 @@ function getMembers() {
       admin: String(r[5]).trim().toUpperCase() === 'Y',
       budget: String(r[6]).trim().toUpperCase() === 'Y',
       notify: String(r[7] || '').trim(),
+      recruit: String(r[8] || '').trim().toUpperCase() === 'Y', // 채용 담당: 수습평가·인터뷰 안내 메일을 받는다
     }))
     .sort((a, b) => a.order - b.order);
 }

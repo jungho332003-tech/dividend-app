@@ -104,7 +104,7 @@ const ACCESS_TTL = 1800; // 공유 상태 캐시 30분 (권한 적용·팀원 �
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget, notify: m.notify })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget, notify: m.notify, recruit: m.recruit })),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -217,6 +217,7 @@ function apiSaveMembers(list) {
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 8, '알림메일');
+  ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 9, '채용담당(Y/N)');
 
   const rows = (list || []).map((m, i) => ({
     order: Number(m.order) || i + 1,
@@ -227,6 +228,7 @@ function apiSaveMembers(list) {
     admin: !!m.admin,
     budget: !!m.budget,
     notify: String(m.notify || '').trim().toLowerCase(),
+    recruit: !!m.recruit,
   })).filter(m => m.name);
 
   const names = {};
@@ -238,9 +240,9 @@ function apiSaveMembers(list) {
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 8).clearContent();
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 9).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 8).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N', m.notify]));
+    sh.getRange(2, 1, rows.length, 9).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N', m.notify, m.recruit ? 'Y' : 'N']));
   }
   clearCaches_(ctx);
   // 저장만 하고 공유 상태는 다시 확인하지 않는다 (확인은 "권한 한 번에 적용"이나 "상태 새로고침"에서)

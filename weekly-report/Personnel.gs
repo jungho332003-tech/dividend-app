@@ -231,3 +231,68 @@ function writeHrTable_(sh, ctx, top, table) {
     .setBorder(true, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_MEDIUM));
   return row;
 }
+
+/* ---------- 채용 담당자 안내 메일 (매시간 자동 실행에서) ----------
+ *  - 입사: 입사일 + 70일이 되는 날 → 수습평가 안내
+ *  - 인터뷰: 인터뷰 전날 → 내일 인터뷰 안내
+ * 받는 사람: [팀원] 시트 "채용담당(Y)" — 알림메일(회사 메일) 칸이 있으면 그 주소로.
+ * 같은 항목·같은 날짜로는 한 번만 보낸다 (날짜를 고치면 새 날짜 기준으로 다시 보낸다).
+ */
+const HR_MAIL = {
+  PROBATION_DAYS: 70,
+  HOUR: 9,      // 오전 9시 이후 첫 자동 실행 때 보낸다
+  LATE_DAYS: 3, // 그날 못 보냈으면 3일 안에는 보낸다 (기능을 켜기 전 지난 입사자에게 한꺼번에 가지 않도록)
+};
+
+function hrMailCheck_(ctx, now) {
+  now = now || new Date();
+  if (now.getHours() < HR_MAIL.HOUR) return [];
+  const to = ctx.members.filter(m => m.recruit).map(mailTo_).filter(Boolean);
+  const sh = ctx.ss.getSheetByName(HR.SHEET);
+  if (!to.length || !sh || sh.getLastRow() < 2) return [];
+  const today = startOfDay_(now);
+  const props = PropertiesService.getDocumentProperties();
+  const team = ctx.cfg[CFG.TEAM] || '';
+  const url = ScriptApp.getService().getUrl() || ctx.ss.getUrl();
+  const md = d => `${d.getMonth() + 1}/${d.getDate()}(${DAY_KO[d.getDay()]})`;
+  const sent = [];
+
+  sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.DELETED).getValues().forEach(r => {
+    const id = String(r[0]).trim();
+    const cat = String(r[HCOL.CATEGORY - 1]).trim();
+    const start = r[HCOL.START - 1];
+    if (!id || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y' || !(start instanceof Date)) return;
+    const target = String(r[HCOL.TARGET - 1]).trim();
+    const memo = String(r[HCOL.MEMO - 1] || '').trim();
+    const day = startOfDay_(start);
+
+    let due = null, mail = null;
+    if (cat === '입사') {
+      due = addDays(day, HR_MAIL.PROBATION_DAYS);
+      mail = {
+        subject: `[${team}] 수습평가 안내 - ${target} (입사 ${HR_MAIL.PROBATION_DAYS}일)`,
+        htmlBody: `채용 담당자님, 아래 입사자가 입사 ${HR_MAIL.PROBATION_DAYS}일이 되었습니다. 수습평가 진행을 준비해 주세요.<br><br>` +
+          `· 대상: <b>${target}</b><br>· 입사일: ${md(day)}<br>· 입사 ${HR_MAIL.PROBATION_DAYS}일: ${md(due)}<br>` +
+          (memo ? `· 비고: ${memo}<br>` : '') + `<br><a href="${url}">업무관리 열기</a>`,
+      };
+    } else if (cat === '인터뷰') {
+      due = addDays(day, -1);
+      mail = {
+        subject: `[${team}] 내일 인터뷰 안내 - ${target} (${md(day)})`,
+        htmlBody: `채용 담당자님, 내일 인터뷰 일정이 있습니다.<br><br>` +
+          `· 내용: <b>${target}</b><br>· 일자: ${hrPeriod_(start, r[HCOL.END - 1])}<br>` +
+          (memo ? `· 비고: ${memo}<br>` : '') + `<br><a href="${url}">업무관리 열기</a>`,
+      };
+    } else return;
+
+    if (today < due || today > addDays(due, cat === '인터뷰' ? 0 : HR_MAIL.LATE_DAYS)) return; // 인터뷰는 전날에만
+    const key = `HRMAIL:${cat}:${id}:${ymd(day)}`;
+    if (props.getProperty(key)) return;
+    try {
+      MailApp.sendEmail(Object.assign({ to: to.join(',') }, mail));
+      props.setProperty(key, ymd(today));
+      sent.push(`${cat} ${target}`);
+    } catch (e) { /* 메일 한도 등 → 다음 실행 때 다시 */ }
+  });
+  return sent;
+}

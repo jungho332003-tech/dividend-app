@@ -153,6 +153,7 @@ function sendClosingMail_(ctx) {
  *  - 평일 업무시간엔 보고서 자동 새로고침 (바뀐 내용이 있을 때만)
  *  - 마감 N시간 전 미작성자 알림 (주 1회)
  *  - 마감 후 팀장에게 취합 메일 (주 1회)
+ *  - 채용 담당자 안내 메일 (입사 70일 수습평가, 인터뷰 전날)
  *  - 화면 데이터 미리 캐시 (첫 접속 속도)
  */
 function hourlyCheck() {
@@ -180,6 +181,7 @@ function hourlyCheck() {
     props.setProperty(PROP.CLOSED, key);
   }
 
+  hrMailCheck_(ctx, now); // 채용 담당자: 입사 70일 수습평가·인터뷰 전날 안내 메일
   warmCaches_(ctx); // 다음 접속이 빠르도록 화면 데이터를 미리 캐시
 }
 

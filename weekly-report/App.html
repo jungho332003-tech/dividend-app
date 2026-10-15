@@ -2044,6 +2044,7 @@
         <td data-label="주간보고 작성">${chk(i, 'write', m.write, '주간보고 작성')}</td>
         <td data-label="관리자">${chk(i, 'admin', m.admin, '관리자')}</td>
         <td data-label="예산담당">${chk(i, 'budget', m.budget, '예산담당')}</td>
+        <td data-label="채용담당">${chk(i, 'recruit', m.recruit, '채용담당')}</td>
         ${st && saved ? `<td data-label="스프레드시트">${accessChip('sheet', st.sheet)}</td><td data-label="입력시트">${accessChip('input', st.input)}</td><td data-label="첨부 폴더">${accessChip('folder', st.folder)}</td><td data-label="팀 캘린더">${accessChip('calendar', st.calendar)}</td>`
           : `<td colspan="4" class="c-wide"><span style="color:var(--muted);font-size:12px">${!A.status && saved ? '확인 중…' : m.email ? '저장 후 "권한 한 번에 적용"을 누르세요' : '이메일을 입력하세요'}</span></td>`}
         <td class="c-x"><button class="icon-btn" onclick="aRemove(${i})" aria-label="${esc(m.name)} 삭제">${ic('x', 'sm')}</button></td>
@@ -2066,7 +2067,7 @@
       <section class="panel">
         <div class="table-wrap">
           <table class="t cards admin-cards">
-            <thead><tr><th>이름</th><th>이메일 (구글 계정)</th><th>알림메일 (회사)</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
+            <thead><tr><th>이름</th><th>이메일 (구글 계정)</th><th>알림메일 (회사)</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th style="text-align:center" title="입사 70일 수습평가·인터뷰 전날 안내 메일을 받습니다">채용<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -2083,7 +2084,7 @@
     if (bar) bar.hidden = false;
   }
   function aAdd() {
-    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false, budget: false, notify: '' });
+    aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false, budget: false, recruit: false, notify: '' });
     aDirty = true;
     render();
     const inputs = document.querySelectorAll('#main tbody input[aria-label="이름"]');

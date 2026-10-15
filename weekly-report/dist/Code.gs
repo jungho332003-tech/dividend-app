@@ -165,7 +165,7 @@ function setConfigValue(key, value) {
 function getMembers() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues()
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues()
     .filter(r => String(r[1]).trim())
     .map(r => ({
       order: Number(r[0]) || 999,
@@ -176,6 +176,7 @@ function getMembers() {
       admin: String(r[5]).trim().toUpperCase() === 'Y',
       budget: String(r[6]).trim().toUpperCase() === 'Y',
       notify: String(r[7] || '').trim(),
+      recruit: String(r[8] || '').trim().toUpperCase() === 'Y', // 채용 담당: 수습평가·인터뷰 안내 메일을 받는다
     }))
     .sort((a, b) => a.order - b.order);
 }
@@ -370,6 +371,7 @@ function initialize() {
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
   ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 8, '알림메일');
+  ensureHeader_(ss.getSheetByName(SHEET.MEMBERS), 9, '채용담당(Y/N)');
   if (!ss.getSheetByName(SHEET.REPORT)) ss.insertSheet(SHEET.REPORT, 0);
 
   SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n[팀원] 시트에 이름·이메일을, [예산과목] 시트에 과목·편성액을 입력한 뒤\n"2. 팀원 입력시트 만들기 + 권한 적용"을 실행하세요.');
@@ -889,6 +891,7 @@ function sendClosingMail_(ctx) {
  *  - 평일 업무시간엔 보고서 자동 새로고침 (바뀐 내용이 있을 때만)
  *  - 마감 N시간 전 미작성자 알림 (주 1회)
  *  - 마감 후 팀장에게 취합 메일 (주 1회)
+ *  - 채용 담당자 안내 메일 (입사 70일 수습평가, 인터뷰 전날)
  *  - 화면 데이터 미리 캐시 (첫 접속 속도)
  */
 function hourlyCheck() {
@@ -916,6 +919,7 @@ function hourlyCheck() {
     props.setProperty(PROP.CLOSED, key);
   }
 
+  hrMailCheck_(ctx, now); // 채용 담당자: 입사 70일 수습평가·인터뷰 전날 안내 메일
   warmCaches_(ctx); // 다음 접속이 빠르도록 화면 데이터를 미리 캐시
 }
 
@@ -2041,6 +2045,71 @@ function writeHrTable_(sh, ctx, top, table) {
   return row;
 }
 
+/* ---------- 채용 담당자 안내 메일 (매시간 자동 실행에서) ----------
+ *  - 입사: 입사일 + 70일이 되는 날 → 수습평가 안내
+ *  - 인터뷰: 인터뷰 전날 → 내일 인터뷰 안내
+ * 받는 사람: [팀원] 시트 "채용담당(Y)" — 알림메일(회사 메일) 칸이 있으면 그 주소로.
+ * 같은 항목·같은 날짜로는 한 번만 보낸다 (날짜를 고치면 새 날짜 기준으로 다시 보낸다).
+ */
+const HR_MAIL = {
+  PROBATION_DAYS: 70,
+  HOUR: 9,      // 오전 9시 이후 첫 자동 실행 때 보낸다
+  LATE_DAYS: 3, // 그날 못 보냈으면 3일 안에는 보낸다 (기능을 켜기 전 지난 입사자에게 한꺼번에 가지 않도록)
+};
+
+function hrMailCheck_(ctx, now) {
+  now = now || new Date();
+  if (now.getHours() < HR_MAIL.HOUR) return [];
+  const to = ctx.members.filter(m => m.recruit).map(mailTo_).filter(Boolean);
+  const sh = ctx.ss.getSheetByName(HR.SHEET);
+  if (!to.length || !sh || sh.getLastRow() < 2) return [];
+  const today = startOfDay_(now);
+  const props = PropertiesService.getDocumentProperties();
+  const team = ctx.cfg[CFG.TEAM] || '';
+  const url = ScriptApp.getService().getUrl() || ctx.ss.getUrl();
+  const md = d => `${d.getMonth() + 1}/${d.getDate()}(${DAY_KO[d.getDay()]})`;
+  const sent = [];
+
+  sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.DELETED).getValues().forEach(r => {
+    const id = String(r[0]).trim();
+    const cat = String(r[HCOL.CATEGORY - 1]).trim();
+    const start = r[HCOL.START - 1];
+    if (!id || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y' || !(start instanceof Date)) return;
+    const target = String(r[HCOL.TARGET - 1]).trim();
+    const memo = String(r[HCOL.MEMO - 1] || '').trim();
+    const day = startOfDay_(start);
+
+    let due = null, mail = null;
+    if (cat === '입사') {
+      due = addDays(day, HR_MAIL.PROBATION_DAYS);
+      mail = {
+        subject: `[${team}] 수습평가 안내 - ${target} (입사 ${HR_MAIL.PROBATION_DAYS}일)`,
+        htmlBody: `채용 담당자님, 아래 입사자가 입사 ${HR_MAIL.PROBATION_DAYS}일이 되었습니다. 수습평가 진행을 준비해 주세요.<br><br>` +
+          `· 대상: <b>${target}</b><br>· 입사일: ${md(day)}<br>· 입사 ${HR_MAIL.PROBATION_DAYS}일: ${md(due)}<br>` +
+          (memo ? `· 비고: ${memo}<br>` : '') + `<br><a href="${url}">업무관리 열기</a>`,
+      };
+    } else if (cat === '인터뷰') {
+      due = addDays(day, -1);
+      mail = {
+        subject: `[${team}] 내일 인터뷰 안내 - ${target} (${md(day)})`,
+        htmlBody: `채용 담당자님, 내일 인터뷰 일정이 있습니다.<br><br>` +
+          `· 내용: <b>${target}</b><br>· 일자: ${hrPeriod_(start, r[HCOL.END - 1])}<br>` +
+          (memo ? `· 비고: ${memo}<br>` : '') + `<br><a href="${url}">업무관리 열기</a>`,
+      };
+    } else return;
+
+    if (today < due || today > addDays(due, cat === '인터뷰' ? 0 : HR_MAIL.LATE_DAYS)) return; // 인터뷰는 전날에만
+    const key = `HRMAIL:${cat}:${id}:${ymd(day)}`;
+    if (props.getProperty(key)) return;
+    try {
+      MailApp.sendEmail(Object.assign({ to: to.join(',') }, mail));
+      props.setProperty(key, ymd(today));
+      sent.push(`${cat} ${target}`);
+    } catch (e) { /* 메일 한도 등 → 다음 실행 때 다시 */ }
+  });
+  return sent;
+}
+
 // ===================================================================
 // Leave.gs
 // ===================================================================
@@ -2548,7 +2617,7 @@ const ACCESS_TTL = 1800; // 공유 상태 캐시 30분 (권한 적용·팀원 �
 function adminData_(ctx, useCache) {
   const cfg = ctx.cfg;
   return {
-    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget, notify: m.notify })),
+    members: ctx.members.map(m => ({ order: m.order, name: m.name, email: m.email, role: m.role, write: m.write, admin: m.admin, budget: m.budget, notify: m.notify, recruit: m.recruit })),
     menus: MENUS,
     roles: ROLES,
     menuAccess: getMenuAccess_(),
@@ -2661,6 +2730,7 @@ function apiSaveMembers(list) {
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 6, '관리자(Y/N)');
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 7, '예산담당(Y/N)');
   ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 8, '알림메일');
+  ensureHeader_(ctx.ss.getSheetByName(SHEET.MEMBERS), 9, '채용담당(Y/N)');
 
   const rows = (list || []).map((m, i) => ({
     order: Number(m.order) || i + 1,
@@ -2671,6 +2741,7 @@ function apiSaveMembers(list) {
     admin: !!m.admin,
     budget: !!m.budget,
     notify: String(m.notify || '').trim().toLowerCase(),
+    recruit: !!m.recruit,
   })).filter(m => m.name);
 
   const names = {};
@@ -2682,9 +2753,9 @@ function apiSaveMembers(list) {
   });
 
   const sh = ctx.ss.getSheetByName(SHEET.MEMBERS);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 8).clearContent();
+  if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 9).clearContent();
   if (rows.length) {
-    sh.getRange(2, 1, rows.length, 8).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N', m.notify]));
+    sh.getRange(2, 1, rows.length, 9).setValues(rows.map(m => [m.order, m.name, m.email, m.role, m.write ? 'Y' : 'N', m.admin ? 'Y' : 'N', m.budget ? 'Y' : 'N', m.notify, m.recruit ? 'Y' : 'N']));
   }
   clearCaches_(ctx);
   // 저장만 하고 공유 상태는 다시 확인하지 않는다 (확인은 "권한 한 번에 적용"이나 "상태 새로고침"에서)
