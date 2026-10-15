@@ -154,6 +154,7 @@
   .top-user b { font-weight: 600; }
 
   .main { padding: 28px 32px 56px; width: 100%; max-width: 1320px; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .main.wide { max-width: none; } /* 일정: 화면 너비를 다 쓴다 */
 
   /* ===== 페이지 머리 ===== */
   .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; }
@@ -463,7 +464,7 @@
   .cal-grid .dow { text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); padding: 10px 0; border-bottom: 1px solid var(--line); background: var(--panel-2); }
   .cal-grid .dow.sun, .cal-day.sun .dn, .cal-day.holi .dn { color: var(--warn-ink); }
   .cal-day {
-    min-height: 132px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    min-height: max(132px, calc((100vh - 300px) / 6)); border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
     padding: 7px; display: flex; flex-direction: column; gap: 4px; background: var(--panel); cursor: pointer; text-align: left; font: inherit; color: inherit;
   }
   .cal-day:nth-child(7n) { border-right: 0; }
@@ -989,6 +990,7 @@
     });
 
     renderTopbar(initials, role);
+    $('#main').classList.toggle('wide', page === 'calendar');
     $('#main').innerHTML = PAGES[page]();
     if (page === 'weekly' && (weeklyTab === 'mine' || weeklyTab === 'pre')) bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = $('#main').onkeydown = null;
     if (page === 'dash' && !upcoming && can('calendar')) loadUpcoming();
