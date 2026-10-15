@@ -326,8 +326,8 @@
   .report td.cm textarea { width: 100%; min-height: 70px; border: 1px solid var(--field-line); border-radius: 6px; padding: 6px; background: var(--panel); }
   .report-title { font-weight: 700; margin: 0 0 4px; }
   /* 팀 주간보고: 회의 때 같이 보기 좋게 */
-  table.report.team { font-size: 14.5px; line-height: 1.5; width: 100%; }
-  .report.team th, .report.team td { padding: 10px 12px; }
+  table.report.team { font-size: 14.5px; line-height: 1.5; width: 100%; table-layout: fixed; } /* 금주·차주 업무 칸 너비를 똑같이 */
+  .report.team th, .report.team td { padding: 10px 12px; word-break: keep-all; overflow-wrap: anywhere; } /* 띄어쓰기 단위로 줄바꿈 */
   .report.team td.cm { background: none; }
   .report.team tr.alt td { background: var(--row-alt); }
   .report.team td.nm { vertical-align: middle; text-align: center; }
