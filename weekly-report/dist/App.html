@@ -3045,22 +3045,48 @@
       else if (form.fromCost === form.toCost && form.from === form.to) msg = '변경전과 변경후가 같습니다.';
       else if (a && Number(form.amount) > a.current) msg = `현재예산을 초과합니다. (${bLabel(form.fromCost, a.code, form.from)} 현재예산 ${won(a.current)}원)`;
       if (msg) { err.textContent = msg; err.hidden = false; return; }
-      $('#bSubmit').disabled = true;
+      // 서버를 기다리지 않고 신청 내역·현재예산에 바로 반영한다 (실패하면 되돌린다)
+      const undo = budgetLocal(form);
+      closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; budgetMonth = form.month; render();
       call('apiSubmitBudget', form)
-        .then(data => { applyData(data); closeModal(); page = 'budget'; budgetTab = 'list'; budgetFilter = 'all'; budgetMonth = form.month; render(); toast(`${monthName(form.month)}분 ${data.newId || D.budget.requests[0].id} 신청 완료`); })
-        .catch(e2 => { $('#bSubmit').disabled = false; err.textContent = e2.message || String(e2); err.hidden = false; });
+        .then(data => { applyData(data); render(); toast(`${monthName(form.month)}분 ${data.newId || D.budget.requests[0].id} 신청 완료`); })
+        .catch(e2 => { undo(); render(); fail(e2); });
     };
   }
 
   function cancelBudget(row, id) {
     const r = D.budget.requests.find(x => x.row === row);
+    if (!r || r.pending) return toast('신청을 저장하는 중입니다. 잠시 후 다시 눌러 주세요.');
     openModal(`<h3>${esc(id)} 신청을 취소할까요?</h3>
       <p class="sub">${esc(r.req)} · ${esc(bLabel(r.fromCost, r.fromCode, r.from))} → ${esc(bLabel(r.toCost, r.toCode, r.to))} · <b>${won(r.amount)}원</b><br>취소하면 예산에서 빠지고, 시트에는 취소 표시로 남습니다.</p>
       <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" id="cxOk">신청 취소</button></div>`);
     $('#cxOk').onclick = () => {
-      $('#cxOk').disabled = true;
-      call('apiCancelBudget', row, id).then(data => { applyData(data); closeModal(); render(); toast(`${id} 신청을 취소했습니다.`); }).catch(e => { closeModal(); fail(e); });
+      const undo = budgetLocal(r, true);
+      closeModal(); render();
+      call('apiCancelBudget', row, id).then(data => { applyData(data); render(); toast(`${id} 신청을 취소했습니다.`); }).catch(e => { undo(); render(); fail(e); });
     };
+  }
+
+  /**
+   * 예산전용 신청(cancel=false)·취소(cancel=true)를 화면에 먼저 반영한다: 신청 내역 + 변경전/변경후 현재예산.
+   * 되돌리는 함수를 돌려준다.
+   */
+  function budgetLocal(f, cancel) {
+    const before = JSON.stringify(D.budget);
+    const amt = Number(f.amount) || 0, sign = cancel ? -1 : 1;
+    const acc = (cost, name) => D.budget.accounts.find(a => a.cost === cost && a.name === name);
+    const from = acc(f.fromCost, f.from), to = acc(f.toCost, f.to);
+    if (from) { from.outAmt += sign * amt; from.current -= sign * amt; }
+    if (to) { to.inAmt += sign * amt; to.current += sign * amt; }
+    if (cancel) D.budget.requests = D.budget.requests.filter(x => x !== f);
+    else {
+      const n = new Date();
+      D.budget.requests.unshift({ row: -1, id: '접수 중', pending: true, req: f.requester, month: f.month,
+        date: `${dkey(n)} ${pad2(n.getHours())}:${pad2(n.getMinutes())}`,
+        fromCost: f.fromCost, fromCode: from ? from.code : '', from: f.from, toCost: f.toCost, toCode: to ? to.code : '', to: f.to,
+        amount: amt, reason: f.reason });
+    }
+    return () => { D.budget = JSON.parse(before); };
   }
 
   /* ================= 기타 동작 ================= */
