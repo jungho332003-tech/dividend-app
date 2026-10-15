@@ -108,6 +108,7 @@ function apiBootstrap() {
     board: can('board') ? cached_(CK.board, () => readBoard_(ss)) : [],
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
     minutes: can('weekly') ? cached_(CK.minutes, () => readMinutes_(ss)) : [],
+    people: can('weekly') ? ctx.members.filter(m => m.name).map(m => m.name) : [], // 회의록 담당 고르기용 (주간보고를 안 쓰는 팀장도 포함)
   });
 }
 

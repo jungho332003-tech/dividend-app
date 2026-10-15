@@ -2172,7 +2172,7 @@ function hrMailCheck_(ctx, now) {
  * 회의록 (주간업무보고 > 회의록 탭)
  *
  * [회의록]  번호 | 일자 | 시간 | 장소 | 참석자 | 방향성 | 항목(JSON) | 수정자 | 수정일시 | 삭제(Y)
- * 항목: [{ cat: 구분, sub: 세부, content: 내용, owner: 담당, due: 기한(자유 입력), status: 진행상태 }]
+ * 항목: [{ cat: 구분, sub: 세부, content: 내용, owner: 담당(여러 명은 쉼표), due: 기한(yyyy-mm-dd / - / 직접 입력), status: 진행상태 }]
  * 새 회의록은 지난 회의록을 이어받아 시작한다 (완료한 항목은 빼고).
  */
 
@@ -3233,6 +3233,7 @@ function apiBootstrap() {
     board: can('board') ? cached_(CK.board, () => readBoard_(ss)) : [],
     rules: can('rules') ? cached_(CK.rules, () => readRules_(ss)) : [],
     minutes: can('weekly') ? cached_(CK.minutes, () => readMinutes_(ss)) : [],
+    people: can('weekly') ? ctx.members.filter(m => m.name).map(m => m.name) : [], // 회의록 담당 고르기용 (주간보고를 안 쓰는 팀장도 포함)
   });
 }
 

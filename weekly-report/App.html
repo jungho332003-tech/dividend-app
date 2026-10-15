@@ -560,6 +560,14 @@
   .m-edit td.m-act .icon-btn { width: 28px; height: 28px; }
   @media (max-width: 760px) { .m-grid { grid-template-columns: 1fr 1fr; } .m-grid .fld:last-child { grid-column: 1 / -1; } }
   .meet-min { display: flex; flex-direction: column; gap: 10px; }
+  .due-box { display: flex; flex-direction: column; gap: 4px; }
+  .m-edit .due-box .field-in { width: 100%; min-width: 0; padding: 5px 6px; font-size: inherit; }
+  .own-btn { width: 100%; min-height: 34px; padding: 6px 8px; text-align: center; cursor: pointer; background: var(--panel); font-size: inherit; line-height: 1.4; word-break: keep-all; }
+  .own-btn .ph { color: var(--muted); }
+  .own-pop { position: fixed; z-index: 1000; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; max-height: 320px; overflow: auto; display: flex; flex-direction: column; }
+  .own-pop label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .own-pop label:hover { background: var(--panel-2); }
+  .own-foot { display: flex; justify-content: flex-end; gap: 6px; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; }
   /* 회의 모드: 왼쪽 주간업무 | 오른쪽 회의록 (각자 스크롤) */
   .meet-body.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: minmax(0, 1fr); gap: 18px; overflow: hidden; }
   .meet-body.split .meet-left, .meet-body.split .meet-right { min-width: 0; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 18px; }
@@ -1066,6 +1074,7 @@
 
   /* ================= 렌더링 ================= */
   function render() {
+    ownClose();
     $('#brandTeam').textContent = `${D.team} 업무관리`;
     $('#brandWeek').textContent = D.week.thisLabel;
     const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
@@ -1583,7 +1592,7 @@
     const rows = m.items.map((x, i) => `<tr class="${x.status === '완료' ? 'm-done' : ''}">
         ${sp.cat[i] ? `<td rowspan="${sp.cat[i]}" ${noSub[i] ? 'colspan="2"' : ''} class="m-cat">${esc(x.cat)}</td>` : ''}
         ${!noSub[i] && sp.sub[i] ? `<td rowspan="${sp.sub[i]}" class="m-sub">${esc(x.sub)}</td>` : ''}
-        <td class="m-content">${esc(x.content)}</td><td>${esc(x.owner)}</td><td class="m-due">${esc(x.due || '-')}</td>
+        <td class="m-content">${esc(x.content)}</td><td>${esc(x.owner)}</td><td class="m-due">${esc(minDueText(x.due))}</td>
         <td><span class="m-st ${minStatusCls(x.status)}">${esc(x.status)}</span></td></tr>`).join('')
       || '<tr><td colspan="6" class="empty">항목이 없습니다.</td></tr>';
     return `<section class="panel min-side">${head}
@@ -1604,6 +1613,94 @@
       </section>`;
   }
 
+  /* ---------- 회의록 담당(여러 명)·기한(날짜 / - / 직접입력) ---------- */
+  const DUE_ISO = /^\d{4}-\d{2}-\d{2}$/;
+  const minDueMode = v => v === '-' ? 'dash' : (!v || DUE_ISO.test(v)) ? 'date' : 'text';
+  const minDueText = v => DUE_ISO.test(v || '') ? fmtDue(v) : (v || '-');
+  const minOwners = v => String(v || '').split(/\s*,\s*/).map(t => t.trim()).filter(Boolean);
+  const minStore = s => s === 'mm' ? meetMin : minDraft;
+  /** 예전처럼 '10/08 (목)'으로 적은 기한은 날짜로 바꿔 둔다 (연도는 회의 일자 기준) */
+  function minNormDue(m) {
+    if (!m) return m;
+    const base = DUE_ISO.test(m.date || '') ? m.date : dkey(now());
+    m.items.forEach(x => {
+      const r = /^(\d{1,2})\/(\d{1,2})(\s*\([^)]*\))?$/.exec(String(x.due || '').trim());
+      if (!r || +r[1] < 1 || +r[1] > 12 || +r[2] < 1 || +r[2] > 31) return;
+      let y = +base.slice(0, 4);
+      if (+r[1] < +base.slice(5, 7) - 6) y++; // 12월 회의에서 1월 기한
+      x.due = `${y}-${pad2(+r[1])}-${pad2(+r[2])}`;
+    });
+    return m;
+  }
+  function minDueCell(s, i, x) {
+    const mode = x._dm || minDueMode(x.due);
+    const o = (v, t) => `<option value="${v}" ${mode === v ? 'selected' : ''}>${t}</option>`;
+    const box = mode === 'date' ? `<input class="field-in due-val" type="date" data-s="${s}" data-i="${i}" value="${DUE_ISO.test(x.due || '') ? x.due : ''}" aria-label="기한 날짜">`
+      : mode === 'text' ? `<input class="field-in due-val" data-s="${s}" data-i="${i}" value="${esc(x.due)}" placeholder="예) 10월 중" aria-label="기한 직접입력">` : '';
+    return `<div class="due-box"><select class="field-in due-mode" data-s="${s}" data-i="${i}" aria-label="기한 입력 방식">${o('date', '날짜')}${o('dash', '-')}${o('text', '직접입력')}</select>${box}</div>`;
+  }
+  function minOwnerCell(s, i, x) {
+    const list = minOwners(x.owner);
+    return `<button type="button" class="field-in own-btn" data-s="${s}" data-i="${i}" onclick="ownOpen(this)" aria-label="담당 고르기">${list.length ? esc(list.join(', ')) : '<span class="ph">담당 선택</span>'}</button>`;
+  }
+  function minTouched(s) { if (s === 'mm') meetMinQueue(); }
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (!el.classList || !el.classList.contains('due-mode')) return;
+    const x = minStore(el.dataset.s) && minStore(el.dataset.s).items[Number(el.dataset.i)];
+    if (!x) return;
+    const mode = el.value, was = x.due || '';
+    x._dm = mode;
+    x.due = mode === 'dash' ? '-' : mode === 'date' ? (DUE_ISO.test(was) ? was : '')
+      : (was === '-' ? '' : DUE_ISO.test(was) ? fmtDue(was) : was); // 날짜를 고른 뒤 직접입력으로 바꾸면 그 날짜를 글자로 이어받는다
+    const box = el.closest('.due-box');
+    box.outerHTML = minDueCell(el.dataset.s, el.dataset.i, x);
+    const v = document.querySelector(`.due-val[data-s="${el.dataset.s}"][data-i="${el.dataset.i}"]`);
+    if (v) { v.focus(); if (mode === 'date' && v.showPicker) try { v.showPicker(); } catch (er) { /* 일부 브라우저 */ } }
+    minTouched(el.dataset.s);
+  });
+  document.addEventListener('input', e => {
+    const el = e.target;
+    if (!el.classList || !el.classList.contains('due-val')) return;
+    const x = minStore(el.dataset.s) && minStore(el.dataset.s).items[Number(el.dataset.i)];
+    if (!x) return;
+    x.due = el.value;
+    minTouched(el.dataset.s);
+  });
+  /** 담당 고르기: 등록된 팀원 목록에서 여러 명 체크 */
+  function ownClose() { const p = $('#ownPop'); if (p) p.remove(); }
+  function ownOpen(btn) {
+    const open = $('#ownPop');
+    ownClose();
+    if (open && open.dataset.key === btn.dataset.s + btn.dataset.i) return; // 같은 단추를 다시 누르면 닫기
+    const x = minStore(btn.dataset.s).items[Number(btn.dataset.i)];
+    const names = (D.people && D.people.length ? D.people : D.members.map(m => m.name)).slice();
+    const cur = minOwners(x.owner);
+    const all = names.concat(cur.filter(n => names.indexOf(n) < 0)); // 예전에 직접 쓴 이름도 남겨 둔다
+    const pop = document.createElement('div');
+    pop.id = 'ownPop'; pop.className = 'own-pop'; pop.dataset.key = btn.dataset.s + btn.dataset.i;
+    pop.innerHTML = all.map(n => `<label><input type="checkbox" value="${esc(n)}" ${cur.indexOf(n) >= 0 ? 'checked' : ''}> ${esc(n)}</label>`).join('')
+      + `<div class="own-foot"><button type="button" class="btn small" data-clear>모두 해제</button><button type="button" class="btn small primary" data-done>확인</button></div>`;
+    document.body.appendChild(pop);
+    const r = btn.getBoundingClientRect();
+    const h = pop.offsetHeight, w = Math.max(r.width, 170);
+    pop.style.width = w + 'px';
+    pop.style.left = Math.min(r.left, innerWidth - w - 8) + 'px';
+    pop.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 4) : r.bottom + 4) + 'px';
+    const apply = () => {
+      const picked = all.filter(n => pop.querySelector(`input[value="${CSS.escape(n)}"]`).checked);
+      x.owner = picked.join(', ');
+      const b = document.querySelector(`.own-btn[data-s="${btn.dataset.s}"][data-i="${btn.dataset.i}"]`);
+      if (b) b.innerHTML = picked.length ? esc(x.owner) : '<span class="ph">담당 선택</span>';
+      minTouched(btn.dataset.s);
+    };
+    pop.addEventListener('change', apply);
+    pop.querySelector('[data-clear]').onclick = () => { pop.querySelectorAll('input').forEach(c => { c.checked = false; }); apply(); };
+    pop.querySelector('[data-done]').onclick = ownClose;
+  }
+  document.addEventListener('mousedown', e => { const p = $('#ownPop'); if (p && !p.contains(e.target) && !e.target.closest('.own-btn')) ownClose(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#ownPop')) { ownClose(); e.stopPropagation(); } }, true);
+
   /** fresh=true: 새 회의록 (가장 최근 회의록을 이어받고 완료 항목은 뺀다) */
   function minEdit(fresh) {
     const base = minCur();
@@ -1613,6 +1710,7 @@
         ? { id: '', date: dkey(now()), time: base.time, place: base.place, attendees: base.attendees, vision: base.vision, items: copy(base.items).filter(x => x.status !== '완료') }
         : { id: '', date: dkey(now()), time: '', place: '', attendees: '', vision: '', items: [{ cat: '', sub: '', content: '', owner: '', due: '', status: '진행중' }] };
     } else minDraft = copy(base);
+    minNormDue(minDraft);
     render();
   }
   function minEditorHtml() {
@@ -1621,7 +1719,7 @@
     const rows = d.items.map((x, i) => `<tr>
         <td>${inp(i, 'cat', x.cat, '구분')}</td><td>${inp(i, 'sub', x.sub, '세부')}</td>
         <td><textarea class="field-in m-in" data-i="${i}" data-f="content" rows="1" placeholder="내용" aria-label="내용">${esc(x.content)}</textarea></td>
-        <td>${inp(i, 'owner', x.owner, '담당')}</td><td>${inp(i, 'due', x.due, '예) 10/14 (수)')}</td>
+        <td>${minOwnerCell('d', i, x)}</td><td>${minDueCell('d', i, x)}</td>
         <td><select class="field-in m-in" data-i="${i}" data-f="status" aria-label="진행상태">${MIN_STATUS.map(s2 => `<option ${s2 === x.status ? 'selected' : ''}>${s2}</option>`).join('')}</select></td>
         <td class="m-act"><button class="icon-btn" onclick="minRow(${i},-1)" title="위로" aria-label="위로">↑</button><button class="icon-btn" onclick="minRow(${i},1)" title="아래로" aria-label="아래로">↓</button><button class="icon-btn" onclick="minRow(${i},0)" title="지우기" aria-label="지우기">${ic('x', 'sm')}</button></td>
       </tr>`).join('');
@@ -1648,7 +1746,7 @@
       <section class="panel">
         <div class="table-wrap">
           <table class="t m-edit">
-            <colgroup><col style="width:150px"><col style="width:120px"><col><col style="width:100px"><col style="width:130px"><col style="width:125px"><col style="width:110px"></colgroup>
+            <colgroup><col style="width:150px"><col style="width:120px"><col><col style="width:130px"><col style="width:150px"><col style="width:125px"><col style="width:110px"></colgroup>
             <thead><tr><th>구분</th><th>세부</th><th>내용</th><th>담당</th><th>기한</th><th>진행상태</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
@@ -2922,6 +3020,7 @@
   }
 
   function drawMeeting() {
+    ownClose();
     const total = D.members.length;
     const onHr = meetIdx === total, onMin = meetIdx > total;
     const pills = D.members.map((m, i) => `<button class="mp ${i === meetIdx ? 'on' : ''} ${m.done ? '' : 'pending'}" onclick="meetGo(${i})">${esc(m.name)}</button>`).join('')
@@ -2980,7 +3079,7 @@
   try { meetSplit = localStorage.getItem('meetSplit') !== '0'; } catch (e) { /* 저장소 없음 */ }
   function meetToggleSplit() { meetMinFlush(); meetSplit = !meetSplit; try { localStorage.setItem('meetSplit', meetSplit ? '1' : '0'); } catch (e) { /* 저장소 없음 */ } drawMeeting(); }
   function meetMinHtml(side) {
-    if (!meetMin) { const cur = minCur(); meetMin = cur ? JSON.parse(JSON.stringify(cur)) : null; }
+    if (!meetMin) { const cur = minCur(); meetMin = cur ? minNormDue(JSON.parse(JSON.stringify(cur))) : null; }
     const m = meetMin;
     if (!m) return `<div class="meet-hr"><h2>■ 회의록</h2><p class="none">아직 회의록이 없습니다.</p>
       <button class="btn primary" onclick="meetMinNew()">${ic('plus', 'sm')}새 회의록 시작</button></div>`;
@@ -2988,7 +3087,7 @@
     const rows = m.items.map((x, i) => `<tr class="${x.status === '완료' ? 'm-done' : ''}">
         <td>${inp(i, 'cat', x.cat, '구분')}</td><td>${inp(i, 'sub', x.sub, '세부')}</td>
         <td><textarea class="field-in mm-in" data-i="${i}" data-f="content" rows="1" placeholder="내용" aria-label="내용">${esc(x.content)}</textarea></td>
-        <td>${inp(i, 'owner', x.owner, '담당')}</td><td>${inp(i, 'due', x.due, '기한')}</td>
+        <td>${minOwnerCell('mm', i, x)}</td><td>${minDueCell('mm', i, x)}</td>
         <td><select class="field-in mm-in st-${minStatusCls(x.status)}" data-i="${i}" data-f="status" aria-label="진행상태">${MIN_STATUS.map(s2 => `<option ${s2 === x.status ? 'selected' : ''}>${s2}</option>`).join('')}</select></td>
         <td class="m-act"><button class="icon-btn" onclick="meetMinRow(${i},-1)" aria-label="위로">↑</button><button class="icon-btn" onclick="meetMinRow(${i},1)" aria-label="아래로">↓</button><button class="icon-btn" onclick="meetMinRow(${i},0)" aria-label="지우기">${ic('x', 'sm')}</button></td>
       </tr>`).join('');
@@ -3003,7 +3102,7 @@
         <label class="wide">참석자 <input class="field-in mm-top" data-f="attendees" value="${esc(m.attendees)}" placeholder="참석자"></label>
       </div>
       <div class="table-wrap"><table class="t m-edit mm-table">
-        <colgroup><col style="width:13%"><col style="width:11%"><col><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:96px"></colgroup>
+        <colgroup><col style="width:13%"><col style="width:11%"><col><col style="width:12%"><col style="width:14%"><col style="width:12%"><col style="width:96px"></colgroup>
         <thead><tr><th>구분</th><th>세부</th><th>내용</th><th>담당</th><th>기한</th><th>진행상태</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <button class="btn small add" onclick="meetMinAdd()" style="margin-top:10px">${ic('plus', 'sm')}항목 추가</button>
@@ -3043,7 +3142,7 @@
     meetMin = base
       ? { id: 'tmp-' + Date.now(), date: dkey(now()), time: base.time, place: base.place, attendees: base.attendees, vision: base.vision, items: JSON.parse(JSON.stringify(base.items)).filter(x => x.status !== '완료') }
       : { id: 'tmp-' + Date.now(), date: dkey(now()), time: '', place: '', attendees: '', vision: '', items: [{ cat: '', sub: '', content: '', owner: '', due: '', status: '진행중' }] };
-    drawMeeting(); meetMinSave();
+    minNormDue(meetMin); drawMeeting(); meetMinSave();
   }
   function meetMinAdd() {
     const last = meetMin.items[meetMin.items.length - 1];
