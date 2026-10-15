@@ -518,6 +518,15 @@
   .day-peek .ag { padding: 6px 0; }
   .more-peek { font-size: 12px; color: var(--muted); padding-top: 4px; }
   .cal-day { cursor: pointer; }
+  .memo-box { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .memo-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13.5px; }
+  .memo-head b { display: inline-flex; align-items: center; gap: 6px; }
+  .memo-head .ph { font-size: 12px; }
+  .memo-st { margin-left: auto; font-size: 12px; color: var(--muted); }
+  #memoIn { width: 100%; min-height: 160px; resize: vertical; line-height: 1.6; }
+  .cal-day { position: relative; }
+  .cal-day .memo-mark { display: none; position: absolute; top: 8px; right: 8px; color: var(--muted); line-height: 0; }
+  .cal-day.has-memo .memo-mark { display: block; }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
   .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .lg { width: 12px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -1573,6 +1582,7 @@
   }
   /** 앱을 열면 이번 달 일정을 미리 받아 둔다 → 일정 메뉴를 누르면 바로 보인다 */
   function prefetchCalendar() {
+    setTimeout(loadMemos, 300);
     // 관리자는 관리 정보도 미리 받아 둔다
     if (D.me.isAdmin && !A) setTimeout(() => { if (!A && !adminLoading) loadAdmin(false); }, 1500);
     if (!can('calendar')) return;
@@ -1584,7 +1594,46 @@
     render();
   }
   // 날짜를 누르면 그날 일정을 옆(휴대폰은 아래) 목록에 보여준다. 추가는 [추가] 버튼으로
-  function calPick(k) { calSel = k; $('#main').innerHTML = PAGES.calendar(); }
+  function calPick(k) { memoFlush(); calSel = k; $('#main').innerHTML = PAGES.calendar(); }
+
+  /* ---------- 내 메모 (일별, 나만 보기) ----------
+   * 서버의 내 계정 전용 저장소에 둔다 (시트에 남지 않음). 이 기기에도 저장해 두었다가 먼저 보여준다. */
+  let memos = null, memoTimer = null;
+  const memoKey = () => `memos:${D.me.email}`;
+  function loadMemos() {
+    if (!can('calendar')) return;
+    try { const st = JSON.parse(localStorage.getItem(memoKey()) || 'null'); if (st && !memos) memos = st; } catch (e) { /* 저장소 없음 */ }
+    call('apiMemos').then(m => {
+      // 그사이 고친 메모(저장 대기 중)는 지우지 않는다
+      const box = $('#memoIn');
+      memos = Object.assign(m || {}, memoTimer && box ? { [box.dataset.day]: box.value } : {});
+      memoLocal();
+      if (page === 'calendar' && !(box && document.activeElement === box)) $('#main').innerHTML = PAGES.calendar();
+    }).catch(() => { if (!memos) memos = {}; });
+  }
+  function memoLocal() { try { localStorage.setItem(memoKey(), JSON.stringify(memos)); } catch (e) { /* 저장소 없음 */ } }
+  function memoSave(day, text) {
+    clearTimeout(memoTimer); memoTimer = null;
+    if (!memos) return;
+    if (((memos[day] || '') === text)) return;
+    if (text.trim()) memos[day] = text; else delete memos[day];
+    memoLocal();
+    const cell = document.querySelector(`.cal-day[onclick="calPick('${day}')"]`);
+    if (cell) cell.classList.toggle('has-memo', !!text.trim());
+    const st = $('#memoSt'); if (st) st.textContent = '저장 중…';
+    call('apiSaveMemo', day, text)
+      .then(() => { const s2 = $('#memoSt'); if (s2 && $('#memoIn') && $('#memoIn').dataset.day === day) s2.textContent = '저장됨'; })
+      .catch(e => { const s2 = $('#memoSt'); if (s2) s2.textContent = ''; fail(e); });
+  }
+  function memoFlush() { const box = $('#memoIn'); if (box && memoTimer) memoSave(box.dataset.day, box.value); }
+  document.addEventListener('input', e => {
+    if (e.target.id !== 'memoIn') return;
+    const box = e.target, st = $('#memoSt'); if (st) st.textContent = '';
+    clearTimeout(memoTimer);
+    memoTimer = setTimeout(() => memoSave(box.dataset.day, box.value), 800); // 쓰는 중에는 0.8초 쉬면 저장
+  });
+  document.addEventListener('focusout', e => { if (e.target.id === 'memoIn') memoSave(e.target.dataset.day, e.target.value); });
+  window.addEventListener('beforeunload', memoFlush);
 
   VIEWS.calendar = function () {
     if (!calMonth) calMonth = new Date(now().getFullYear(), now().getMonth(), 1);
@@ -1600,8 +1649,9 @@
       const dk = dkey(d);
       const evs = map[dk] || [];
       const cls = ['cal-day', d.getMonth() !== calMonth.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', dk === todayK ? 'today' : '', dk === calSel ? 'sel' : '', evs.some(e => e.kind === 'holiday') ? 'holi' : ''].join(' ');
-      cells += `<button class="${cls}" onclick="calPick('${dk}')" aria-label="${dayLabel(dk)} 일정 ${evs.length}건">
-        <span class="dn">${d.getDate()}</span>
+      const hasMemo = !!(memos && memos[dk]);
+      cells += `<button class="${cls} ${hasMemo ? 'has-memo' : ''}" onclick="calPick('${dk}')" aria-label="${dayLabel(dk)} 일정 ${evs.length}건${hasMemo ? ' · 메모 있음' : ''}">
+        <span class="dn">${d.getDate()}</span><i class="memo-mark" title="내 메모">${ic('pencil', 'xs')}</i>
         ${evs.slice(0, 4).map(e => `<span class="ev ${e.kind}">${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}</span>`).join('')}
         ${evs.length > 4 ? `<span class="more">+${evs.length - 4}건</span>` : ''}
       </button>`;
@@ -1637,6 +1687,10 @@
         <section class="panel">
           <div class="panel-head"><h2>${dayLabel(calSel)}</h2><button class="btn small" onclick="openEventForm('${calSel}')">${ic('plus', 'sm')}추가</button></div>
           <div class="agenda">${selEvents.map(agRow).join('') || '<div class="empty">일정이 없습니다.</div>'}</div>
+          <div class="memo-box">
+            <div class="memo-head"><b>${ic('pencil', 'sm')}내 메모</b><span class="ph">나만 보기</span><span class="memo-st" id="memoSt"></span></div>
+            <textarea class="field-in" id="memoIn" data-day="${calSel}" placeholder="${memos ? '이 날의 메모 (나만 보입니다)' : '메모를 불러오는 중…'}" ${memos ? '' : 'disabled'}>${esc((memos && memos[calSel]) || '')}</textarea>
+          </div>
         </section>
       </div>`;
   };

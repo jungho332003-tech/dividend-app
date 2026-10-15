@@ -1543,6 +1543,29 @@ function apiAddEvent(ev) {
   return true;
 }
 
+/* ---------- 내 메모 (일별, 나만 보기) ----------
+ * 접속한 사람의 사용자 속성(UserProperties)에 저장한다 → 스프레드시트에 남지 않고, 관리자도 볼 수 없다.
+ * 웹앱이 "접속한 사용자" 권한으로 돌아서 사람마다 따로 저장된다. 한 메모는 8,000자까지.
+ */
+const MEMO_PREFIX = 'memo:';
+
+function apiMemos() {
+  const all = PropertiesService.getUserProperties().getProperties();
+  const out = {};
+  Object.keys(all).forEach(k => { if (k.indexOf(MEMO_PREFIX) === 0) out[k.slice(MEMO_PREFIX.length)] = all[k]; });
+  return out;
+}
+
+function apiSaveMemo(ymd, text) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) throw new Error('날짜가 올바르지 않습니다.');
+  const value = String(text || '').replace(/\s+$/, '');
+  if (value.length > 8000) throw new Error('메모는 8,000자까지 쓸 수 있습니다.');
+  const props = PropertiesService.getUserProperties();
+  if (value.trim()) props.setProperty(MEMO_PREFIX + ymd, value);
+  else props.deleteProperty(MEMO_PREFIX + ymd);
+  return true;
+}
+
 // ===================================================================
 // Board.gs
 // ===================================================================
