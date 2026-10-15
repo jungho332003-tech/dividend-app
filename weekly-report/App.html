@@ -1408,6 +1408,17 @@
     const s = parseD(ev.start), e = parseD(ev.end);
     return +s === +e ? hm(s) : `${hm(s)}–${hm(e)}`;
   }
+  /** 팀 일정 표시: "이름) 업무명" — 예전에 이름 없이 만든 일정도 설명의 "등록: 이름"으로 붙인다 */
+  function tidyEvents(res) {
+    (res && res.events || []).forEach(e => {
+      if (e.kind !== 'event' || !e.desc) return;
+      const m = String(e.desc).match(/(?:^|\n)등록: ([^\s(]+)/);
+      if (!m) return;
+      if (String(e.title).indexOf(m[1] + ')') !== 0) e.title = `${m[1]}) ${e.title}`;
+      e.desc = String(e.desc).replace(/(?:^|\n)등록: [^\n]*/, '').trim();
+    });
+    return res;
+  }
   function agRow(ev) {
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
     return `<div class="ag"><div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
@@ -1432,7 +1443,7 @@
     const st = calStored('up');
     if (st) { upcoming = st; const el = $('#upcoming'); if (el) el.innerHTML = upcomingHtml(); }
     call('apiCalendar', today.toISOString(), addD(today, 7).toISOString())
-      .then(r => { upcoming = r; calStore('up', r); })
+      .then(r => { upcoming = tidyEvents(r); calStore('up', r); })
       .catch(e => { if (!st) upcoming = { error: e.message || String(e) }; })
       .then(() => { const el = $('#upcoming'); if (el) el.innerHTML = upcomingHtml(); });
   }
@@ -1467,6 +1478,7 @@
     calLoading[k] = true;
     call('apiCalendar', r.start.toISOString(), r.end.toISOString(), !!force)
       .then(res => {
+        tidyEvents(res);
         calStore(k, res);
         calPending = calPending.filter(p => !res.events.some(e => sameEv(e, p)));
         res.events = res.events.concat(calPending);
@@ -1688,7 +1700,8 @@
       let e0 = at(ev.endTime || '10:00');
       if (e0 <= s0) e0 = new Date(s0.getTime() + 36e5);
       page = 'calendar';
-      showNow({ id: tempId, title: ev.title, allDay: ev.allDay, location: ev.location, desc: ev.desc, kind: target === 'mine' && both ? 'mine' : 'event',
+      const teamEv = !(target === 'mine' && both);
+      showNow({ id: tempId, title: teamEv && D.me.name && ev.title.indexOf(D.me.name + ')') !== 0 ? `${D.me.name}) ${ev.title}` : ev.title, allDay: ev.allDay, location: ev.location, desc: ev.desc, kind: target === 'mine' && both ? 'mine' : 'event',
         start: ev.allDay ? ev.date : s0.toISOString(), end: ev.allDay ? dkey(addD(parseD(ev.date), 1)) : e0.toISOString() }, ev.date);
       call('apiAddEvent', ev)
         .then(() => { toast(target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : '일정을 추가했습니다.'); })

@@ -1361,6 +1361,8 @@ function apiAddEvent(ev) {
   const me = currentMember_(sheetBase_().members); // 캐시 (시트를 매번 읽지 않도록)
   requireMenu_(me, 'calendar');
   const mine = ev.target === 'mine';
+  // 팀 일정은 "이름) 업무명" 으로 만든다 (구글 캘린더에서도 누가 넣었는지 보이게). 나만 보기 일정은 그대로
+  const fullTitle = !mine && me.name && title.indexOf(me.name + ')') !== 0 ? `${me.name}) ${title}` : title;
   const cal = mine ? CalendarApp.getDefaultCalendar() : getTeamCalendar_();
   const opts = {
     location: String(ev.location || '').trim(),
@@ -1371,7 +1373,7 @@ function apiAddEvent(ev) {
   let created = null;
   try {
     if (ev.allDay) {
-      created = cal.createAllDayEvent(title, day, opts);
+      created = cal.createAllDayEvent(fullTitle, day, opts);
     } else {
       const at = (t, fallback) => {
         const [h, mi] = String(t || fallback).split(':').map(Number);
@@ -1382,7 +1384,7 @@ function apiAddEvent(ev) {
       const s = at(ev.startTime, '09:00');
       let e = at(ev.endTime, '10:00');
       if (e <= s) e = new Date(s.getTime() + 3600 * 1000);
-      created = cal.createEvent(title, s, e, opts);
+      created = cal.createEvent(fullTitle, s, e, opts);
     }
   } catch (err) {
     if (mine) throw new Error('내 캘린더에 일정을 만들지 못했습니다. 잠시 후 다시 시도하세요.');
