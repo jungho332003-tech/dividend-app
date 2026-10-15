@@ -153,8 +153,7 @@
   .top-user { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .top-user b { font-weight: 600; }
 
-  .main { padding: 28px 32px 56px; width: 100%; max-width: 1320px; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-  .main.wide { max-width: none; } /* 일정: 화면 너비를 다 쓴다 */
+  .main { padding: 28px 32px 56px; width: 100%; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
   /* ===== 페이지 머리 ===== */
   .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; }
@@ -259,7 +258,7 @@
   .meter { height: 6px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
   .meter i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
 
-  .grid-2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .grid-2 { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
 
   .list { display: flex; flex-direction: column; }
   .list-row { display: grid; grid-template-columns: 72px auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); }
@@ -510,6 +509,7 @@
   .leave-empty { color: var(--muted); font-size: 13px; margin: 0; }
   .more { font-size: 12px; color: var(--muted); padding-left: 4px; }
   .agenda { display: flex; flex-direction: column; }
+  #upcoming { max-height: 380px; overflow-y: auto; } /* 대시보드: 옆 패널과 높이를 맞춘다 */
   .ag { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
   .ag:first-child { border-top: 0; }
   .ag .tm { color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
@@ -990,7 +990,6 @@
     });
 
     renderTopbar(initials, role);
-    $('#main').classList.toggle('wide', page === 'calendar');
     $('#main').innerHTML = PAGES[page]();
     if (page === 'weekly' && (weeklyTab === 'mine' || weeklyTab === 'pre')) bindMine(); else $('#main').oninput = $('#main').onchange = $('#main').onclick = $('#main').onkeydown = null;
     if (page === 'dash' && !upcoming && can('calendar')) loadUpcoming();
@@ -1102,19 +1101,18 @@
             <div class="panel-head"><h2>이번 주 중요 업무</h2><button class="btn small" onclick="setTab('weekly','team', true)">팀 주간보고</button></div>
             <div>${dueRows}</div>
           </section>`,
-        (BO || R) && `<div style="display:flex;flex-direction:column;gap:16px">
-            ${BO ? `<section class="panel">
-              <div class="panel-head"><h2>공유게시판</h2><button class="btn small ghost" onclick="go('board')">전체 보기${ic('chev', 'sm')}</button></div>
-              <div class="list">${boardPreview}</div>
-            </section>` : ''}
-            ${R ? `<section class="panel">
-              <div class="panel-head"><h2>최근 개정된 회사 기준</h2><button class="btn small ghost" onclick="go('rules')">전체 보기${ic('chev', 'sm')}</button></div>
-              <div class="list">${rulePreview}</div>
-            </section>` : ''}
-          </div>`,
+        BO && `<section class="panel">
+            <div class="panel-head"><h2>공유게시판</h2><button class="btn small ghost" onclick="go('board')">전체 보기${ic('chev', 'sm')}</button></div>
+            <div class="list">${boardPreview}</div>
+          </section>`,
+        R && `<section class="panel">
+            <div class="panel-head"><h2>최근 개정된 회사 기준</h2><button class="btn small ghost" onclick="go('rules')">전체 보기${ic('chev', 'sm')}</button></div>
+            <div class="list">${rulePreview}</div>
+          </section>`,
       ].filter(Boolean);
+      // 두 칸씩 채우고, 하나 남으면 한 줄을 다 쓴다 (오른쪽이 비지 않게)
       let rowsHtml = '';
-      for (let i = 0; i < panels.length; i += 2) rowsHtml += `<div class="grid-2">${panels[i]}${panels[i + 1] || ''}</div>`;
+      for (let i = 0; i < panels.length; i += 2) rowsHtml += panels[i + 1] ? `<div class="grid-2">${panels[i]}${panels[i + 1]}</div>` : panels[i];
 
       return `
         <div class="head">
