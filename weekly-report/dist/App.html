@@ -2850,13 +2850,13 @@
       if (entry.end && entry.start && entry.end < entry.start) return err('종료일이 시작일보다 빠릅니다.');
       $('#hOk').disabled = true;
       call('apiSaveHr', entry)
-        .then(data => { applyData(data); closeModal(); render(); toast(x ? '수정했습니다.' : '등록했습니다.'); })
+        .then(data => { applyData(data); calCache = {}; calForget(); upcoming = null; closeModal(); render(); toast(data && data.warning ? data.warning : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
         .catch(e2 => { $('#hOk').disabled = false; err(e2.message || String(e2)); });
     };
     if (x) $('#hDel').onclick = () => {
       $('#hDel').disabled = true;
       call('apiDeleteHr', x.id)
-        .then(data => { applyData(data); closeModal(); render(); toast('삭제했습니다.'); })
+        .then(data => { applyData(data); calCache = {}; calForget(); upcoming = null; closeModal(); render(); toast('삭제했습니다.'); })
         .catch(e2 => { $('#hDel').disabled = false; err(e2.message || String(e2)); });
     };
   }

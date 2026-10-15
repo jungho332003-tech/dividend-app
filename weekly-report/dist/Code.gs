@@ -1812,7 +1812,8 @@ function apiDeleteRule(id) {
  *
  *  구 분 | 금주: 대상 및 내용 | 일자/기간 | 차주: 대상 및 내용 | 발령일 | 비고
  *
- * [인사현황]  번호 | 등록일시 | 등록자 | 주차(월요일) | 구분 | 대상 및 내용 | 시작일 | 종료일 | 비고 | 삭제(Y)
+ * [인사현황]  번호 | 등록일시 | 등록자 | 주차(월요일) | 구분 | 대상 및 내용 | 시작일 | 종료일 | 비고 | 삭제(Y) | 캘린더ID
+ * 등록하면 팀 캘린더에도 "[구분] 대상 및 내용" 종일 일정으로 만든다 (고치면 같이 고치고, 지우면 같이 지운다).
  * 주차는 일자(시작일)가 속한 주의 월요일로 정한다 → 날짜만 넣으면 그 주에 맞게 들어가고,
  * 다음 주가 되면 "차주"였던 항목이 자동으로 "금주"로 보인다. 더 뒤의 날짜는 미리 등록해 두면 그 주가 됐을 때 나타난다.
  */
@@ -1823,13 +1824,13 @@ const HR = {
   MIN_ROWS: 1, // 빈 줄 없이 등록한 만큼만
 };
 
-const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10 };
+const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11 };
 
 function setupHrSheet_(ss) {
   if (ss.getSheetByName(HR.SHEET)) return;
   const sh = ss.insertSheet(HR.SHEET);
-  sh.getRange(1, 1, 1, HCOL.DELETED).setValues([['번호', '등록일시', '등록자', '주차(월요일)', '구분', '대상 및 내용', '시작일', '종료일', '비고', '삭제(Y)']]);
-  styleHeader_(sh.getRange(1, 1, 1, HCOL.DELETED));
+  sh.getRange(1, 1, 1, HCOL.EVENT).setValues([['번호', '등록일시', '등록자', '주차(월요일)', '구분', '대상 및 내용', '시작일', '종료일', '비고', '삭제(Y)', '캘린더ID']]);
+  styleHeader_(sh.getRange(1, 1, 1, HCOL.EVENT));
   sh.getRange('B2:B').setNumberFormat('yyyy-mm-dd hh:mm');
   sh.getRange('D2:D').setNumberFormat('@');
   sh.getRange('G2:H').setNumberFormat('yyyy-mm-dd (ddd)');
@@ -1916,25 +1917,57 @@ function apiSaveHr(entry) {
   const memo = String(entry.memo || '').trim();
 
   const sh = ctx.ss.getSheetByName(HR.SHEET) || (setupHrSheet_(ctx.ss), ctx.ss.getSheetByName(HR.SHEET));
+  ensureHeader_(sh, HCOL.EVENT, '캘린더ID');
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
+  let row, oldEvent = '';
   try {
     const last = sh.getLastRow();
-    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.AUTHOR).getValues() : [];
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.EVENT).getValues() : [];
     if (entry.id) {
       const idx = ids.findIndex(r => String(r[0]) === String(entry.id));
       if (idx < 0) throw new Error('항목을 찾을 수 없습니다.');
       if (ids[idx][2] !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 등록한 항목만 고칠 수 있습니다.');
-      sh.getRange(idx + 2, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
+      row = idx + 2;
+      oldEvent = String(ids[idx][HCOL.EVENT - 1] || '');
+      sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
     } else {
       const id = ids.reduce((m, r) => Math.max(m, Number(r[0]) || 0), 0) + 1;
-      sh.getRange(last + 1, HCOL.WEEK).setNumberFormat('@');
-      sh.getRange(last + 1, 1, 1, HCOL.DELETED).setValues([[id, new Date(), me.name, week, category, target, start, end, memo, '']]);
+      row = last + 1;
+      sh.getRange(row, HCOL.WEEK).setNumberFormat('@');
+      sh.getRange(row, 1, 1, HCOL.DELETED).setValues([[id, new Date(), me.name, week, category, target, start, end, memo, '']]);
     }
   } finally {
     lock.releaseLock();
   }
-  return refreshHr_(ctx);
+  // 팀 캘린더에도 같은 내용으로 (권한이 없으면 인사현황에만 저장)
+  const ev = hrEvent_(me, oldEvent, category, target, start, end, memo);
+  if (ev.id !== oldEvent) sh.getRange(row, HCOL.EVENT).setValue(ev.id);
+  return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
+}
+
+/** 인사현황 1건 → 팀 캘린더 종일 일정 "[구분] 대상 및 내용". 이미 있으면 고친다. { id, warning } */
+function hrEvent_(me, eventId, category, target, start, end, memo) {
+  if (allowedMenus_(me).indexOf('calendar') < 0) return { id: eventId };
+  const title = `[${category}] ${target}`;
+  const last = end instanceof Date ? end : start;
+  const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
+  try {
+    const cal = getTeamCalendar_();
+    const ev = eventId ? cal.getEventById(eventId) : null;
+    if (ev) {
+      ev.setTitle(title);
+      ev.setAllDayDates(start, addDays(last, 1));
+      ev.setDescription(desc);
+      bumpCalendar_();
+      return { id: eventId };
+    }
+    const created = cal.createAllDayEvent(title, start, addDays(last, 1), { description: desc });
+    bumpCalendar_();
+    return { id: created.getId() };
+  } catch (e) {
+    return { id: eventId, warning: '팀 캘린더에 일정을 만들 권한이 없어 인사현황에만 저장했습니다.' };
+  }
 }
 
 function apiDeleteHr(id) {
@@ -1948,6 +1981,14 @@ function apiDeleteHr(id) {
   if (idx < 0) throw new Error('항목을 찾을 수 없습니다.');
   if (rows[idx][2] !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 등록한 항목만 삭제할 수 있습니다.');
   sh.getRange(idx + 2, HCOL.DELETED).setValue('Y');
+  // 팀 캘린더 일정도 지운다
+  const eventId = sh.getLastColumn() >= HCOL.EVENT ? String(sh.getRange(idx + 2, HCOL.EVENT).getValue() || '') : '';
+  if (eventId) {
+    try {
+      const ev = getTeamCalendar_().getEventById(eventId);
+      if (ev) { ev.deleteEvent(); bumpCalendar_(); }
+    } catch (e) { /* 캘린더 권한이 없으면 인사현황에서만 지운다 */ }
+  }
   return refreshHr_(ctx);
 }
 
