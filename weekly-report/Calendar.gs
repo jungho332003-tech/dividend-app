@@ -6,6 +6,14 @@
  * 팀원이 일정을 보려면 그 캘린더가 팀원에게 공유되어 있어야 하고, 추가하려면 "일정 변경" 권한이 필요하다.
  */
 
+/** [설정] "함께 볼 캘린더" — 회사 공용·다른 팀 캘린더 등을 보기 전용으로 같이 띄운다 (최대 6개) */
+const EXTRA_CAL_MAX = 6;
+function extraCalendarIds_(cfg) {
+  const team = String(cfg[CFG.CALENDAR] || '').trim();
+  return String(cfg[CFG.EXTRA_CAL] || '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i && v !== team).slice(0, EXTRA_CAL_MAX);
+}
+
 function getTeamCalendar_() {
   const id = String(sheetBase_().cfg[CFG.CALENDAR] || '').trim();
   const cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
@@ -98,13 +106,29 @@ function apiCalendar(startIso, endIso, fresh) {
       }, MY_CAL_TTL);
     } catch (e) { /* 개인 캘린더를 못 읽으면 팀 일정만 보여준다 */ }
   }
+  // 함께 볼 캘린더 — 볼 수 있는지는 사람마다 다르므로 본인 캐시에
+  const ids = extraCalendarIds_(ctx.cfg);
+  let extras = [];
+  if (ids.length) {
+    extras = userCached_('x' + key + ':' + ids.join(','), () => ids.map((id, i) => {
+      try {
+        const c = CalendarApp.getCalendarById(id);
+        if (!c) return { name: '', ok: false, events: [] };
+        return { name: c.getName(), ok: true, events: c.getEvents(start, end).map(e => Object.assign(eventJson_(e, 'extra'), { cal: i, calName: c.getName() })) };
+      } catch (e) { return { name: '', ok: false, events: [] }; }
+    }), CAL_TTL);
+  }
   const seen = {};
-  team.events.forEach(e => { seen[e.id] = true; });
+  const once = list => list.filter(e => !seen[e.id] && (seen[e.id] = true));
+  // 같은 일정이 여러 캘린더에 있으면(초대 등) 한 번만: 팀 → 내 캘린더 → 함께 볼 캘린더 순
+  const events = once(team.events).concat(once(mine.events));
+  extras.forEach(x => { events.push.apply(events, once(x.events)); });
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
-    // 팀 일정에 초대된 것은 한 번만, 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
-    events: dropHolidayDupes_(team.events.concat(mine.events.filter(e => !seen[e.id]))),
+    extraCalendars: extras.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
+    // 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
+    events: dropHolidayDupes_(events),
   };
 }
 

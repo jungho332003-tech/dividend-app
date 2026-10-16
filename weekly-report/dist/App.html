@@ -505,6 +505,12 @@
   .ev.leave { background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; }
   .ev.mine { background: var(--panel); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .tt.mine { color: var(--ink-2); }
+  /* 함께 볼 캘린더 (보기 전용) — 캘린더마다 색 */
+  .c0 { --xc: #3b82f6; } .c1 { --xc: #8b5cf6; } .c2 { --xc: #0d9488; } .c3 { --xc: #d97706; } .c4 { --xc: #db2777; } .c5 { --xc: #64748b; }
+  .ev.extra { background: color-mix(in srgb, var(--xc) 14%, var(--panel)); color: var(--ink-2); box-shadow: inset 3px 0 0 var(--xc); }
+  .lg.extra { background: color-mix(in srgb, var(--xc) 22%, var(--panel)); box-shadow: inset 3px 0 0 var(--xc); }
+  .cal-tag { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--xc); background: color-mix(in srgb, var(--xc) 12%, var(--panel)); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+  .lg-warn { color: var(--warn-ink); }
   .only-me { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--ink-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line-strong); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
   .form .pane { display: flex; flex-direction: column; gap: inherit; }
   .form .pane[hidden] { display: none; }
@@ -1927,7 +1933,7 @@
   function agRow(ev) {
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
     const del = canDelLeaveEv(ev) ? `<button class="icon-btn ag-del" onclick="deleteLeaveEvent('${esc(ev.id)}')" title="휴가 지우기" aria-label="${esc(ev.title)} 지우기">${ic('x', 'sm')}</button>` : '';
-    return `<div class="ag${del ? ' has-del' : ''}">${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
+    return `<div class="ag${del ? ' has-del' : ''}">${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${ev.kind === 'extra' ? `<span class="cal-tag c${ev.cal}">${esc(ev.calName || '')}</span>` : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(' · '))}</div>` : ''}</div></div>`;
   }
   function dayLabel(k) { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAY[d.getDay()]})`; }
 
@@ -2100,14 +2106,14 @@
       const hasMemo = !!(memos && memos[dk]);
       cells += `<button class="${cls} ${hasMemo ? 'has-memo' : ''}" onclick="calPick('${dk}')" aria-label="${dayLabel(dk)} 일정 ${evs.length}건${hasMemo ? ' · 메모 있음' : ''}">
         <span class="dn">${d.getDate()}</span><i class="memo-mark" title="내 메모">${ic('pencil', 'xs')}</i>
-        ${evs.slice(0, 4).map(e => `<span class="ev ${e.kind}">${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}</span>`).join('')}
+        ${evs.slice(0, 4).map(e => `<span class="ev ${e.kind}${e.kind === 'extra' ? ' c' + e.cal : ''}">${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}</span>`).join('')}
         ${evs.length > 4 ? `<span class="more">+${evs.length - 4}건</span>` : ''}
       </button>`;
     }
     const selEvents = map[calSel] || [];
     return `
       <div class="head">
-        <div><h1>일정</h1><p class="one-line">${data && data.calendarName ? esc(data.calendarName) : '구글 캘린더'}${data && data.myCalendarName ? ' + 내 캘린더' : ''} · 공휴일 포함</p></div>
+        <div><h1>일정</h1><p class="one-line">${data && data.calendarName ? esc(data.calendarName) : '구글 캘린더'}${data && data.myCalendarName ? ' + 내 캘린더' : ''}${data && data.extraCalendars ? data.extraCalendars.filter(x => x.ok).map(x => ' + ' + esc(x.name)).join('') : ''} · 공휴일 포함</p></div>
         <div class="head-actions">
           <button class="btn" onclick="loadMonth(true)">${ic('refresh', 'sm')}새로고침</button>
           <button class="btn primary" onclick="openEventForm()">${ic('plus', 'sm')}일정·휴가 추가</button>
@@ -2130,6 +2136,7 @@
             <span><i class="lg event"></i>${D.teamCalendar ? '팀 일정' : '일정'}</span>
             ${D.teamCalendar ? '<span><i class="lg mine"></i>내 일정 (나만 보기)</span>' : ''}
             <span><i class="lg leave"></i>휴가</span>
+            ${data && data.extraCalendars ? data.extraCalendars.map(x => x.ok ? `<span><i class="lg extra c${x.cal}"></i>${esc(x.name)}</span>` : `<span class="lg-warn">함께 볼 캘린더 ${x.cal + 1}: 볼 권한이 없습니다</span>`).join('') : ''}
           </div>
         </section>
         <div class="cal-side">
@@ -2692,6 +2699,10 @@
             <div class="fld"><label for="sRemind">미작성 알림</label><select class="field-in" id="sRemind">${[0, 1, 2, 3, 4, 6, 24].map(h => `<option value="${h}" ${h === st.remindHours ? 'selected' : ''}>${h ? `마감 ${h}시간 전` : '보내지 않음'}</option>`).join('')}</select></div>
           </div>
           <div class="fld"><label for="sCal">팀 캘린더 ID</label><input class="field-in" id="sCal" value="${esc(st.calendarId)}" placeholder="예) abcd1234@group.calendar.google.com">${status(res.calendar)}</div>
+          <div class="fld"><label for="sXcal">함께 볼 캘린더 ID <span class="hint" style="display:inline">(보기 전용 · 한 줄에 하나 · 최대 6개)</span></label>
+            <textarea class="field-in" id="sXcal" rows="3" placeholder="회사 공용 캘린더, 다른 팀 캘린더 등의 캘린더 ID&#10;예) company-all@group.calendar.google.com">${esc(st.extraCalendars || '')}</textarea>
+            ${!res.extra ? (st.extraCalendars ? status(null) : '') : res.extra.map(x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ ${esc(x.name)}` : `${esc(x.id)} — ${esc(x.error)}`}</div>`).join('')}
+            <div class="hint">[일정]에 팀 캘린더와 같이 색을 달리해서 보입니다. 팀원도 그 캘린더를 볼 수 있게 공유되어 있어야 각자 화면에 보입니다.</div></div>
           <div class="fld"><label for="sFolder">첨부 폴더 (폴더 주소 또는 ID)</label><input class="field-in" id="sFolder" value="${esc(st.folderId)}" placeholder="https://drive.google.com/drive/folders/... 를 그대로 붙여넣어도 됩니다">${status(res.folder)}</div>
           <div class="msg err" id="sErr" hidden></div>
           <div><button class="btn primary" id="sOk">저장</button></div>
@@ -2701,7 +2712,7 @@
   document.addEventListener('submit', e => {
     if (e.target.id !== 'sForm') return;
     e.preventDefault();
-    const s2 = { team: $('#sTeam').value, deadlineHour: $('#sHour').value, remindHours: $('#sRemind').value, calendarId: $('#sCal').value, folderId: $('#sFolder').value };
+    const s2 = { team: $('#sTeam').value, deadlineHour: $('#sHour').value, remindHours: $('#sRemind').value, calendarId: $('#sCal').value, extraCalendars: $('#sXcal').value, folderId: $('#sFolder').value };
     $('#sOk').disabled = true;
     call('apiSaveSettings', s2).then(data => { setAdmin(data); load(); toast('설정을 저장했습니다.'); })
       .catch(err => { $('#sOk').disabled = false; $('#sErr').textContent = err.message || String(err); $('#sErr').hidden = false; });

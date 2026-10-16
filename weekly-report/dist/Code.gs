@@ -31,6 +31,7 @@ const CFG = {
   DEADLINE_HOUR: '기본 마감 시각(시)',
   REMIND_HOURS: '미작성 알림(마감 몇 시간 전)',
   CALENDAR: '팀 캘린더 ID(비우면 각자 기본 캘린더)',
+  EXTRA_CAL: '함께 볼 캘린더 ID(쉼표로 여러 개)',
   DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
 };
 
@@ -321,7 +322,7 @@ function initialize() {
 
   if (!ss.getSheetByName(SHEET.CONFIG)) {
     const sh = ss.insertSheet(SHEET.CONFIG);
-    sh.getRange(1, 1, 8, 2).setValues([
+    sh.getRange(1, 1, 9, 2).setValues([
       ['항목', '값'],
       [CFG.TEAM, '인사팀'],
       [CFG.MONDAY, mondayOf(new Date())],
@@ -330,8 +331,10 @@ function initialize() {
       [CFG.REMIND_HOURS, 3],
       [CFG.CALENDAR, ''],
       [CFG.DRIVE_FOLDER, ''],
+      [CFG.EXTRA_CAL, ''],
     ]);
     sh.getRange('B8').setNote('드라이브에서 폴더를 열었을 때 주소 .../folders/ 뒤의 값. 팀원에게 편집자로 공유해야 합니다.');
+    sh.getRange('B9').setNote('회사 공용 캘린더·다른 팀 캘린더 등 [일정]에 같이 보여줄 캘린더 ID. 쉼표로 여러 개 (최대 6개). 보기만 하고 일정은 넣지 않습니다.');
     sh.getRange('B3').setNumberFormat('yyyy-mm-dd (ddd)');
     sh.getRange('B7').setNote('구글 캘린더 > 설정 > 팀 캘린더 선택 > "캘린더 통합"의 캘린더 ID. 팀원에게 캘린더를 공유해야 합니다.');
     sh.getRange('B4').setNumberFormat('yyyy-mm-dd hh:mm').setNote('명절 등으로 이번 주만 마감이 다르면 입력. 예) 2026-09-23 14:00\n다음 주차로 넘어가면 자동으로 비워집니다.');
@@ -1374,6 +1377,14 @@ function escapeHtml_(s) {
  * 팀원이 일정을 보려면 그 캘린더가 팀원에게 공유되어 있어야 하고, 추가하려면 "일정 변경" 권한이 필요하다.
  */
 
+/** [설정] "함께 볼 캘린더" — 회사 공용·다른 팀 캘린더 등을 보기 전용으로 같이 띄운다 (최대 6개) */
+const EXTRA_CAL_MAX = 6;
+function extraCalendarIds_(cfg) {
+  const team = String(cfg[CFG.CALENDAR] || '').trim();
+  return String(cfg[CFG.EXTRA_CAL] || '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i && v !== team).slice(0, EXTRA_CAL_MAX);
+}
+
 function getTeamCalendar_() {
   const id = String(sheetBase_().cfg[CFG.CALENDAR] || '').trim();
   const cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
@@ -1466,13 +1477,29 @@ function apiCalendar(startIso, endIso, fresh) {
       }, MY_CAL_TTL);
     } catch (e) { /* 개인 캘린더를 못 읽으면 팀 일정만 보여준다 */ }
   }
+  // 함께 볼 캘린더 — 볼 수 있는지는 사람마다 다르므로 본인 캐시에
+  const ids = extraCalendarIds_(ctx.cfg);
+  let extras = [];
+  if (ids.length) {
+    extras = userCached_('x' + key + ':' + ids.join(','), () => ids.map((id, i) => {
+      try {
+        const c = CalendarApp.getCalendarById(id);
+        if (!c) return { name: '', ok: false, events: [] };
+        return { name: c.getName(), ok: true, events: c.getEvents(start, end).map(e => Object.assign(eventJson_(e, 'extra'), { cal: i, calName: c.getName() })) };
+      } catch (e) { return { name: '', ok: false, events: [] }; }
+    }), CAL_TTL);
+  }
   const seen = {};
-  team.events.forEach(e => { seen[e.id] = true; });
+  const once = list => list.filter(e => !seen[e.id] && (seen[e.id] = true));
+  // 같은 일정이 여러 캘린더에 있으면(초대 등) 한 번만: 팀 → 내 캘린더 → 함께 볼 캘린더 순
+  const events = once(team.events).concat(once(mine.events));
+  extras.forEach(x => { events.push.apply(events, once(x.events)); });
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
-    // 팀 일정에 초대된 것은 한 번만, 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
-    events: dropHolidayDupes_(team.events.concat(mine.events.filter(e => !seen[e.id]))),
+    extraCalendars: extras.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
+    // 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
+    events: dropHolidayDupes_(events),
   };
 }
 
@@ -2821,6 +2848,7 @@ function adminData_(ctx, useCache) {
       deadlineHour: Number(cfg[CFG.DEADLINE_HOUR]) || 14,
       remindHours: Number(cfg[CFG.REMIND_HOURS]) || 3,
       calendarId: String(cfg[CFG.CALENDAR] || ''),
+      extraCalendars: extraCalendarIds_(cfg).join('\n'),
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -2913,6 +2941,11 @@ function accessStatus_(ctx) {
       calendar: res.calendar.ok ? (acl[e] || 'none') : 'n/a',
     };
   });
+  // 함께 볼 캘린더: 관리자 계정으로 열리는지 (팀원도 각자 볼 권한이 있어야 보인다)
+  res.extra = extraCalendarIds_(ctx.cfg).map(id => {
+    try { const c = CalendarApp.getCalendarById(id); return c ? { id: id, ok: true, name: c.getName() } : { id: id, ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
+    catch (e) { return { id: id, ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
+  });
   return { resources: res, people: people };
 }
 
@@ -2985,6 +3018,10 @@ function apiSaveSettings(s) {
   setConfigValue(CFG.DEADLINE_HOUR, hour);
   setConfigValue(CFG.REMIND_HOURS, remind);
   setConfigValue(CFG.CALENDAR, String(s.calendarId || '').trim());
+  const extra = String(s.extraCalendars || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+  if (extra.length > EXTRA_CAL_MAX) throw new Error(`함께 볼 캘린더는 ${EXTRA_CAL_MAX}개까지 넣을 수 있습니다.`);
+  setConfigValue(CFG.EXTRA_CAL, extra.filter((v, i, a) => a.indexOf(v) === i).join(', '));
+  bumpCalendar_(); // 달력을 새로 읽게
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_(ctx);
   return adminData_(getContext(), false);

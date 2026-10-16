@@ -113,6 +113,7 @@ function adminData_(ctx, useCache) {
       deadlineHour: Number(cfg[CFG.DEADLINE_HOUR]) || 14,
       remindHours: Number(cfg[CFG.REMIND_HOURS]) || 3,
       calendarId: String(cfg[CFG.CALENDAR] || ''),
+      extraCalendars: extraCalendarIds_(cfg).join('\n'),
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -205,6 +206,11 @@ function accessStatus_(ctx) {
       calendar: res.calendar.ok ? (acl[e] || 'none') : 'n/a',
     };
   });
+  // 함께 볼 캘린더: 관리자 계정으로 열리는지 (팀원도 각자 볼 권한이 있어야 보인다)
+  res.extra = extraCalendarIds_(ctx.cfg).map(id => {
+    try { const c = CalendarApp.getCalendarById(id); return c ? { id: id, ok: true, name: c.getName() } : { id: id, ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
+    catch (e) { return { id: id, ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
+  });
   return { resources: res, people: people };
 }
 
@@ -277,6 +283,10 @@ function apiSaveSettings(s) {
   setConfigValue(CFG.DEADLINE_HOUR, hour);
   setConfigValue(CFG.REMIND_HOURS, remind);
   setConfigValue(CFG.CALENDAR, String(s.calendarId || '').trim());
+  const extra = String(s.extraCalendars || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+  if (extra.length > EXTRA_CAL_MAX) throw new Error(`함께 볼 캘린더는 ${EXTRA_CAL_MAX}개까지 넣을 수 있습니다.`);
+  setConfigValue(CFG.EXTRA_CAL, extra.filter((v, i, a) => a.indexOf(v) === i).join(', '));
+  bumpCalendar_(); // 달력을 새로 읽게
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_(ctx);
   return adminData_(getContext(), false);
