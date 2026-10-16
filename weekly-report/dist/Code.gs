@@ -32,6 +32,7 @@ const CFG = {
   REMIND_HOURS: '미작성 알림(마감 몇 시간 전)',
   CALENDAR: '팀 캘린더 ID(비우면 각자 기본 캘린더)',
   EXTRA_CAL: '함께 볼 캘린더 ID(쉼표로 여러 개)',
+  RECRUIT_CAL: '채용 캘린더 ID(채용담당만)',
   DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
 };
 
@@ -322,7 +323,7 @@ function initialize() {
 
   if (!ss.getSheetByName(SHEET.CONFIG)) {
     const sh = ss.insertSheet(SHEET.CONFIG);
-    sh.getRange(1, 1, 9, 2).setValues([
+    sh.getRange(1, 1, 10, 2).setValues([
       ['항목', '값'],
       [CFG.TEAM, '인사팀'],
       [CFG.MONDAY, mondayOf(new Date())],
@@ -332,9 +333,11 @@ function initialize() {
       [CFG.CALENDAR, ''],
       [CFG.DRIVE_FOLDER, ''],
       [CFG.EXTRA_CAL, ''],
+      [CFG.RECRUIT_CAL, ''],
     ]);
     sh.getRange('B8').setNote('드라이브에서 폴더를 열었을 때 주소 .../folders/ 뒤의 값. 팀원에게 편집자로 공유해야 합니다.');
     sh.getRange('B9').setNote('회사 공용 캘린더·다른 팀 캘린더 등 [일정]에 같이 보여줄 캘린더 ID. 쉼표로 여러 개 (최대 6개). 보기만 하고 일정은 넣지 않습니다.');
+    sh.getRange('B10').setNote('채용 전용 캘린더 ID. [팀원] 시트에서 채용담당=Y인 사람만 [일정]에서 보고 일정을 넣을 수 있습니다. 채용담당에게 "일정 변경" 권한으로 공유하세요.');
     sh.getRange('B3').setNumberFormat('yyyy-mm-dd (ddd)');
     sh.getRange('B7').setNote('구글 캘린더 > 설정 > 팀 캘린더 선택 > "캘린더 통합"의 캘린더 ID. 팀원에게 캘린더를 공유해야 합니다.');
     sh.getRange('B4').setNumberFormat('yyyy-mm-dd hh:mm').setNote('명절 등으로 이번 주만 마감이 다르면 입력. 예) 2026-09-23 14:00\n다음 주차로 넘어가면 자동으로 비워집니다.');
@@ -1385,6 +1388,15 @@ function extraCalendarIds_(cfg) {
     .filter((v, i, a) => a.indexOf(v) === i && v !== team).slice(0, EXTRA_CAL_MAX);
 }
 
+/** 채용 캘린더: [팀원] 채용담당=Y 인 사람만 보고 쓴다 */
+function recruitCalendarId_(cfg) { return String(cfg[CFG.RECRUIT_CAL] || '').trim(); }
+function canRecruitCal_(ctx, me) { return !!(me && me.recruiter && recruitCalendarId_(ctx.cfg)); }
+function getRecruitCalendar_(ctx) {
+  const cal = CalendarApp.getCalendarById(recruitCalendarId_(ctx.cfg));
+  if (!cal) throw new Error('채용 캘린더에 접근할 수 없습니다. 캘린더가 공유되어 있는지 관리자에게 확인하세요.');
+  return cal;
+}
+
 function getTeamCalendar_() {
   const id = String(sheetBase_().cfg[CFG.CALENDAR] || '').trim();
   const cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
@@ -1489,15 +1501,32 @@ function apiCalendar(startIso, endIso, fresh) {
       } catch (e) { return { name: '', ok: false, events: [] }; }
     }), CAL_TTL);
   }
+  // 채용 캘린더 (채용담당만) — 팀 캘린더와 같이 등록한 일정은 한 번만 보이게 제목·시작으로도 겹침을 뺀다
+  const me = currentMember_(ctx.members);
+  let rec = null;
+  if (canRecruitCal_(ctx, me)) {
+    try {
+      rec = userCached_('r' + key, () => {
+        const c = getRecruitCalendar_(ctx);
+        return { name: c.getName(), ok: true, events: c.getEvents(start, end).map(e => eventJson_(e, 'recruit')) };
+      }, CAL_TTL);
+    } catch (e) { rec = { name: '', ok: false, events: [] }; }
+  }
   const seen = {};
   const once = list => list.filter(e => !seen[e.id] && (seen[e.id] = true));
   // 같은 일정이 여러 캘린더에 있으면(초대 등) 한 번만: 팀 → 내 캘린더 → 함께 볼 캘린더 순
   const events = once(team.events).concat(once(mine.events));
+  if (rec) {
+    const same = {};
+    events.forEach(e => { same[e.title + '|' + e.start] = true; });
+    events.push.apply(events, once(rec.events).filter(e => !same[e.title + '|' + e.start]));
+  }
   extras.forEach(x => { events.push.apply(events, once(x.events)); });
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
     extraCalendars: extras.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
+    recruitCalendar: rec ? { name: rec.name, ok: rec.ok } : null,
     // 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
     events: dropHolidayDupes_(events),
   };
@@ -1563,42 +1592,52 @@ function apiAddEvent(ev) {
 
   const me = currentMember_(sheetBase_().members); // 캐시 (시트를 매번 읽지 않도록)
   requireMenu_(me, 'calendar');
+  const ctx = sheetBase_(); // 캐시 (설정·팀원)
+  const recruitOnly = ev.target === 'recruit';
+  const alsoRecruit = !!ev.recruit && !recruitOnly && ev.target !== 'mine';
+  if ((recruitOnly || alsoRecruit) && !canRecruitCal_(ctx, currentMember_(ctx.members))) throw new Error('채용 캘린더는 채용담당만 쓸 수 있습니다.');
   const mine = ev.target === 'mine';
   // 팀 일정은 "이름) 업무명" 으로 만든다 (구글 캘린더에서도 누가 넣었는지 보이게). 나만 보기 일정은 그대로
   const fullTitle = !mine && me.name && title.indexOf(me.name + ')') !== 0 ? `${me.name}) ${title}` : title;
-  const cal = mine ? CalendarApp.getDefaultCalendar() : getTeamCalendar_();
+  const cal = mine ? CalendarApp.getDefaultCalendar() : recruitOnly ? getRecruitCalendar_(ctx) : getTeamCalendar_();
   const opts = {
     location: String(ev.location || '').trim(),
     description: [String(ev.desc || '').trim(), me.name ? `등록: ${me.name}` : ''].filter(Boolean).join('\n'),
   };
   const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 
+  const make = c => {
+    if (ev.allDay) return c.createAllDayEvent(fullTitle, day, opts);
+    const at = (t, fallback) => {
+      const [h, mi] = String(t || fallback).split(':').map(Number);
+      const d = new Date(day.getTime());
+      d.setHours(h || 0, mi || 0, 0, 0);
+      return d;
+    };
+    const s = at(ev.startTime, '09:00');
+    let e = at(ev.endTime, '10:00');
+    if (e <= s) e = new Date(s.getTime() + 3600 * 1000);
+    return c.createEvent(fullTitle, s, e, opts);
+  };
   let created = null;
   try {
-    if (ev.allDay) {
-      created = cal.createAllDayEvent(fullTitle, day, opts);
-    } else {
-      const at = (t, fallback) => {
-        const [h, mi] = String(t || fallback).split(':').map(Number);
-        const d = new Date(day.getTime());
-        d.setHours(h || 0, mi || 0, 0, 0);
-        return d;
-      };
-      const s = at(ev.startTime, '09:00');
-      let e = at(ev.endTime, '10:00');
-      if (e <= s) e = new Date(s.getTime() + 3600 * 1000);
-      created = cal.createEvent(fullTitle, s, e, opts);
-    }
+    created = make(cal);
   } catch (err) {
     if (mine) throw new Error('내 캘린더에 일정을 만들지 못했습니다. 잠시 후 다시 시도하세요.');
+    if (recruitOnly) throw new Error('채용 캘린더에 일정을 추가할 권한이 없습니다. "일정 변경" 권한을 관리자에게 요청하세요.');
     throw new Error('일정을 추가할 권한이 없습니다. 팀 캘린더의 "일정 변경" 권한을 관리자에게 요청하세요.');
+  }
+  // 채용 캘린더에도 같이 (팀 캘린더에는 이미 들어갔으므로 실패해도 알리기만)
+  let warning = '';
+  if (alsoRecruit) {
+    try { make(getRecruitCalendar_(ctx)); } catch (err) { warning = '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.'; }
   }
   // 개인 캘린더를 다른 사람과 공유해 두었더라도 내용은 안 보이게
   if (mine && created) {
     try { created.setVisibility(CalendarApp.Visibility.PRIVATE); } catch (e) { /* 무시 */ }
   }
   bumpCalendar_();
-  return true;
+  return warning ? { warning: warning } : true;
 }
 
 /* ---------- 내 메모 (일별, 나만 보기) ----------
@@ -1909,7 +1948,9 @@ const HR = {
   MIN_ROWS: 1, // 빈 줄 없이 등록한 만큼만
 };
 
-const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11 };
+const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11, REC_EVENT: 12 };
+// 채용 캘린더에도 같이 넣는 구분
+const HR_RECRUIT_CATS = ['인터뷰', '입사'];
 
 function setupHrSheet_(ss) {
   if (ss.getSheetByName(HR.SHEET)) return;
@@ -2003,18 +2044,20 @@ function apiSaveHr(entry) {
 
   const sh = ctx.ss.getSheetByName(HR.SHEET) || (setupHrSheet_(ctx.ss), ctx.ss.getSheetByName(HR.SHEET));
   ensureHeader_(sh, HCOL.EVENT, '캘린더ID');
+  ensureHeader_(sh, HCOL.REC_EVENT, '채용캘린더ID');
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
-  let row, oldEvent = '';
+  let row, oldEvent = '', oldRec = '';
   try {
     const last = sh.getLastRow();
-    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.EVENT).getValues() : [];
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.REC_EVENT).getValues() : [];
     if (entry.id) {
       const idx = ids.findIndex(r => String(r[0]) === String(entry.id));
       if (idx < 0) throw new Error('항목을 찾을 수 없습니다.');
       if (ids[idx][2] !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 등록한 항목만 고칠 수 있습니다.');
       row = idx + 2;
       oldEvent = String(ids[idx][HCOL.EVENT - 1] || '');
+      oldRec = String(ids[idx][HCOL.REC_EVENT - 1] || '');
       sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
     } else {
       const id = ids.reduce((m, r) => Math.max(m, Number(r[0]) || 0), 0) + 1;
@@ -2028,6 +2071,9 @@ function apiSaveHr(entry) {
   // 팀 캘린더에도 같은 내용으로 (권한이 없으면 인사현황에만 저장)
   const ev = hrEvent_(me, oldEvent, category, target, start, end, memo);
   if (ev.id !== oldEvent) sh.getRange(row, HCOL.EVENT).setValue(ev.id);
+  // 인터뷰·입사는 채용 캘린더에도 (채용 캘린더가 정해져 있을 때만, 권한이 없으면 조용히 건너뛴다)
+  const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo);
+  if (rec !== oldRec) sh.getRange(row, HCOL.REC_EVENT).setValue(rec);
   return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
 }
 
@@ -2055,6 +2101,34 @@ function hrEvent_(me, eventId, category, target, start, end, memo) {
   }
 }
 
+/** 인사현황 → 채용 캘린더 일정 (인터뷰·입사만). 구분이 바뀌어 대상이 아니면 지운다. 새 일정 ID(없으면 '') */
+function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo) {
+  if (!recruitCalendarId_(ctx.cfg)) return eventId;
+  try {
+    const cal = getRecruitCalendar_(ctx);
+    const ev = eventId ? cal.getEventById(eventId) : null;
+    if (HR_RECRUIT_CATS.indexOf(category) < 0) {
+      if (ev) { ev.deleteEvent(); bumpCalendar_(); }
+      return '';
+    }
+    const title = `[${category}] ${target}`;
+    const last = end instanceof Date ? end : start;
+    const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
+    if (ev) {
+      ev.setTitle(title);
+      ev.setAllDayDates(start, addDays(last, 1));
+      ev.setDescription(desc);
+      bumpCalendar_();
+      return eventId;
+    }
+    const created = cal.createAllDayEvent(title, start, addDays(last, 1), { description: desc });
+    bumpCalendar_();
+    return created.getId();
+  } catch (e) {
+    return eventId; // 채용 캘린더 권한이 없는 사람이 등록한 경우 등
+  }
+}
+
 function apiDeleteHr(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
@@ -2073,6 +2147,13 @@ function apiDeleteHr(id) {
       const ev = getTeamCalendar_().getEventById(eventId);
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
     } catch (e) { /* 캘린더 권한이 없으면 인사현황에서만 지운다 */ }
+  }
+  const recId = sh.getLastColumn() >= HCOL.REC_EVENT ? String(sh.getRange(idx + 2, HCOL.REC_EVENT).getValue() || '') : '';
+  if (recId && recruitCalendarId_(ctx.cfg)) {
+    try {
+      const ev = getRecruitCalendar_(ctx).getEventById(recId);
+      if (ev) { ev.deleteEvent(); bumpCalendar_(); }
+    } catch (e) { /* 권한 없음 */ }
   }
   return refreshHr_(ctx);
 }
@@ -2849,6 +2930,7 @@ function adminData_(ctx, useCache) {
       remindHours: Number(cfg[CFG.REMIND_HOURS]) || 3,
       calendarId: String(cfg[CFG.CALENDAR] || ''),
       extraCalendars: extraCalendarIds_(cfg).join('\n'),
+      recruitCalendarId: recruitCalendarId_(cfg),
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
@@ -2946,6 +3028,11 @@ function accessStatus_(ctx) {
     try { const c = CalendarApp.getCalendarById(id); return c ? { id: id, ok: true, name: c.getName() } : { id: id, ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
     catch (e) { return { id: id, ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
   });
+  const recId = recruitCalendarId_(ctx.cfg);
+  if (recId) {
+    try { const c = CalendarApp.getCalendarById(recId); res.recruit = c ? { ok: true, name: c.getName() } : { ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
+    catch (e) { res.recruit = { ok: false, error: '캘린더를 찾을 수 없거나 볼 권한이 없습니다.' }; }
+  }
   return { resources: res, people: people };
 }
 
@@ -3021,6 +3108,7 @@ function apiSaveSettings(s) {
   const extra = String(s.extraCalendars || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
   if (extra.length > EXTRA_CAL_MAX) throw new Error(`함께 볼 캘린더는 ${EXTRA_CAL_MAX}개까지 넣을 수 있습니다.`);
   setConfigValue(CFG.EXTRA_CAL, extra.filter((v, i, a) => a.indexOf(v) === i).join(', '));
+  setConfigValue(CFG.RECRUIT_CAL, String(s.recruitCalendarId || '').trim());
   bumpCalendar_(); // 달력을 새로 읽게
   setConfigValue(CFG.DRIVE_FOLDER, String(s.folderId || '').trim().replace(/^.*\/folders\//, '').replace(/[?#].*$/, ''));
   clearCaches_(ctx);
@@ -3297,6 +3385,8 @@ function baseData_(ctx) {
     hrCategories: HR.CATEGORIES,
     // 팀 캘린더가 따로 있으면 일정 추가 때 "팀 / 내 캘린더(나만 보기)"를 고른다
     teamCalendar: teamCalendarSet_(ctx),
+    // 채용담당이고 채용 캘린더가 정해져 있으면 [일정]에서 채용 캘린더를 보고 쓸 수 있다
+    recruitCalendar: canRecruitCal_(ctx, me),
   };
 }
 
@@ -3382,6 +3472,7 @@ function currentMember_(members) {
     isAdmin: isAdmin,
     // 예산담당자: 예산 메뉴 + [월별 정리]·[예산 설정] 탭 (관리 메뉴·스프레드시트 바로가기는 관리자만)
     budgetManager: !!(m && m.budget),
+    recruiter: !!(m && m.recruit),
   };
   me.menus = allowedMenus_(me);
   return me;

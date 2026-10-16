@@ -23,6 +23,7 @@ const CFG = {
   REMIND_HOURS: '미작성 알림(마감 몇 시간 전)',
   CALENDAR: '팀 캘린더 ID(비우면 각자 기본 캘린더)',
   EXTRA_CAL: '함께 볼 캘린더 ID(쉼표로 여러 개)',
+  RECRUIT_CAL: '채용 캘린더 ID(채용담당만)',
   DRIVE_FOLDER: '첨부 폴더 ID(구글 드라이브)',
 };
 

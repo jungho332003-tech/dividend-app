@@ -135,6 +135,8 @@ function baseData_(ctx) {
     hrCategories: HR.CATEGORIES,
     // 팀 캘린더가 따로 있으면 일정 추가 때 "팀 / 내 캘린더(나만 보기)"를 고른다
     teamCalendar: teamCalendarSet_(ctx),
+    // 채용담당이고 채용 캘린더가 정해져 있으면 [일정]에서 채용 캘린더를 보고 쓸 수 있다
+    recruitCalendar: canRecruitCal_(ctx, me),
   };
 }
 
@@ -220,6 +222,7 @@ function currentMember_(members) {
     isAdmin: isAdmin,
     // 예산담당자: 예산 메뉴 + [월별 정리]·[예산 설정] 탭 (관리 메뉴·스프레드시트 바로가기는 관리자만)
     budgetManager: !!(m && m.budget),
+    recruiter: !!(m && m.recruit),
   };
   me.menus = allowedMenus_(me);
   return me;

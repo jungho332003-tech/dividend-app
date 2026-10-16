@@ -15,7 +15,9 @@ const HR = {
   MIN_ROWS: 1, // 빈 줄 없이 등록한 만큼만
 };
 
-const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11 };
+const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11, REC_EVENT: 12 };
+// 채용 캘린더에도 같이 넣는 구분
+const HR_RECRUIT_CATS = ['인터뷰', '입사'];
 
 function setupHrSheet_(ss) {
   if (ss.getSheetByName(HR.SHEET)) return;
@@ -109,18 +111,20 @@ function apiSaveHr(entry) {
 
   const sh = ctx.ss.getSheetByName(HR.SHEET) || (setupHrSheet_(ctx.ss), ctx.ss.getSheetByName(HR.SHEET));
   ensureHeader_(sh, HCOL.EVENT, '캘린더ID');
+  ensureHeader_(sh, HCOL.REC_EVENT, '채용캘린더ID');
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
-  let row, oldEvent = '';
+  let row, oldEvent = '', oldRec = '';
   try {
     const last = sh.getLastRow();
-    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.EVENT).getValues() : [];
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.REC_EVENT).getValues() : [];
     if (entry.id) {
       const idx = ids.findIndex(r => String(r[0]) === String(entry.id));
       if (idx < 0) throw new Error('항목을 찾을 수 없습니다.');
       if (ids[idx][2] !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인이 등록한 항목만 고칠 수 있습니다.');
       row = idx + 2;
       oldEvent = String(ids[idx][HCOL.EVENT - 1] || '');
+      oldRec = String(ids[idx][HCOL.REC_EVENT - 1] || '');
       sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
     } else {
       const id = ids.reduce((m, r) => Math.max(m, Number(r[0]) || 0), 0) + 1;
@@ -134,6 +138,9 @@ function apiSaveHr(entry) {
   // 팀 캘린더에도 같은 내용으로 (권한이 없으면 인사현황에만 저장)
   const ev = hrEvent_(me, oldEvent, category, target, start, end, memo);
   if (ev.id !== oldEvent) sh.getRange(row, HCOL.EVENT).setValue(ev.id);
+  // 인터뷰·입사는 채용 캘린더에도 (채용 캘린더가 정해져 있을 때만, 권한이 없으면 조용히 건너뛴다)
+  const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo);
+  if (rec !== oldRec) sh.getRange(row, HCOL.REC_EVENT).setValue(rec);
   return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
 }
 
@@ -161,6 +168,34 @@ function hrEvent_(me, eventId, category, target, start, end, memo) {
   }
 }
 
+/** 인사현황 → 채용 캘린더 일정 (인터뷰·입사만). 구분이 바뀌어 대상이 아니면 지운다. 새 일정 ID(없으면 '') */
+function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo) {
+  if (!recruitCalendarId_(ctx.cfg)) return eventId;
+  try {
+    const cal = getRecruitCalendar_(ctx);
+    const ev = eventId ? cal.getEventById(eventId) : null;
+    if (HR_RECRUIT_CATS.indexOf(category) < 0) {
+      if (ev) { ev.deleteEvent(); bumpCalendar_(); }
+      return '';
+    }
+    const title = `[${category}] ${target}`;
+    const last = end instanceof Date ? end : start;
+    const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
+    if (ev) {
+      ev.setTitle(title);
+      ev.setAllDayDates(start, addDays(last, 1));
+      ev.setDescription(desc);
+      bumpCalendar_();
+      return eventId;
+    }
+    const created = cal.createAllDayEvent(title, start, addDays(last, 1), { description: desc });
+    bumpCalendar_();
+    return created.getId();
+  } catch (e) {
+    return eventId; // 채용 캘린더 권한이 없는 사람이 등록한 경우 등
+  }
+}
+
 function apiDeleteHr(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
@@ -179,6 +214,13 @@ function apiDeleteHr(id) {
       const ev = getTeamCalendar_().getEventById(eventId);
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
     } catch (e) { /* 캘린더 권한이 없으면 인사현황에서만 지운다 */ }
+  }
+  const recId = sh.getLastColumn() >= HCOL.REC_EVENT ? String(sh.getRange(idx + 2, HCOL.REC_EVENT).getValue() || '') : '';
+  if (recId && recruitCalendarId_(ctx.cfg)) {
+    try {
+      const ev = getRecruitCalendar_(ctx).getEventById(recId);
+      if (ev) { ev.deleteEvent(); bumpCalendar_(); }
+    } catch (e) { /* 권한 없음 */ }
   }
   return refreshHr_(ctx);
 }

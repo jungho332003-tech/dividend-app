@@ -14,6 +14,15 @@ function extraCalendarIds_(cfg) {
     .filter((v, i, a) => a.indexOf(v) === i && v !== team).slice(0, EXTRA_CAL_MAX);
 }
 
+/** 채용 캘린더: [팀원] 채용담당=Y 인 사람만 보고 쓴다 */
+function recruitCalendarId_(cfg) { return String(cfg[CFG.RECRUIT_CAL] || '').trim(); }
+function canRecruitCal_(ctx, me) { return !!(me && me.recruiter && recruitCalendarId_(ctx.cfg)); }
+function getRecruitCalendar_(ctx) {
+  const cal = CalendarApp.getCalendarById(recruitCalendarId_(ctx.cfg));
+  if (!cal) throw new Error('채용 캘린더에 접근할 수 없습니다. 캘린더가 공유되어 있는지 관리자에게 확인하세요.');
+  return cal;
+}
+
 function getTeamCalendar_() {
   const id = String(sheetBase_().cfg[CFG.CALENDAR] || '').trim();
   const cal = id ? CalendarApp.getCalendarById(id) : CalendarApp.getDefaultCalendar();
@@ -118,15 +127,32 @@ function apiCalendar(startIso, endIso, fresh) {
       } catch (e) { return { name: '', ok: false, events: [] }; }
     }), CAL_TTL);
   }
+  // 채용 캘린더 (채용담당만) — 팀 캘린더와 같이 등록한 일정은 한 번만 보이게 제목·시작으로도 겹침을 뺀다
+  const me = currentMember_(ctx.members);
+  let rec = null;
+  if (canRecruitCal_(ctx, me)) {
+    try {
+      rec = userCached_('r' + key, () => {
+        const c = getRecruitCalendar_(ctx);
+        return { name: c.getName(), ok: true, events: c.getEvents(start, end).map(e => eventJson_(e, 'recruit')) };
+      }, CAL_TTL);
+    } catch (e) { rec = { name: '', ok: false, events: [] }; }
+  }
   const seen = {};
   const once = list => list.filter(e => !seen[e.id] && (seen[e.id] = true));
   // 같은 일정이 여러 캘린더에 있으면(초대 등) 한 번만: 팀 → 내 캘린더 → 함께 볼 캘린더 순
   const events = once(team.events).concat(once(mine.events));
+  if (rec) {
+    const same = {};
+    events.forEach(e => { same[e.title + '|' + e.start] = true; });
+    events.push.apply(events, once(rec.events).filter(e => !same[e.title + '|' + e.start]));
+  }
   extras.forEach(x => { events.push.apply(events, once(x.events)); });
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
     extraCalendars: extras.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
+    recruitCalendar: rec ? { name: rec.name, ok: rec.ok } : null,
     // 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
     events: dropHolidayDupes_(events),
   };
@@ -192,42 +218,52 @@ function apiAddEvent(ev) {
 
   const me = currentMember_(sheetBase_().members); // 캐시 (시트를 매번 읽지 않도록)
   requireMenu_(me, 'calendar');
+  const ctx = sheetBase_(); // 캐시 (설정·팀원)
+  const recruitOnly = ev.target === 'recruit';
+  const alsoRecruit = !!ev.recruit && !recruitOnly && ev.target !== 'mine';
+  if ((recruitOnly || alsoRecruit) && !canRecruitCal_(ctx, currentMember_(ctx.members))) throw new Error('채용 캘린더는 채용담당만 쓸 수 있습니다.');
   const mine = ev.target === 'mine';
   // 팀 일정은 "이름) 업무명" 으로 만든다 (구글 캘린더에서도 누가 넣었는지 보이게). 나만 보기 일정은 그대로
   const fullTitle = !mine && me.name && title.indexOf(me.name + ')') !== 0 ? `${me.name}) ${title}` : title;
-  const cal = mine ? CalendarApp.getDefaultCalendar() : getTeamCalendar_();
+  const cal = mine ? CalendarApp.getDefaultCalendar() : recruitOnly ? getRecruitCalendar_(ctx) : getTeamCalendar_();
   const opts = {
     location: String(ev.location || '').trim(),
     description: [String(ev.desc || '').trim(), me.name ? `등록: ${me.name}` : ''].filter(Boolean).join('\n'),
   };
   const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 
+  const make = c => {
+    if (ev.allDay) return c.createAllDayEvent(fullTitle, day, opts);
+    const at = (t, fallback) => {
+      const [h, mi] = String(t || fallback).split(':').map(Number);
+      const d = new Date(day.getTime());
+      d.setHours(h || 0, mi || 0, 0, 0);
+      return d;
+    };
+    const s = at(ev.startTime, '09:00');
+    let e = at(ev.endTime, '10:00');
+    if (e <= s) e = new Date(s.getTime() + 3600 * 1000);
+    return c.createEvent(fullTitle, s, e, opts);
+  };
   let created = null;
   try {
-    if (ev.allDay) {
-      created = cal.createAllDayEvent(fullTitle, day, opts);
-    } else {
-      const at = (t, fallback) => {
-        const [h, mi] = String(t || fallback).split(':').map(Number);
-        const d = new Date(day.getTime());
-        d.setHours(h || 0, mi || 0, 0, 0);
-        return d;
-      };
-      const s = at(ev.startTime, '09:00');
-      let e = at(ev.endTime, '10:00');
-      if (e <= s) e = new Date(s.getTime() + 3600 * 1000);
-      created = cal.createEvent(fullTitle, s, e, opts);
-    }
+    created = make(cal);
   } catch (err) {
     if (mine) throw new Error('내 캘린더에 일정을 만들지 못했습니다. 잠시 후 다시 시도하세요.');
+    if (recruitOnly) throw new Error('채용 캘린더에 일정을 추가할 권한이 없습니다. "일정 변경" 권한을 관리자에게 요청하세요.');
     throw new Error('일정을 추가할 권한이 없습니다. 팀 캘린더의 "일정 변경" 권한을 관리자에게 요청하세요.');
+  }
+  // 채용 캘린더에도 같이 (팀 캘린더에는 이미 들어갔으므로 실패해도 알리기만)
+  let warning = '';
+  if (alsoRecruit) {
+    try { make(getRecruitCalendar_(ctx)); } catch (err) { warning = '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.'; }
   }
   // 개인 캘린더를 다른 사람과 공유해 두었더라도 내용은 안 보이게
   if (mine && created) {
     try { created.setVisibility(CalendarApp.Visibility.PRIVATE); } catch (e) { /* 무시 */ }
   }
   bumpCalendar_();
-  return true;
+  return warning ? { warning: warning } : true;
 }
 
 /* ---------- 내 메모 (일별, 나만 보기) ----------
