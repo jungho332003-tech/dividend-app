@@ -49,6 +49,8 @@ const INPUT = {
   PRE_NOTE: 'H3',        // 다음 주 휴무계획/특이사항
   PRE_THIS_COL: 7,       // G:H 다음 주의 "금주" 업무·기한
   PRE_NEXT_COL: 10,      // J:K 다다음 주의 "차주" 업무·기한
+  // 중요 표시(★)는 업무·기한 바로 오른쪽의 좁은 칸: C(금주) · F(차주) · I(미리 쓰기 금주) · L(미리 쓰기 차주)
+  IMP_MARK: '★',
   PRE_THIS_LABEL: 'G5',
   PRE_NEXT_LABEL: 'J5',
 };
@@ -249,15 +251,15 @@ function readInput(ss, name) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
   if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [], pre: emptyPre_() };
   // 작성완료·특이사항·업무 목록·미리 쓰기를 한 번에 읽는다 (시트 요청 1회)
-  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 1).getValues();
+  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 2).getValues();
   const at = a1 => v[Number(a1.slice(1)) - 1][a1.charCodeAt(0) - 65];
   const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
     exists: true,
     done: at(INPUT.DONE_CELL) === true,
     note: String(at(INPUT.NOTE_CELL) || '').trim(),
-    thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1] })),
-    nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4] })),
+    thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1], imp: !!String(r[2]).trim() })),
+    nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4], imp: !!String(r[5]).trim() })),
     pre: readPre_(rows, at),
   };
 }
@@ -272,8 +274,8 @@ function readPre_(rows, at) {
   const pre = {
     exists: String(at(INPUT.PRE_FLAG)).toUpperCase() === 'Y',
     note: String(at(INPUT.PRE_NOTE) || '').trim(),
-    thisWeek: rows.filter(r => String(r[t]).trim()).map(r => ({ task: String(r[t]).trim(), due: r[t + 1] })),
-    nextWeek: rows.filter(r => String(r[n]).trim()).map(r => ({ task: String(r[n]).trim(), due: r[n + 1] })),
+    thisWeek: rows.filter(r => String(r[t]).trim()).map(r => ({ task: String(r[t]).trim(), due: r[t + 1], imp: !!String(r[t + 2]).trim() })),
+    nextWeek: rows.filter(r => String(r[n]).trim()).map(r => ({ task: String(r[n]).trim(), due: r[n + 1], imp: !!String(r[n + 2]).trim() })),
   };
   if (!pre.exists) return emptyPre_();
   return pre;
@@ -654,8 +656,9 @@ function buildReport_(ctx, onlyIfChanged) {
     for (let i = 0; i < n; i++) {
       const a = input.thisWeek[i];
       const b = input.nextWeek[i];
-      if (a && mk.thisWeek.indexOf(a.task) >= 0) bold.push('B' + (row + i));
-      if (b && mk.nextWeek.indexOf(b.task) >= 0) bold.push('D' + (row + i));
+      // 담당자가 중요(★)로 표시했거나 팀장이 굵게 표시한 업무
+      if (a && (a.imp || mk.thisWeek.indexOf(a.task) >= 0)) bold.push('B' + (row + i));
+      if (b && (b.imp || mk.nextWeek.indexOf(b.task) >= 0)) bold.push('D' + (row + i));
       rows.push([
         i === 0 ? m.name : '',
         a ? a.task : '', a ? formatDue(a.due) : '',
@@ -798,24 +801,25 @@ function carryOver_(ss, name, ctx) {
   if (!sh) return;
 
   const pre = readInput(ss, name).pre;
-  const lastNext = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).getValues().filter(r => String(r[0]).trim());
-  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).clearContent();
+  // 업무 | 기한 | 중요(★) 를 함께 옮긴다
+  const lastNext = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 3).getValues().filter(r => String(r[0]).trim());
+  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 3).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 3).clearContent();
 
   if (pre.exists) {
     // 미리 써둔 다음 주 보고를 그대로 옮기고 작성완료로 표시
-    const toRows = list => list.slice(0, INPUT.ROWS).map(x => [x.task, x.due]);
+    const toRows = list => list.slice(0, INPUT.ROWS).map(x => [x.task, x.due, x.imp ? INPUT.IMP_MARK : '']);
     const thisRows = toRows(pre.thisWeek), nextRows = toRows(pre.nextWeek);
-    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 2).setValues(thisRows);
-    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
+    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 3).setValues(thisRows);
+    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 3).setValues(nextRows);
     sh.getRange(INPUT.DONE_CELL).setValue(true);
     sh.getRange(INPUT.NOTE_CELL).setValue(pre.note);
     clearPre_(sh);
   } else {
     // 기본: 차주 → 금주, "지속" 업무는 차주에도 유지
     const keep = lastNext.filter(r => String(r[1]).trim() === '지속');
-    if (lastNext.length) sh.getRange(INPUT.FIRST_ROW, 1, lastNext.length, 2).setValues(lastNext);
-    if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 2).setValues(keep);
+    if (lastNext.length) sh.getRange(INPUT.FIRST_ROW, 1, lastNext.length, 3).setValues(lastNext);
+    if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 3).setValues(keep);
     sh.getRange(INPUT.DONE_CELL).setValue(false);
     sh.getRange(INPUT.NOTE_CELL).clearContent();
   }
@@ -826,8 +830,8 @@ function carryOver_(ss, name, ctx) {
 function clearPre_(sh) {
   sh.getRange(INPUT.PRE_FLAG).clearContent();
   sh.getRange(INPUT.PRE_NOTE).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 3).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 3).clearContent();
 }
 
 /** 현재 주간보고를 "보관_yyyy-MM-dd" 시트로 복사해 숨김 */
@@ -3454,6 +3458,7 @@ function toClientItem_(item) {
     task: item.task,
     due: formatDue(due),
     dueIso: due instanceof Date ? ymd(due) : '',
+    imp: !!item.imp, // 담당자가 표시한 중요 업무 → 팀 주간보고에서 굵게
   };
 }
 
@@ -3535,14 +3540,14 @@ function apiSaveMyWeek(payload) {
   const toRows = list => (list || [])
     .filter(x => String(x.task || '').trim())
     .slice(0, INPUT.ROWS)
-    .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+    .map(x => [String(x.task).trim(), parseDue_(x.due), x.imp ? INPUT.IMP_MARK : '']);
 
   const thisRows = toRows(payload.thisWeek);
   const nextRows = toRows(payload.nextWeek);
 
   // 지우기+쓰기를 한 번에: 빈 줄까지 채워서 통째로 덮어쓴다
-  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).setValues(padRows_(thisRows));
-  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).setValues(padRows_(nextRows));
+  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 3).setValues(padRows_(thisRows));
+  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 3).setValues(padRows_(nextRows));
   sh.getRange(INPUT.NOTE_CELL).setValue(String(payload.note || '').trim());
   sh.getRange(INPUT.DONE_CELL).setValue(!!payload.done);
   return memberPatch_(ctx, me.name);
@@ -3589,10 +3594,10 @@ function apiSavePreWeek(payload) {
   const toRows = list => payload.clear ? [] : (list || [])
     .filter(x => String(x.task || '').trim())
     .slice(0, INPUT.ROWS)
-    .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+    .map(x => [String(x.task).trim(), parseDue_(x.due), x.imp ? INPUT.IMP_MARK : '']);
   // 지우기도 같은 경로: 빈 줄로 통째로 덮어쓴다
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.thisWeek)));
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.nextWeek)));
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 3).setValues(padRows_(toRows(payload.thisWeek)));
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 3).setValues(padRows_(toRows(payload.nextWeek)));
   sh.getRange(INPUT.PRE_NOTE).setValue(payload.clear ? '' : String(payload.note || '').trim());
   sh.getRange(INPUT.PRE_FLAG).setValue(payload.clear ? '' : 'Y');
   return memberPatch_(ctx, me.name);
@@ -3601,7 +3606,7 @@ function apiSavePreWeek(payload) {
 /** 입력 칸 수(INPUT.ROWS)만큼 빈 줄을 채운다 */
 function padRows_(rows) {
   const out = rows.slice(0, INPUT.ROWS);
-  while (out.length < INPUT.ROWS) out.push(['', '']);
+  while (out.length < INPUT.ROWS) out.push(['', '', '']); // 업무 | 기한 | 중요(★)
   return out;
 }
 

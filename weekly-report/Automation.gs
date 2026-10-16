@@ -53,24 +53,25 @@ function carryOver_(ss, name, ctx) {
   if (!sh) return;
 
   const pre = readInput(ss, name).pre;
-  const lastNext = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).getValues().filter(r => String(r[0]).trim());
-  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).clearContent();
+  // 업무 | 기한 | 중요(★) 를 함께 옮긴다
+  const lastNext = sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 3).getValues().filter(r => String(r[0]).trim());
+  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 3).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 3).clearContent();
 
   if (pre.exists) {
     // 미리 써둔 다음 주 보고를 그대로 옮기고 작성완료로 표시
-    const toRows = list => list.slice(0, INPUT.ROWS).map(x => [x.task, x.due]);
+    const toRows = list => list.slice(0, INPUT.ROWS).map(x => [x.task, x.due, x.imp ? INPUT.IMP_MARK : '']);
     const thisRows = toRows(pre.thisWeek), nextRows = toRows(pre.nextWeek);
-    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 2).setValues(thisRows);
-    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 2).setValues(nextRows);
+    if (thisRows.length) sh.getRange(INPUT.FIRST_ROW, 1, thisRows.length, 3).setValues(thisRows);
+    if (nextRows.length) sh.getRange(INPUT.FIRST_ROW, 4, nextRows.length, 3).setValues(nextRows);
     sh.getRange(INPUT.DONE_CELL).setValue(true);
     sh.getRange(INPUT.NOTE_CELL).setValue(pre.note);
     clearPre_(sh);
   } else {
     // 기본: 차주 → 금주, "지속" 업무는 차주에도 유지
     const keep = lastNext.filter(r => String(r[1]).trim() === '지속');
-    if (lastNext.length) sh.getRange(INPUT.FIRST_ROW, 1, lastNext.length, 2).setValues(lastNext);
-    if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 2).setValues(keep);
+    if (lastNext.length) sh.getRange(INPUT.FIRST_ROW, 1, lastNext.length, 3).setValues(lastNext);
+    if (keep.length) sh.getRange(INPUT.FIRST_ROW, 4, keep.length, 3).setValues(keep);
     sh.getRange(INPUT.DONE_CELL).setValue(false);
     sh.getRange(INPUT.NOTE_CELL).clearContent();
   }
@@ -81,8 +82,8 @@ function carryOver_(ss, name, ctx) {
 function clearPre_(sh) {
   sh.getRange(INPUT.PRE_FLAG).clearContent();
   sh.getRange(INPUT.PRE_NOTE).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).clearContent();
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 3).clearContent();
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 3).clearContent();
 }
 
 /** 현재 주간보고를 "보관_yyyy-MM-dd" 시트로 복사해 숨김 */

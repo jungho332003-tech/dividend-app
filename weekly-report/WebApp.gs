@@ -204,6 +204,7 @@ function toClientItem_(item) {
     task: item.task,
     due: formatDue(due),
     dueIso: due instanceof Date ? ymd(due) : '',
+    imp: !!item.imp, // 담당자가 표시한 중요 업무 → 팀 주간보고에서 굵게
   };
 }
 
@@ -285,14 +286,14 @@ function apiSaveMyWeek(payload) {
   const toRows = list => (list || [])
     .filter(x => String(x.task || '').trim())
     .slice(0, INPUT.ROWS)
-    .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+    .map(x => [String(x.task).trim(), parseDue_(x.due), x.imp ? INPUT.IMP_MARK : '']);
 
   const thisRows = toRows(payload.thisWeek);
   const nextRows = toRows(payload.nextWeek);
 
   // 지우기+쓰기를 한 번에: 빈 줄까지 채워서 통째로 덮어쓴다
-  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 2).setValues(padRows_(thisRows));
-  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 2).setValues(padRows_(nextRows));
+  sh.getRange(INPUT.FIRST_ROW, 1, INPUT.ROWS, 3).setValues(padRows_(thisRows));
+  sh.getRange(INPUT.FIRST_ROW, 4, INPUT.ROWS, 3).setValues(padRows_(nextRows));
   sh.getRange(INPUT.NOTE_CELL).setValue(String(payload.note || '').trim());
   sh.getRange(INPUT.DONE_CELL).setValue(!!payload.done);
   return memberPatch_(ctx, me.name);
@@ -339,10 +340,10 @@ function apiSavePreWeek(payload) {
   const toRows = list => payload.clear ? [] : (list || [])
     .filter(x => String(x.task || '').trim())
     .slice(0, INPUT.ROWS)
-    .map(x => [String(x.task).trim(), parseDue_(x.due)]);
+    .map(x => [String(x.task).trim(), parseDue_(x.due), x.imp ? INPUT.IMP_MARK : '']);
   // 지우기도 같은 경로: 빈 줄로 통째로 덮어쓴다
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.thisWeek)));
-  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 2).setValues(padRows_(toRows(payload.nextWeek)));
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_THIS_COL, INPUT.ROWS, 3).setValues(padRows_(toRows(payload.thisWeek)));
+  sh.getRange(INPUT.FIRST_ROW, INPUT.PRE_NEXT_COL, INPUT.ROWS, 3).setValues(padRows_(toRows(payload.nextWeek)));
   sh.getRange(INPUT.PRE_NOTE).setValue(payload.clear ? '' : String(payload.note || '').trim());
   sh.getRange(INPUT.PRE_FLAG).setValue(payload.clear ? '' : 'Y');
   return memberPatch_(ctx, me.name);
@@ -351,7 +352,7 @@ function apiSavePreWeek(payload) {
 /** 입력 칸 수(INPUT.ROWS)만큼 빈 줄을 채운다 */
 function padRows_(rows) {
   const out = rows.slice(0, INPUT.ROWS);
-  while (out.length < INPUT.ROWS) out.push(['', '']);
+  while (out.length < INPUT.ROWS) out.push(['', '', '']); // 업무 | 기한 | 중요(★)
   return out;
 }
 

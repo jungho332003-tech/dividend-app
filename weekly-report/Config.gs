@@ -40,6 +40,8 @@ const INPUT = {
   PRE_NOTE: 'H3',        // 다음 주 휴무계획/특이사항
   PRE_THIS_COL: 7,       // G:H 다음 주의 "금주" 업무·기한
   PRE_NEXT_COL: 10,      // J:K 다다음 주의 "차주" 업무·기한
+  // 중요 표시(★)는 업무·기한 바로 오른쪽의 좁은 칸: C(금주) · F(차주) · I(미리 쓰기 금주) · L(미리 쓰기 차주)
+  IMP_MARK: '★',
   PRE_THIS_LABEL: 'G5',
   PRE_NEXT_LABEL: 'J5',
 };
@@ -240,15 +242,15 @@ function readInput(ss, name) {
   const sh = ss.getSheetByName(SHEET.INPUT_PREFIX + name);
   if (!sh) return { exists: false, done: false, note: '', thisWeek: [], nextWeek: [], pre: emptyPre_() };
   // 작성완료·특이사항·업무 목록·미리 쓰기를 한 번에 읽는다 (시트 요청 1회)
-  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 1).getValues();
+  const v = sh.getRange(1, 1, INPUT.FIRST_ROW + INPUT.ROWS - 1, INPUT.PRE_NEXT_COL + 2).getValues();
   const at = a1 => v[Number(a1.slice(1)) - 1][a1.charCodeAt(0) - 65];
   const rows = v.slice(INPUT.FIRST_ROW - 1);
   return {
     exists: true,
     done: at(INPUT.DONE_CELL) === true,
     note: String(at(INPUT.NOTE_CELL) || '').trim(),
-    thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1] })),
-    nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4] })),
+    thisWeek: rows.filter(r => String(r[0]).trim()).map(r => ({ task: String(r[0]).trim(), due: r[1], imp: !!String(r[2]).trim() })),
+    nextWeek: rows.filter(r => String(r[3]).trim()).map(r => ({ task: String(r[3]).trim(), due: r[4], imp: !!String(r[5]).trim() })),
     pre: readPre_(rows, at),
   };
 }
@@ -263,8 +265,8 @@ function readPre_(rows, at) {
   const pre = {
     exists: String(at(INPUT.PRE_FLAG)).toUpperCase() === 'Y',
     note: String(at(INPUT.PRE_NOTE) || '').trim(),
-    thisWeek: rows.filter(r => String(r[t]).trim()).map(r => ({ task: String(r[t]).trim(), due: r[t + 1] })),
-    nextWeek: rows.filter(r => String(r[n]).trim()).map(r => ({ task: String(r[n]).trim(), due: r[n + 1] })),
+    thisWeek: rows.filter(r => String(r[t]).trim()).map(r => ({ task: String(r[t]).trim(), due: r[t + 1], imp: !!String(r[t + 2]).trim() })),
+    nextWeek: rows.filter(r => String(r[n]).trim()).map(r => ({ task: String(r[n]).trim(), due: r[n + 1], imp: !!String(r[n + 2]).trim() })),
   };
   if (!pre.exists) return emptyPre_();
   return pre;

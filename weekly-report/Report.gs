@@ -46,8 +46,9 @@ function buildReport_(ctx, onlyIfChanged) {
     for (let i = 0; i < n; i++) {
       const a = input.thisWeek[i];
       const b = input.nextWeek[i];
-      if (a && mk.thisWeek.indexOf(a.task) >= 0) bold.push('B' + (row + i));
-      if (b && mk.nextWeek.indexOf(b.task) >= 0) bold.push('D' + (row + i));
+      // 담당자가 중요(★)로 표시했거나 팀장이 굵게 표시한 업무
+      if (a && (a.imp || mk.thisWeek.indexOf(a.task) >= 0)) bold.push('B' + (row + i));
+      if (b && (b.imp || mk.nextWeek.indexOf(b.task) >= 0)) bold.push('D' + (row + i));
       rows.push([
         i === 0 ? m.name : '',
         a ? a.task : '', a ? formatDue(a.due) : '',

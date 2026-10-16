@@ -415,7 +415,11 @@
   /* ===== 내 주간업무 ===== */
   .edit-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .items { display: flex; flex-direction: column; gap: 8px; }
-  .item { display: grid; grid-template-columns: minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
+  .item { display: grid; grid-template-columns: minmax(0, 1fr) 142px auto auto auto; gap: 6px; align-items: start; }
+  .toggle.imp-btn { color: var(--muted); }
+  .toggle.imp-btn[aria-pressed="true"] { background: #fff4d6; color: #a15c00; border-color: #e0a526; font-weight: 700; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toggle.imp-btn[aria-pressed="true"] { background: #3a2c0a; color: #f5c451; border-color: #b8860b; } }
+  :root[data-theme="dark"] .toggle.imp-btn[aria-pressed="true"] { background: #3a2c0a; color: #f5c451; border-color: #b8860b; }
   textarea.task-in { resize: none; overflow: hidden; min-height: 42px; height: 42px; line-height: 1.45; display: block; }
   /* 여러 줄로 쓴 업무는 줄을 바꿔 보여준다 */
   .report td.task, .meet li .t, .msec li > span, .dd-items li > span, .key-row .t { white-space: pre-line; }
@@ -760,7 +764,8 @@
   }
   @media (max-width: 520px) {
     .kpi .value { font-size: 24px; }
-    .item { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .item { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+    .item .task-in { grid-column: 1 / -1; }
     .item .date-in { grid-column: 1 / 2; }
     .form .two { grid-template-columns: 1fr; }
     .list-row { grid-template-columns: 60px auto; }
@@ -876,7 +881,7 @@
     .mcards { display: flex; flex-direction: column; gap: 10px; }
     .desk { display: none; }
 
-    .item { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .item { grid-template-columns: minmax(0, 1fr) auto auto auto; }
     .item > input[data-f="task"] { grid-column: 1 / -1; }
     .save-bar { position: static; box-shadow: var(--shadow-sm); padding: 14px; gap: 10px; }
     .desk-only { display: none; }
@@ -1394,7 +1399,7 @@
         <div class="report-split">
         <section class="panel">
           <p class="report-title">■ ${esc(D.week.title)}</p>
-          <p class="report-note">${D.me.isLeader ? '업무 클릭: 굵게 표시/해제' : '굵은 글씨: 팀장 강조 업무'}</p>
+          <p class="report-note">${D.me.isLeader ? '굵은 글씨: 담당자가 표시한 중요 업무 · 업무 클릭: 굵게 표시/해제' : '굵은 글씨: 중요 업무 (내 주간업무에서 ☆중요 체크)'}</p>
           <div class="mcards">${reportCards()}</div>
           <div class="table-wrap desk">
             <table class="report team">
@@ -2912,18 +2917,19 @@
   }
 
   /* ================= 내 주간업무 편집 ================= */
-  function blank() { return { task: '', dueIso: '', cont: false, raw: '' }; }
+  function blank() { return { task: '', dueIso: '', cont: false, raw: '', imp: false }; }
   function convItems(list) {
-    return (list || []).map(it => ({ task: it.task, dueIso: it.dueIso, cont: it.due === '지속', raw: it.dueIso || it.due === '지속' ? '' : it.due }));
+    return (list || []).map(it => ({ task: it.task, dueIso: it.dueIso, cont: it.due === '지속', raw: it.dueIso || it.due === '지속' ? '' : it.due, imp: !!it.imp }));
   }
-  const draftOut = list => list.filter(x => x.task.trim()).map(x => ({ task: x.task.trim(), due: x.cont ? '지속' : (x.dueIso || x.raw || '') }));
-  const toItem = x => /^\d{4}-\d{2}-\d{2}$/.test(x.due) ? { task: x.task, due: fmtDue(x.due), dueIso: x.due } : { task: x.task, due: x.due, dueIso: '' };
+  const draftOut = list => list.filter(x => x.task.trim()).map(x => ({ task: x.task.trim(), due: x.cont ? '지속' : (x.dueIso || x.raw || ''), imp: !!x.imp }));
+  const toItem = x => /^\d{4}-\d{2}-\d{2}$/.test(x.due) ? { task: x.task, due: fmtDue(x.due), dueIso: x.due, imp: x.imp } : { task: x.task, due: x.due, dueIso: '', imp: x.imp };
 
   function itemsHtml(key) {
     return draft[key].map((it, i) => `
       <div class="item">
         <textarea class="field-in task-in" rows="1" data-k="${key}" data-i="${i}" data-f="task" placeholder="업무 내용" aria-label="업무 내용">${esc(it.task)}</textarea>
         <input class="field-in date-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-k="${key}" data-i="${i}" data-f="dueIso" value="${esc(it.dueIso)}" ${it.cont ? 'disabled' : ''} aria-label="기한">
+        <button class="toggle imp-btn" data-k="${key}" data-i="${i}" data-f="imp" aria-pressed="${!!it.imp}" title="중요 업무: 팀 주간보고에 굵게 표시됩니다">${it.imp ? '★' : '☆'} 중요</button>
         <button class="toggle" data-k="${key}" data-i="${i}" data-f="cont" aria-pressed="${it.cont}">지속</button>
         <button class="icon-btn" data-k="${key}" data-i="${i}" data-f="del" aria-label="삭제">${ic('x', 'sm')}</button>
       </div>`).join('');
@@ -2975,6 +2981,11 @@
         fitTasks(t.dataset.add);
         const inputs = document.querySelectorAll(`#list-${t.dataset.add} [data-f="task"]`);
         inputs[inputs.length - 1].focus();
+      } else if (t.dataset.f === 'imp') {
+        const it = draft[t.dataset.k][Number(t.dataset.i)];
+        it.imp = !it.imp;
+        t.setAttribute('aria-pressed', String(it.imp));
+        t.textContent = `${it.imp ? '★' : '☆'} 중요`;
       } else if (t.dataset.f === 'cont') {
         const it = draft[t.dataset.k][Number(t.dataset.i)];
         it.cont = !it.cont;
@@ -3065,14 +3076,21 @@
   }
 
   /* ----- 팀장 강조(굵게) ----- */
+  /** 굵게: 담당자가 중요(★)로 표시했거나 팀장이 표시한 업무 */
+  function isImp(m, w, task) {
+    const items = m ? (w === 'next' ? m.nextWeek : m.thisWeek) || [] : [];
+    return !!task && items.some(x => x.task === task && x.imp);
+  }
   function isMarked(m, w, task) {
+    if (isImp(m, w, task)) return true;
     const list = m && m.marks ? m.marks[w === 'next' ? 'nextWeek' : 'thisWeek'] : null;
     return !!(list && task && list.indexOf(task) >= 0);
   }
   /** 팀 주간보고 표의 업무 칸: 팀장은 눌러서 굵게 켜고 끈다 */
   function taskCell(m, w, i, it, cls) {
-    const can = D.me.isLeader && it && it.task;
-    return `<td class="task ${cls} ${isMarked(m, w, it && it.task) ? 'mk' : ''} ${can ? 'markable' : ''}" ${can ? `data-mk="${esc(m.name)}|${w}|${i}" tabindex="0" title="눌러서 굵게 표시"` : ''}>${esc(it && it.task)}</td>`;
+    const imp = !!(it && it.imp);
+    const can = D.me.isLeader && it && it.task && !imp; // 담당자가 중요로 표시한 업무는 그대로 굵게
+    return `<td class="task ${cls} ${isMarked(m, w, it && it.task) ? 'mk' : ''} ${can ? 'markable' : ''}" ${can ? `data-mk="${esc(m.name)}|${w}|${i}" tabindex="0" title="눌러서 굵게 표시"` : imp ? 'title="담당자가 중요 업무로 표시"' : ''}>${esc(it && it.task)}</td>`;
   }
   function toggleMark(key) {
     const [name, w, i] = key.split('|');
