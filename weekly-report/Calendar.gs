@@ -89,6 +89,8 @@ function apiCalendar(startIso, endIso, fresh) {
     const events = cal.getEvents(start, end).map(e => {
       const ev = eventJson_(e, isLeaveTitle_(e.getTitle(), names) ? 'leave' : 'event');
       ev.title = leaveTitle_(ev.title, names) || ev.title;
+      // "연차] 민경"처럼 휴가 형식인데 [팀원]에 없는 이름이면 휴가 색으로만 보여준다 (주간보고에는 안 들어감)
+      if (ev.kind === 'event') { const t = leaveTagTitle_(ev.title); if (t) { ev.kind = 'leave'; ev.title = t; ev.ro = true; } }
       return ev;
     });
     const sh = ctx.ss.getSheetByName(SHEET.HOLIDAYS);
@@ -148,13 +150,14 @@ function apiCalendar(startIso, endIso, fresh) {
     events.push.apply(events, once(rec.events).filter(e => !same[e.title + '|' + e.start]));
   }
   extras.forEach(x => { events.push.apply(events, once(x.events)); });
+  const merged = mergeLeaves_(events, ctx.members.map(m => m.name));
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
     extraCalendars: extras.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
     recruitCalendar: rec ? { name: rec.name, ok: rec.ok } : null,
     // 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
-    events: dropHolidayDupes_(events),
+    events: dropHolidayDupes_(merged),
   };
 }
 
@@ -162,6 +165,44 @@ function apiCalendar(startIso, endIso, fresh) {
  * 구글 캘린더에 공휴일이 일정으로 들어 있으면(공휴일 캘린더를 합쳐 둔 경우 등) [공휴일] 시트의 공휴일과 두 번 보인다.
  * 같은 날의 종일 일정 중 이름이 공휴일과 같거나 서로 포함되면 빼고, 빨간 공휴일만 남긴다.
  */
+/** "연차] 민경", "[오전반차] 소영" → "[연차] 민경" (휴가 단어로 시작하는 제목). 아니면 '' */
+function leaveTagTitle_(title) {
+  const m = /^\s*\[?\s*([가-힣]+?)\s*\]\s*(.+)$/.exec(String(title || ''));
+  if (!m) return '';
+  const w = m[1].match(LEAVE.WORDS);
+  return w && w[0] === m[1] ? `[${leaveType_(w[1], m[1])}] ${m[2].trim()}` : '';
+}
+
+/**
+ * 채용 캘린더·내 캘린더·함께 볼 캘린더에 적힌 휴가도 "[연차] 안지선"처럼 이름을 맞춰 휴가 색으로 보여주고,
+ * 팀 캘린더에 같은 날 같은 휴가가 있으면 하나만 남긴다. (팀 캘린더 것이 아니면 여기서 지우지는 못하게 ro)
+ */
+function mergeLeaves_(events, names) {
+  const dayOf = e => (/^\d{4}-\d{2}-\d{2}$/.test(e.start) ? e.start : ymd(new Date(e.start)));
+  const keyOf = e => e.title.replace(/\s+/g, '') + '|' + dayOf(e);
+  const seen = {};
+  events.forEach(e => {
+    if (e.kind === 'leave' || e.kind === 'event') {
+      if (e.kind === 'leave') { seen[keyOf(e)] = true; e._base = true; } // 팀 캘린더 휴가가 기준
+      return;
+    }
+    if (e.kind !== 'recruit' && e.kind !== 'mine' && e.kind !== 'extra') return;
+    const t = (isLeaveTitle_(e.title, names) && leaveTitle_(e.title, names)) || leaveTagTitle_(e.title);
+    if (!t) return;
+    e.title = t;
+    e.kind = 'leave';
+    e.ro = true;
+  });
+  return events.filter(e => {
+    if (e._base) { delete e._base; return true; }
+    if (!e.ro || e.kind !== 'leave') return true;
+    const k = keyOf(e);
+    if (seen[k]) return false;
+    seen[k] = true;
+    return true;
+  });
+}
+
 function dropHolidayDupes_(events) {
   const norm = t => String(t || '').replace(/[\s()\[\]·]/g, '');
   const words = t => String(t || '').split(/[\s()\[\]·]+/).filter(Boolean);

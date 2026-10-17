@@ -1941,7 +1941,7 @@
   function canDelLeaveEv(ev) {
     // 여러 명이 함께 적힌 휴가 일정("[오전반차] 김지애, 이소영")은 팀장·관리자만 (각자 것은 내 주간업무 휴무 일정에서 지운다)
     const many = String(ev.title).indexOf(', ') >= 0;
-    return ev.kind === 'leave' && !String(ev.id).startsWith('tmp-') && (D.me.isLeader || D.me.isAdmin || (!many && D.me.name && String(ev.title).indexOf(D.me.name) >= 0));
+    return ev.kind === 'leave' && !ev.ro && !String(ev.id).startsWith('tmp-') && (D.me.isLeader || D.me.isAdmin || (!many && D.me.name && String(ev.title).indexOf(D.me.name) >= 0));
   }
   function agRow(ev) {
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
