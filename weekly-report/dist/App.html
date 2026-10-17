@@ -3598,7 +3598,7 @@
 
   function leaveStrip(list, range) {
     list = list || [];
-    const chips = list.map(l => `<span class="leave-chip">${esc(l.text)}${l.source === '캘린더' ? ' <small>캘린더</small>' : ''}
+    const chips = list.map(l => `<span class="leave-chip">${esc(l.text)}${l.source === '캘린더' ? ' <small>캘린더</small>' : l.source === '채용캘린더' ? ' <small>채용캘린더</small>' : ''}
       <button class="icon-btn" onclick="deleteLeave('${esc(l.id)}')" aria-label="${esc(l.text)} 지우기" title="지우기">${ic('x', 'sm')}</button></span>`).join('');
     return `<section class="panel leave-strip">
       <div class="panel-head"><h2>휴무 일정<span>${range}</span></h2>

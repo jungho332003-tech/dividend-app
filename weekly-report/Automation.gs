@@ -182,6 +182,7 @@ function hourlyCheck() {
     props.setProperty(PROP.CLOSED, key);
   }
 
+  try { syncTeamHr_(ctx); } catch (e) { /* 팀 캘린더 권한이 없으면 건너뛴다 */ }
   try { syncRecruitHr_(ctx); } catch (e) { /* 채용 캘린더 권한이 없으면 건너뛴다 */ }
   hrMailCheck_(ctx, now); // 채용 담당자: 입사 70일 수습평가·인터뷰 전날 안내 메일
   warmCaches_(ctx); // 다음 접속이 빠르도록 화면 데이터를 미리 캐시

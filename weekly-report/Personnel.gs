@@ -339,6 +339,78 @@ function recruitRetitle_(old, category, target) {
   return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : `[${category}] ${target}`;
 }
 
+/* ---------- 팀 캘린더 → 인사현황 ----------
+ * 웹앱 인사현황이 팀 캘린더에 만든 "[구분] 대상" 일정을 구글 캘린더에서 고치면(제목·날짜) 인사현황도 따라간다.
+ * 캘린더에서 지우면 인사현황에서도 지운다. 이번 주 월요일부터 석 달을 맞춘다.
+ */
+function syncTeamHr_(ctx) {
+  if (!teamCalendarSet_(ctx)) return false;
+  const sh = ctx.ss.getSheetByName(HR.SHEET);
+  if (!sh || sh.getLastRow() < 2) return false;
+  const from = ctx.thisWeek.monday, to = addDays(from, RECRUIT_SYNC_DAYS);
+  let cal, events;
+  try { cal = getTeamCalendar_(); events = cal.getEvents(from, to); } catch (e) { return false; }
+  const byId = {};
+  events.forEach(e => { byId[e.getId()] = e; });
+  const key = v => (v instanceof Date ? ymd(v) : '');
+  const width = Math.max(HCOL.EVENT, Math.min(HCOL.REC_EVENT, sh.getLastColumn()));
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues();
+  const changes = [];
+  rows.forEach((r, i) => {
+    const id = String(r[HCOL.EVENT - 1] || '');
+    if (!id || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
+    const st = r[HCOL.START - 1];
+    let ev = byId[id];
+    if (!ev) {
+      if (!(st instanceof Date) || st < from || st >= to) return; // 읽은 범위 밖은 건드리지 않는다
+      try { ev = cal.getEventById(id); } catch (e) { ev = null; } // 범위 밖으로 옮겼는지 확인
+      // 읽은 범위 안에 있다면 getEvents에 나왔어야 한다 → 안 나왔으면 지운 일정으로 본다
+      try { if (ev && ev.getStartTime() >= from && ev.getStartTime() < to) ev = null; } catch (e) { ev = null; }
+      if (!ev) { changes.push({ row: i + 2, del: true, r: r }); return; }
+    }
+    const title = String(ev.getTitle() || '').trim();
+    const m = /^\s*\[([^\]]+)\]\s*(.*)$/.exec(title);
+    const category = m && HR.CATEGORIES.indexOf(m[1].trim()) >= 0 ? m[1].trim() : String(r[HCOL.CATEGORY - 1]);
+    const target = (m ? m[2] : title).trim() || String(r[HCOL.TARGET - 1]);
+    const allDay = ev.isAllDayEvent();
+    const start = allDay ? ev.getAllDayStartDate() : startOfDay_(ev.getStartTime());
+    let end = allDay ? addDays(ev.getAllDayEndDate(), -1) : startOfDay_(ev.getEndTime());
+    if (end <= start) end = '';
+    if (String(r[HCOL.CATEGORY - 1]) !== category || String(r[HCOL.TARGET - 1]) !== target
+      || key(st) !== ymd(start) || key(r[HCOL.END - 1]) !== key(end)) {
+      changes.push({ row: i + 2, r: r, category: category, target: target, start: start, end: end });
+    }
+  });
+  if (!changes.length) return false;
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    changes.forEach(c => {
+      const rec = String(c.r[HCOL.REC_EVENT - 1] || '');
+      const author = String(c.r[HCOL.AUTHOR - 1] || '');
+      if (c.del) {
+        sh.getRange(c.row, HCOL.DELETED).setValue('Y');
+        if (rec && recruitCalendarId_(ctx.cfg)) {
+          try { const ev = getRecruitCalendar_(ctx).getEventById(rec); if (ev) ev.deleteEvent(); } catch (e) { /* 권한 없음 */ }
+        }
+        return;
+      }
+      sh.getRange(c.row, HCOL.WEEK, 1, 5).setValues([[ymd(mondayOf(c.start)), c.category, c.target, c.start, c.end]]);
+      // 채용 캘린더에도 같이 걸려 있으면 그쪽도 맞춘다 (서로 되돌리지 않도록)
+      if (rec || HR_RECRUIT_CATS.indexOf(c.category) >= 0) {
+        const next = hrRecruitEvent_(ctx, { name: author }, rec, c.category, c.target, c.start, c.end instanceof Date ? c.end : '', String(c.r[HCOL.MEMO - 1] || ''), author === RECRUIT_AUTHOR);
+        if (next !== rec && sh.getLastColumn() >= HCOL.EVENT) sh.getRange(c.row, HCOL.REC_EVENT).setValue(next);
+      }
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  bumpCalendar_();
+  refreshHr_(ctx);
+  return true;
+}
+
 function apiDeleteHr(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);

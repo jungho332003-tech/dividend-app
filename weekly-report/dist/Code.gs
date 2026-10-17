@@ -930,6 +930,7 @@ function hourlyCheck() {
     props.setProperty(PROP.CLOSED, key);
   }
 
+  try { syncTeamHr_(ctx); } catch (e) { /* 팀 캘린더 권한이 없으면 건너뛴다 */ }
   try { syncRecruitHr_(ctx); } catch (e) { /* 채용 캘린더 권한이 없으면 건너뛴다 */ }
   hrMailCheck_(ctx, now); // 채용 담당자: 입사 70일 수습평가·인터뷰 전날 안내 메일
   warmCaches_(ctx); // 다음 접속이 빠르도록 화면 데이터를 미리 캐시
@@ -1578,13 +1579,17 @@ function apiSyncLeaves() {
   if (teamCalendarSet_(ctx)) {
     // 이번 주~다다음 주 (주간보고에 나오는 범위)를 읽어 맞춘다
     const start = ctx.thisWeek.monday, end = addDays(ctx.afterWeek.monday, 7);
-    changed = syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(start, end), start, end);
+    const cal = getTeamCalendar_();
+    changed = syncLeaveEvents_(ctx, cal.getEvents(start, end), start, end, cal);
   } else {
     changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
   }
+  // 채용담당이 열면 채용 캘린더의 채용담당 휴가도 맞춘다
+  if (canRecruitCal_(ctx, me)) { try { changed = syncRecruitLeaves_(ctx) || changed; } catch (e) { /* 다음에 다시 */ } }
   // 채용담당: 채용 캘린더에 넣은 입사·인터뷰를 인사현황으로
   let hrChanged = false;
-  if (canRecruitCal_(ctx, me)) { try { hrChanged = syncRecruitHr_(ctx); } catch (e) { /* 다음에 다시 */ } }
+  try { hrChanged = syncTeamHr_(ctx); } catch (e) { /* 다음에 다시 */ } // 팀 캘린더에서 고친 인사현황 일정
+  if (canRecruitCal_(ctx, me)) { try { hrChanged = syncRecruitHr_(ctx) || hrChanged; } catch (e) { /* 다음에 다시 */ } }
   if (!changed && !hrChanged) return { changed: false };
   const out = { changed: true };
   if (changed) out.members = forViewer_(currentMember_(ctx.members), cached_(CK.members(ctx), () => readMembers_(ctx)));
@@ -2283,6 +2288,78 @@ function recruitRetitle_(old, category, target) {
   return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : `[${category}] ${target}`;
 }
 
+/* ---------- 팀 캘린더 → 인사현황 ----------
+ * 웹앱 인사현황이 팀 캘린더에 만든 "[구분] 대상" 일정을 구글 캘린더에서 고치면(제목·날짜) 인사현황도 따라간다.
+ * 캘린더에서 지우면 인사현황에서도 지운다. 이번 주 월요일부터 석 달을 맞춘다.
+ */
+function syncTeamHr_(ctx) {
+  if (!teamCalendarSet_(ctx)) return false;
+  const sh = ctx.ss.getSheetByName(HR.SHEET);
+  if (!sh || sh.getLastRow() < 2) return false;
+  const from = ctx.thisWeek.monday, to = addDays(from, RECRUIT_SYNC_DAYS);
+  let cal, events;
+  try { cal = getTeamCalendar_(); events = cal.getEvents(from, to); } catch (e) { return false; }
+  const byId = {};
+  events.forEach(e => { byId[e.getId()] = e; });
+  const key = v => (v instanceof Date ? ymd(v) : '');
+  const width = Math.max(HCOL.EVENT, Math.min(HCOL.REC_EVENT, sh.getLastColumn()));
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues();
+  const changes = [];
+  rows.forEach((r, i) => {
+    const id = String(r[HCOL.EVENT - 1] || '');
+    if (!id || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
+    const st = r[HCOL.START - 1];
+    let ev = byId[id];
+    if (!ev) {
+      if (!(st instanceof Date) || st < from || st >= to) return; // 읽은 범위 밖은 건드리지 않는다
+      try { ev = cal.getEventById(id); } catch (e) { ev = null; } // 범위 밖으로 옮겼는지 확인
+      // 읽은 범위 안에 있다면 getEvents에 나왔어야 한다 → 안 나왔으면 지운 일정으로 본다
+      try { if (ev && ev.getStartTime() >= from && ev.getStartTime() < to) ev = null; } catch (e) { ev = null; }
+      if (!ev) { changes.push({ row: i + 2, del: true, r: r }); return; }
+    }
+    const title = String(ev.getTitle() || '').trim();
+    const m = /^\s*\[([^\]]+)\]\s*(.*)$/.exec(title);
+    const category = m && HR.CATEGORIES.indexOf(m[1].trim()) >= 0 ? m[1].trim() : String(r[HCOL.CATEGORY - 1]);
+    const target = (m ? m[2] : title).trim() || String(r[HCOL.TARGET - 1]);
+    const allDay = ev.isAllDayEvent();
+    const start = allDay ? ev.getAllDayStartDate() : startOfDay_(ev.getStartTime());
+    let end = allDay ? addDays(ev.getAllDayEndDate(), -1) : startOfDay_(ev.getEndTime());
+    if (end <= start) end = '';
+    if (String(r[HCOL.CATEGORY - 1]) !== category || String(r[HCOL.TARGET - 1]) !== target
+      || key(st) !== ymd(start) || key(r[HCOL.END - 1]) !== key(end)) {
+      changes.push({ row: i + 2, r: r, category: category, target: target, start: start, end: end });
+    }
+  });
+  if (!changes.length) return false;
+
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(30000);
+  try {
+    changes.forEach(c => {
+      const rec = String(c.r[HCOL.REC_EVENT - 1] || '');
+      const author = String(c.r[HCOL.AUTHOR - 1] || '');
+      if (c.del) {
+        sh.getRange(c.row, HCOL.DELETED).setValue('Y');
+        if (rec && recruitCalendarId_(ctx.cfg)) {
+          try { const ev = getRecruitCalendar_(ctx).getEventById(rec); if (ev) ev.deleteEvent(); } catch (e) { /* 권한 없음 */ }
+        }
+        return;
+      }
+      sh.getRange(c.row, HCOL.WEEK, 1, 5).setValues([[ymd(mondayOf(c.start)), c.category, c.target, c.start, c.end]]);
+      // 채용 캘린더에도 같이 걸려 있으면 그쪽도 맞춘다 (서로 되돌리지 않도록)
+      if (rec || HR_RECRUIT_CATS.indexOf(c.category) >= 0) {
+        const next = hrRecruitEvent_(ctx, { name: author }, rec, c.category, c.target, c.start, c.end instanceof Date ? c.end : '', String(c.r[HCOL.MEMO - 1] || ''), author === RECRUIT_AUTHOR);
+        if (next !== rec && sh.getLastColumn() >= HCOL.EVENT) sh.getRange(c.row, HCOL.REC_EVENT).setValue(next);
+      }
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  bumpCalendar_();
+  refreshHr_(ctx);
+  return true;
+}
+
 function apiDeleteHr(id) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
@@ -2694,7 +2771,8 @@ function apiDeleteLeave(id) {
   // 여러 명이 같이 적힌 일정("…#이름")은 이 사람 휴가만 지우고 캘린더 일정은 그대로 둔다
   if (eventId && eventId.indexOf('#') < 0) {
     try {
-      const ev = getTeamCalendar_().getEventById(eventId);
+      const fromRecruit = String(rows[idx][LCOL.SOURCE - 1]) === RECRUIT_LEAVE_SOURCE;
+      const ev = (fromRecruit ? getRecruitCalendar_(ctx) : getTeamCalendar_()).getEventById(eventId);
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
     } catch (e) { /* 캘린더 권한이 없으면 시트에서만 지운다 */ }
   }
@@ -2745,61 +2823,113 @@ function nextLeaveId_(sh) {
  * 캘린더에서 지워진 일정은 [휴가]에서도 지운다 (캘린더에서 넣은 것, 웹앱에서 넣은 것 모두).
  * events: CalendarEvent[] (from~to 사이를 모두 읽은 것). 바뀐 게 있으면 true.
  */
-function syncLeaveEvents_(ctx, events, from, to) {
+/**
+ * opt.source: '캘린더'(팀 캘린더, 기본) | '채용캘린더'(채용 캘린더 — 채용담당 본인 휴가만)
+ * 각 캘린더는 자기가 넣은 [휴가] 줄만 고치고 지운다.
+ */
+function syncLeaveEvents_(ctx, events, from, to, cal, opt) {
+  const source = (opt && opt.source) || '캘린더';
+  const fromRecruit = source === RECRUIT_LEAVE_SOURCE;
   const lo = ctx.thisWeek.monday > from ? ctx.thisWeek.monday : from;
   const afterEnd = addDays(ctx.afterWeek.monday, 7);
   const hi = afterEnd < to ? afterEnd : to;
   if (lo >= hi) return false;
 
-  const names = ctx.members.map(m => m.name).filter(Boolean).sort((a, b) => b.length - a.length);
+  const names = ((opt && opt.names) || ctx.members.map(m => m.name)).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!names.length) return false;
   const found = {};
   const present = {}; // 캘린더에 아직 있는 일정 (제목을 바꿨어도 지운 것으로 보지 않도록 전부)
-  events.forEach(ev => {
-    present[ev.getId()] = true;
+  // 일정 하나 → { 키: 휴가 } (여러 명이면 사람마다 한 줄씩, [휴가] 캘린더 일정ID 칸: "일정ID#이름")
+  const leavesOfEvent = ev => {
+    const out = {};
     const title = ev.getTitle();
     const word = title.match(LEAVE.WORDS);
-    if (!word) return;
+    if (!word) return out;
     const who = leaveNames_(title, names);
-    if (!who.length) return;
     const allDay = ev.isAllDayEvent();
     const start = allDay ? ev.getAllDayStartDate() : startOfDay_(ev.getStartTime());
     const end = allDay ? addDays(ev.getAllDayEndDate(), -1) : startOfDay_(ev.getEndTime());
-    if (start >= hi || end < lo) return;
-    // 여러 명이면 사람마다 한 줄씩 ([휴가] 캘린더 일정ID 칸: "일정ID#이름")
     who.forEach(name => {
-      found[who.length > 1 ? `${ev.getId()}#${name}` : ev.getId()] = { name: name, type: leaveType_(word[1], title), start: start, end: end < start ? start : end };
+      out[who.length > 1 ? `${ev.getId()}#${name}` : ev.getId()] = { name: name, type: leaveType_(word[1], title), start: start, end: end < start ? start : end };
     });
+    return out;
+  };
+  events.forEach(ev => {
+    present[ev.getId()] = true;
+    const one = leavesOfEvent(ev);
+    Object.keys(one).forEach(k => { if (one[k].start < hi && one[k].end >= lo) found[k] = one[k]; });
   });
+  // 읽은 범위 밖으로 옮겨진 일정은 하나씩 찾아본다 (지운 것과 구분)
+  const lookup = {};
+  const moved = key => {
+    const id = key.split('#')[0];
+    if (!(id in lookup)) {
+      let one = null;
+      try {
+        const ev = cal ? cal.getEventById(id) : null;
+        one = ev ? leavesOfEvent(ev) : null;
+      } catch (e) { one = null; }
+      lookup[id] = one;
+    }
+    const f = lookup[id] ? lookup[id][key] || null : null;
+    // 읽은 범위 안에 있다면 getEvents에 나왔어야 한다 → 안 나왔으면 지운 일정으로 본다
+    return f && (f.start >= hi || f.end < lo) ? f : null;
+  };
+  const day = d => (d instanceof Date ? ymd(d) : '');
 
   const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
   const rows = leaveRows_(sh);
   const known = {};
   rows.forEach(r => { if (r[LCOL.EVENT - 1]) known[String(r[LCOL.EVENT - 1])] = true; });
+  const mine = r => (String(r[LCOL.SOURCE - 1]) === RECRUIT_LEAVE_SOURCE) === fromRecruit; // 이 캘린더가 맡은 줄
+  // 다른 캘린더(또는 웹앱)에 같은 사람·같은 날짜·같은 종류 휴가가 이미 있으면 또 넣지 않는다
+  const same = {};
+  rows.forEach(r => {
+    if (String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y' || !(r[LCOL.START - 1] instanceof Date)) return;
+    const e = r[LCOL.END - 1] instanceof Date ? r[LCOL.END - 1] : r[LCOL.START - 1];
+    same[[String(r[LCOL.NAME - 1]).trim(), ymd(r[LCOL.START - 1]), ymd(e), String(r[LCOL.TYPE - 1]).trim()].join('|')] = true;
+  });
 
-  const add = Object.keys(found).filter(id => !known[id]);
+  const add = Object.keys(found).filter(id => !known[id] && !same[[found[id].name, ymd(found[id].start), ymd(found[id].end), found[id].type].join('|')]);
   const gone = [];
+  const update = []; // 캘린더에서 날짜·종류를 바꾼 휴가 [행, 휴가]
   rows.forEach((r, i) => {
     const eid = String(r[LCOL.EVENT - 1] || '');
-    if (!eid || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y') return; // 캘린더 일정이 없는 휴가는 그대로
+    if (!eid || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y' || !mine(r)) return; // 캘린더 일정이 없는 휴가는 그대로
     const s = r[LCOL.START - 1];
-    if (!(s instanceof Date) || s < lo || s >= hi) return; // 이번에 읽은 범위 밖은 건드리지 않는다
-    const fromCal = String(r[LCOL.SOURCE - 1]) === '캘린더';
-    // 캘린더에서 넣은 것: 휴가 일정이 아니게 됐거나 지워지면 / 웹앱에서 넣은 것: 캘린더에서 지워지면
-    if (fromCal ? !found[eid] : !present[eid.split('#')[0]]) gone.push(i + 2);
+    const inRange = s instanceof Date && s >= lo && s < hi;
+    let f = found[eid];
+    if (!f && inRange) {
+      const fromCal = String(r[LCOL.SOURCE - 1]) === source;
+      // 캘린더에서 넣은 것: 휴가 일정이 아니게 됐거나 지워지면 / 웹앱에서 넣은 것: 캘린더에서 지워지면
+      // (단, 날짜를 읽은 범위 밖으로 옮긴 것이면 지우지 않고 날짜를 따라간다)
+      const gonePlain = fromCal ? true : !present[eid.split('#')[0]];
+      if (gonePlain) {
+        f = moved(eid);
+        if (!f) { gone.push(i + 2); return; }
+      }
+    }
+    if (!f) return;
+    const e0 = r[LCOL.END - 1] instanceof Date ? r[LCOL.END - 1] : s;
+    if (day(s) !== ymd(f.start) || day(e0) !== ymd(f.end) || String(r[LCOL.TYPE - 1]).trim() !== f.type) update.push([i + 2, f]);
   });
-  if (!add.length && !gone.length) return false;
+  if (!add.length && !gone.length && !update.length) return false;
 
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
     const target = sh || setupLeaveSheet_(ctx.ss);
     gone.forEach(row => target.getRange(row, LCOL.DELETED).setValue('Y'));
+    update.forEach(([row, f]) => {
+      target.getRange(row, LCOL.TYPE).setValue(f.type);
+      target.getRange(row, LCOL.START, 1, 2).setValues([[f.start, f.end]]);
+    });
     if (add.length) {
       let id = nextLeaveId_(target);
       const now = new Date();
       const values = add.map(eid => {
         const f = found[eid];
-        return [id++, now, f.name, f.type, f.start, f.end, '', eid, '캘린더', ''];
+        return [id++, now, f.name, f.type, f.start, f.end, '', eid, source, ''];
       });
       target.getRange(target.getLastRow() + 1, 1, values.length, LCOL.DELETED).setValues(values);
     }
@@ -2825,7 +2955,7 @@ function syncMyLeaves_(ctx, me) {
   leaveRows_(sh).forEach((r, i) => {
     const eid = String(r[LCOL.EVENT - 1] || '');
     const s = r[LCOL.START - 1];
-    if (!eid || String(r[LCOL.NAME - 1]).trim() !== me.name || String(r[LCOL.SOURCE - 1]) === '캘린더'
+    if (!eid || String(r[LCOL.NAME - 1]).trim() !== me.name || (String(r[LCOL.SOURCE - 1]) === '캘린더' || String(r[LCOL.SOURCE - 1]) === RECRUIT_LEAVE_SOURCE)
       || String(r[LCOL.DELETED - 1]).toUpperCase() === 'Y' || !(s instanceof Date) || s < lo || s >= hi) return;
     if (!present[eid]) gone.push(i + 2);
   });
@@ -2838,13 +2968,34 @@ function syncMyLeaves_(ctx, me) {
 
 /** 매시간 자동 실행: 이번 주~다다음 주 캘린더를 읽어 맞춘다 */
 function syncLeavesFromCalendar_(ctx) {
-  if (!teamCalendarSet_(ctx)) return false;
+  let changed = false;
+  if (teamCalendarSet_(ctx)) {
+    const from = ctx.thisWeek.monday;
+    const to = addDays(ctx.afterWeek.monday, 7);
+    try {
+      const cal = getTeamCalendar_();
+      changed = syncLeaveEvents_(ctx, cal.getEvents(from, to), from, to, cal);
+    } catch (e) { /* 캘린더 미설정·권한 없음 */ }
+  }
+  return syncRecruitLeaves_(ctx) || changed;
+}
+
+/**
+ * 채용 캘린더에 적힌 연차·반차·휴가 → [휴가] (채용담당으로 표시된 사람 것만, 출처 "채용캘린더")
+ * 팀 캘린더에 같은 휴가가 이미 있으면 한 번만 들어간다.
+ */
+const RECRUIT_LEAVE_SOURCE = '채용캘린더';
+function syncRecruitLeaves_(ctx) {
+  if (!recruitCalendarId_(ctx.cfg)) return false;
+  const names = ctx.members.filter(m => m.recruit && m.name).map(m => m.name);
+  if (!names.length) return false;
   const from = ctx.thisWeek.monday;
   const to = addDays(ctx.afterWeek.monday, 7);
   try {
-    return syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(from, to), from, to);
+    const cal = getRecruitCalendar_(ctx);
+    return syncLeaveEvents_(ctx, cal.getEvents(from, to), from, to, cal, { source: RECRUIT_LEAVE_SOURCE, names: names });
   } catch (e) {
-    return false; // 캘린더 미설정·권한 없음
+    return false; // 채용 캘린더 권한 없음
   }
 }
 

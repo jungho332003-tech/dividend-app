@@ -199,13 +199,17 @@ function apiSyncLeaves() {
   if (teamCalendarSet_(ctx)) {
     // 이번 주~다다음 주 (주간보고에 나오는 범위)를 읽어 맞춘다
     const start = ctx.thisWeek.monday, end = addDays(ctx.afterWeek.monday, 7);
-    changed = syncLeaveEvents_(ctx, getTeamCalendar_().getEvents(start, end), start, end);
+    const cal = getTeamCalendar_();
+    changed = syncLeaveEvents_(ctx, cal.getEvents(start, end), start, end, cal);
   } else {
     changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
   }
+  // 채용담당이 열면 채용 캘린더의 채용담당 휴가도 맞춘다
+  if (canRecruitCal_(ctx, me)) { try { changed = syncRecruitLeaves_(ctx) || changed; } catch (e) { /* 다음에 다시 */ } }
   // 채용담당: 채용 캘린더에 넣은 입사·인터뷰를 인사현황으로
   let hrChanged = false;
-  if (canRecruitCal_(ctx, me)) { try { hrChanged = syncRecruitHr_(ctx); } catch (e) { /* 다음에 다시 */ } }
+  try { hrChanged = syncTeamHr_(ctx); } catch (e) { /* 다음에 다시 */ } // 팀 캘린더에서 고친 인사현황 일정
+  if (canRecruitCal_(ctx, me)) { try { hrChanged = syncRecruitHr_(ctx) || hrChanged; } catch (e) { /* 다음에 다시 */ } }
   if (!changed && !hrChanged) return { changed: false };
   const out = { changed: true };
   if (changed) out.members = forViewer_(currentMember_(ctx.members), cached_(CK.members(ctx), () => readMembers_(ctx)));
