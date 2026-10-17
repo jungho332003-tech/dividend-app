@@ -203,8 +203,14 @@ function apiSyncLeaves() {
   } else {
     changed = syncMyLeaves_(ctx, me); // 팀 캘린더가 없으면 내 캘린더에서 지운 내 휴가만
   }
-  if (!changed) return { changed: false };
-  return { changed: true, members: forViewer_(currentMember_(ctx.members), cached_(CK.members(ctx), () => readMembers_(ctx))) };
+  // 채용담당: 채용 캘린더에 넣은 입사·인터뷰를 인사현황으로
+  let hrChanged = false;
+  if (canRecruitCal_(ctx, me)) { try { hrChanged = syncRecruitHr_(ctx); } catch (e) { /* 다음에 다시 */ } }
+  if (!changed && !hrChanged) return { changed: false };
+  const out = { changed: true };
+  if (changed) out.members = forViewer_(currentMember_(ctx.members), cached_(CK.members(ctx), () => readMembers_(ctx)));
+  if (hrChanged) out.hr = cached_(CK.hr(ctx), () => readHr_(ctx));
+  return out;
 }
 
 /**
