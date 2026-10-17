@@ -142,7 +142,8 @@ function apiDeleteLeave(id) {
 
   sh.getRange(idx + 2, LCOL.DELETED).setValue('Y');
   const eventId = String(rows[idx][LCOL.EVENT - 1] || '');
-  if (eventId) {
+  // 여러 명이 같이 적힌 일정("…#이름")은 이 사람 휴가만 지우고 캘린더 일정은 그대로 둔다
+  if (eventId && eventId.indexOf('#') < 0) {
     try {
       const ev = getTeamCalendar_().getEventById(eventId);
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
@@ -163,14 +164,17 @@ function apiDeleteLeaveEvent(eventId) {
   eventId = String(eventId || '');
   const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
   const rows = leaveRows_(sh);
-  const idx = rows.findIndex(r => String(r[LCOL.EVENT - 1]) === eventId && String(r[LCOL.DELETED - 1]).toUpperCase() !== 'Y');
+  const live = r => String(r[LCOL.DELETED - 1]).toUpperCase() !== 'Y';
+  let idx = rows.findIndex(r => String(r[LCOL.EVENT - 1]) === eventId && live(r));
+  if (idx < 0) idx = rows.findIndex(r => String(r[LCOL.EVENT - 1]) === `${eventId}#${me.name}` && live(r)); // 여러 명 일정 중 내 것
   if (idx >= 0) return apiDeleteLeave(rows[idx][0]);
 
   const ev = getTeamCalendar_().getEventById(eventId);
   if (!ev) throw new Error('일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
   const title = ev.getTitle();
   if (!isLeaveTitle_(title, ctx.members.map(m => m.name))) throw new Error('휴가 일정만 여기서 지울 수 있습니다.');
-  if (title.indexOf(me.name) < 0 && !me.isLeader && !me.isAdmin) throw new Error('본인 휴가만 지울 수 있습니다.');
+  const who = leaveNames_(title, ctx.members.map(m => m.name));
+  if (!me.isLeader && !me.isAdmin && (who.length !== 1 || who[0] !== me.name)) throw new Error(who.length > 1 ? '여러 명이 함께 적힌 휴가 일정은 팀장·관리자만 지울 수 있습니다.' : '본인 휴가만 지울 수 있습니다.');
   try { ev.deleteEvent(); } catch (e) { throw new Error('캘린더에서 지울 권한이 없습니다. 팀 캘린더 "일정 변경" 권한을 확인하세요.'); }
   bumpCalendar_();
   return {};
@@ -206,13 +210,16 @@ function syncLeaveEvents_(ctx, events, from, to) {
     const title = ev.getTitle();
     const word = title.match(LEAVE.WORDS);
     if (!word) return;
-    const name = leaveName_(title, names);
-    if (!name) return;
+    const who = leaveNames_(title, names);
+    if (!who.length) return;
     const allDay = ev.isAllDayEvent();
     const start = allDay ? ev.getAllDayStartDate() : startOfDay_(ev.getStartTime());
     const end = allDay ? addDays(ev.getAllDayEndDate(), -1) : startOfDay_(ev.getEndTime());
     if (start >= hi || end < lo) return;
-    found[ev.getId()] = { name: name, type: leaveType_(word[1], title), start: start, end: end < start ? start : end };
+    // 여러 명이면 사람마다 한 줄씩 ([휴가] 캘린더 일정ID 칸: "일정ID#이름")
+    who.forEach(name => {
+      found[who.length > 1 ? `${ev.getId()}#${name}` : ev.getId()] = { name: name, type: leaveType_(word[1], title), start: start, end: end < start ? start : end };
+    });
   });
 
   const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
@@ -229,7 +236,7 @@ function syncLeaveEvents_(ctx, events, from, to) {
     if (!(s instanceof Date) || s < lo || s >= hi) return; // 이번에 읽은 범위 밖은 건드리지 않는다
     const fromCal = String(r[LCOL.SOURCE - 1]) === '캘린더';
     // 캘린더에서 넣은 것: 휴가 일정이 아니게 됐거나 지워지면 / 웹앱에서 넣은 것: 캘린더에서 지워지면
-    if (fromCal ? !found[eid] : !present[eid]) gone.push(i + 2);
+    if (fromCal ? !found[eid] : !present[eid.split('#')[0]]) gone.push(i + 2);
   });
   if (!add.length && !gone.length) return false;
 
@@ -306,12 +313,12 @@ function teamCalendarSet_(ctx) {
  */
 function leaveTitle_(title, names) {
   const word = String(title).match(LEAVE.WORDS);
-  const name = leaveName_(title, names);
-  if (!word || !name) return '';
+  const who = leaveNames_(title, names);
+  if (!word || !who.length) return '';
   const type = leaveType_(word[1], title);
   // 웹앱에서 만든 "[정기휴가] 윤수아"처럼 이미 대괄호 종류가 있으면 그 종류를 쓴다
   const tagged = String(title).match(/^\s*\[([^\]]+)\]/);
-  return `[${tagged ? tagged[1].trim() : type}] ${name}`;
+  return `[${tagged ? tagged[1].trim() : type}] ${who.join(', ')}`;
 }
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */
@@ -326,19 +333,38 @@ function isLeaveTitle_(title, names) {
  *     (앞에 다른 한글이 붙은 "박정호"는 다른 사람으로 보고 건너뛴다)
  */
 function leaveName_(title, names) {
+  return leaveNames_(title, names)[0] || '';
+}
+
+/** "오전반차] 지애, 소영, 은지"처럼 여러 명이면 모두 (제목에 나온 순서대로) */
+function leaveNames_(title, names) {
   const t = String(title || '');
   const list = names.filter(Boolean).slice().sort((a, b) => b.length - a.length);
-  const full = list.find(n => t.indexOf(n) >= 0);
-  if (full) return full;
+  const hits = []; // [위치, 이름]
+  const taken = [];
+  const free = (at, len) => !taken.some(([a, b]) => at < b && at + len > a);
+  list.forEach(n => {
+    let at = t.indexOf(n);
+    while (at >= 0) {
+      if (free(at, n.length)) { hits.push([at, n]); taken.push([at, at + n.length]); }
+      at = t.indexOf(n, at + 1);
+    }
+  });
   const given = {};
   list.forEach(n => {
     if (!/^[가-힣]{3,4}$/.test(n)) return;
     const g = n.slice(1);
     given[g] = given[g] ? '!' : n; // 같은 이름이 둘이면 누군지 모르므로 쓰지 않는다
   });
-  const hit = Object.keys(given).filter(g => given[g] !== '!')
-    .find(g => new RegExp('(^|[^가-힣])' + g).test(t));
-  return hit ? given[hit] : '';
+  Object.keys(given).filter(g => given[g] !== '!').forEach(g => {
+    const re = new RegExp('(^|[^가-힣])' + g, 'g');
+    let m;
+    while ((m = re.exec(t))) {
+      const at = m.index + m[1].length;
+      if (free(at, g.length)) { hits.push([at, given[g]]); taken.push([at, at + g.length]); }
+    }
+  });
+  return hits.sort((a, b) => a[0] - b[0]).map(h => h[1]).filter((n, i, a) => a.indexOf(n) === i);
 }
 
 function leaveType_(word, title) {
