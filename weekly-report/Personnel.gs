@@ -114,7 +114,7 @@ function apiSaveHr(entry) {
   ensureHeader_(sh, HCOL.REC_EVENT, '채용캘린더ID');
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
-  let row, oldEvent = '', oldRec = '';
+  let row, oldEvent = '', oldRec = '', imported = false;
   try {
     const last = sh.getLastRow();
     const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.REC_EVENT).getValues() : [];
@@ -125,6 +125,7 @@ function apiSaveHr(entry) {
       row = idx + 2;
       oldEvent = String(ids[idx][HCOL.EVENT - 1] || '');
       oldRec = String(ids[idx][HCOL.REC_EVENT - 1] || '');
+      imported = ids[idx][2] === RECRUIT_AUTHOR;
       sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
     } else {
       const id = ids.reduce((m, r) => Math.max(m, Number(r[0]) || 0), 0) + 1;
@@ -136,7 +137,8 @@ function apiSaveHr(entry) {
     lock.releaseLock();
   }
   // 팀 캘린더에도 같은 내용으로 (권한이 없으면 인사현황에만 저장)
-  const ev = hrEvent_(me, oldEvent, category, target, start, end, memo);
+  // 채용 캘린더에서 가져온 항목은 팀 캘린더에 새로 만들지 않는다 (팀 캘린더에 이미 같은 일정을 넣어 두는 경우가 많아 두 번 생기지 않게)
+  const ev = imported && !oldEvent ? { id: '' } : hrEvent_(me, oldEvent, category, target, start, end, memo);
   if (ev.id !== oldEvent) sh.getRange(row, HCOL.EVENT).setValue(ev.id);
   // 인터뷰·입사는 채용 캘린더에도 (채용 캘린더가 정해져 있을 때만, 권한이 없으면 조용히 건너뛴다)
   const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo);
