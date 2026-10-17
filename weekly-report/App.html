@@ -506,6 +506,12 @@
   .cal-day.today .dn { background: var(--accent); color: var(--accent-ink); }
   .ev { font-size: 12.5px; line-height: 1.45; padding: 2px 7px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel-2); color: var(--ink-2); }
   .ev.holiday { background: none; color: var(--warn-ink); font-weight: 600; }
+  /* 여러 날 이어지는 일정: 시작 칸에서 오른쪽 칸들 위로 이어 그린 막대 */
+  .cal-day { overflow: visible; }
+  .ev.span { position: relative; z-index: 1; flex: none; max-width: none; }
+  .ev.span.cont-l { margin-left: -7px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .ev.span.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .ev.ev-gap { visibility: hidden; flex: none; }
   .ev.leave { background: var(--warn-bg); color: var(--warn-ink); font-weight: 600; }
   .ev.mine { background: var(--panel); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
   .tt.mine { color: var(--ink-2); }
@@ -1915,6 +1921,48 @@
     for (let i = 0; d <= last && i < 62; i++, d = addD(d, 1)) days.push(dkey(d));
     return days.length ? days : [dkey(s)];
   }
+  /**
+   * 달력 막대: 여러 날에 걸친 종일 일정, 또는 같은 제목의 종일 일정이 이어진 날들을 한 막대로 묶어
+   * 주(줄)마다 lane 을 정한다. → { lanes: [주][lane][{ev, c0, c1, contL, contR}], spanOf: Map(일정 → 막대 대표 일정) }
+   */
+  function calSpans(events, gridStart) {
+    const dayIdx = k => Math.round((parseD(k) - gridStart) / 864e5);
+    // 1) 같은 제목·종류의 종일 일정이 이어지면 하나로
+    const groups = {};
+    events.filter(e => e.allDay && e.kind !== 'holiday').forEach(e => {
+      const days = eventDays(e);
+      const key = e.kind + '|' + String(e.title).replace(/\s+/g, '');
+      (groups[key] = groups[key] || []).push({ ev: e, a: dayIdx(days[0]), b: dayIdx(days[days.length - 1]), ids: [e] });
+    });
+    const spans = [];
+    Object.values(groups).forEach(list => {
+      list.sort((x, y) => x.a - y.a);
+      let cur = null;
+      list.forEach(x => {
+        if (cur && x.a <= cur.b + 1) { cur.b = Math.max(cur.b, x.b); cur.ids.push(...x.ids); }
+        else { cur = { ev: x.ev, a: x.a, b: x.b, ids: x.ids.slice() }; spans.push(cur); }
+      });
+    });
+    const multi = spans.filter(sp => sp.b > sp.a);
+    const spanOf = new Map(); // 일정 → 그 일정이 들어간 막대의 대표 일정
+    multi.forEach(sp => sp.ids.forEach(e => spanOf.set(e, sp.ev)));
+    // 2) 주마다 줄 배정 (먼저 시작하고 긴 것부터)
+    const lanes = [];
+    for (let w = 0; w < 6; w++) {
+      const ws = w * 7, we = ws + 6;
+      const segs = multi.filter(sp => sp.b >= ws && sp.a <= we)
+        .map(sp => ({ ev: sp.ev, c0: Math.max(sp.a, ws) - ws, c1: Math.min(sp.b, we) - ws, contL: sp.a < ws, contR: sp.b > we }))
+        .sort((x, y) => x.c0 - y.c0 || (y.c1 - y.c0) - (x.c1 - x.c0));
+      const rows = [];
+      segs.forEach(g => {
+        let row = rows.find(r2 => r2.every(o => g.c0 > o.c1 || g.c1 < o.c0));
+        if (!row) { row = []; rows.push(row); }
+        row.push(g);
+      });
+      lanes.push(rows);
+    }
+    return { lanes, spanOf };
+  }
   function byDay(events) {
     const map = {};
     events.forEach(ev => eventDays(ev).forEach(k => (map[k] = map[k] || []).push(ev)));
@@ -2118,16 +2166,37 @@
     const r = monthRange(calMonth);
     const todayK = dkey(now());
     let cells = DAY.map((d, i) => `<div class="dow ${i === 0 ? 'sun' : ''}">${d}</div>`).join('');
+    const lay = data ? calSpans(data.events, r.start) : { lanes: [], spanOf: new Map() };
+    const evText = e => `${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}`;
+    const evCls = e => `ev ${e.kind}${e.kind === 'extra' ? ' c' + e.cal : ''}`;
     for (let i = 0; i < 42; i++) {
       const d = addD(r.start, i);
       const dk = dkey(d);
       const evs = map[dk] || [];
+      // 여러 날 이어지는 일정: 같은 줄(lane)에 막대 하나로 (시작 칸에서 오른쪽으로 이어 그린다)
+      const week = Math.floor(i / 7), col = i % 7;
+      const lanes = lay.lanes[week] || [];
+      const shownLanes = lanes.slice(0, 4);
+      const laneHtml = shownLanes.map(lane => {
+        const seg = lane.find(g => col >= g.c0 && col <= g.c1);
+        if (!seg) return '<span class="ev ev-gap" aria-hidden="true">&nbsp;</span>';
+        if (col !== seg.c0) return '<span class="ev ev-gap" aria-hidden="true">&nbsp;</span>';
+        const n = seg.c1 - seg.c0 + 1;
+        const style = `width:calc(${n} * (100% + 15px) - 15px${seg.contL ? ' + 7px' : ''}${seg.contR ? ' + 8px' : ''})`;
+        return `<span class="${evCls(seg.ev)} span${seg.contL ? ' cont-l' : ''}${seg.contR ? ' cont-r' : ''}" style="${style}" title="${esc(seg.ev.title)}">${evText(seg.ev)}</span>`;
+      }).join('');
+      // 비어 있는 뒤쪽 줄은 그리지 않는다
+      const laneOut = laneHtml.replace(/(<span class="ev ev-gap" aria-hidden="true">&nbsp;<\/span>)+$/, '');
+      const usedLanes = (laneOut.match(/<span class="ev /g) || []).length;
+      const singles = evs.filter(e => !lay.spanOf.has(e));
+      const room = Math.max(0, 4 - usedLanes);
+      const hidden = evs.length - evs.filter(e => lay.spanOf.has(e) && shownLanes.some(l => l.some(g => g.ev === lay.spanOf.get(e) && col >= g.c0 && col <= g.c1))).length - Math.min(room, singles.length);
       const cls = ['cal-day', d.getMonth() !== calMonth.getMonth() ? 'out' : '', d.getDay() === 0 ? 'sun' : '', dk === todayK ? 'today' : '', dk === calSel ? 'sel' : '', evs.some(e => e.kind === 'holiday') ? 'holi' : ''].join(' ');
       const hasMemo = !!(memos && memos[dk]);
       cells += `<button class="${cls} ${hasMemo ? 'has-memo' : ''}" onclick="calPick('${dk}')" aria-label="${dayLabel(dk)} 일정 ${evs.length}건${hasMemo ? ' · 메모 있음' : ''}">
         <span class="dn">${d.getDate()}</span><i class="memo-mark" title="내 메모">${ic('pencil', 'xs')}</i>
-        ${evs.slice(0, 4).map(e => `<span class="ev ${e.kind}${e.kind === 'extra' ? ' c' + e.cal : ''}">${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}</span>`).join('')}
-        ${evs.length > 4 ? `<span class="more">+${evs.length - 4}건</span>` : ''}
+        ${laneOut}${singles.slice(0, room).map(e => `<span class="${evCls(e)}">${evText(e)}</span>`).join('')}
+        ${hidden > 0 ? `<span class="more">+${hidden}건</span>` : ''}
       </button>`;
     }
     const selEvents = map[calSel] || [];
