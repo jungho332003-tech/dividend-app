@@ -2642,7 +2642,7 @@ const LEAVE = {
   WORDS: /(오전반반차|오후반반차|반반차|오전반차|오후반차|반차|정기휴가|경조휴가|하계휴가|여름휴가|대체휴무|연차|휴가|휴무)/,
 };
 
-const LCOL = { ID: 1, DATE: 2, NAME: 3, TYPE: 4, START: 5, END: 6, MEMO: 7, EVENT: 8, SOURCE: 9, DELETED: 10 };
+const LCOL = { ID: 1, DATE: 2, NAME: 3, TYPE: 4, START: 5, END: 6, MEMO: 7, EVENT: 8, SOURCE: 9, DELETED: 10, REC_EVENT: 11 };
 
 function setupLeaveSheet_(ss) {
   if (ss.getSheetByName(LEAVE.SHEET)) return ss.getSheetByName(LEAVE.SHEET);
@@ -2657,7 +2657,7 @@ function setupLeaveSheet_(ss) {
 }
 
 function leaveRows_(sh) {
-  return sh && sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, LCOL.DELETED).getValues() : [];
+  return sh && sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, LCOL.REC_EVENT).getValues() : [];
 }
 
 /** 이번 주 월요일 ~ 다다음 주 일요일에 걸친 휴가 (요청 안에서 한 번만 읽는다) */
@@ -2740,13 +2740,24 @@ function apiAddLeave(leave) {
       warning = '팀 캘린더에 일정을 만들 권한이 없어 주간보고에만 반영했습니다.';
     }
   }
+  // 채용담당은 채용 캘린더에도 같이 넣는다
+  let recEventId = '';
+  if (canRecruitCal_(ctx, me)) {
+    try {
+      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(`[${type}] ${me.name}`, start, addDays(end, 1),
+        { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();
+    } catch (e) {
+      warning = warning || '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.';
+    }
+  }
 
   const sh = setupLeaveSheet_(ctx.ss);
   const lock = LockService.getDocumentLock();
   lock.waitLock(30000);
   try {
-    sh.getRange(sh.getLastRow() + 1, 1, 1, LCOL.DELETED)
-      .setValues([[nextLeaveId_(sh), new Date(), me.name, type, start, end, memo, eventId, '웹앱', '']]);
+    if (recEventId) ensureHeader_(sh, LCOL.REC_EVENT, '채용캘린더 일정ID');
+    sh.getRange(sh.getLastRow() + 1, 1, 1, LCOL.REC_EVENT)
+      .setValues([[nextLeaveId_(sh), new Date(), me.name, type, start, end, memo, eventId, '웹앱', '', recEventId]]);
   } finally {
     lock.releaseLock();
   }
@@ -2776,6 +2787,7 @@ function apiDeleteLeave(id) {
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
     } catch (e) { /* 캘린더 권한이 없으면 시트에서만 지운다 */ }
   }
+  dropRecruitLeaveEvent_(ctx, rows[idx][LCOL.REC_EVENT - 1]);
   ctx._leaves = null;
   return leavePatch_(ctx, name);
 }
@@ -2808,6 +2820,18 @@ function apiDeleteLeaveEvent(eventId) {
 }
 
 /** 주간보고 작성 대상이면 그 사람 조각만 돌려준다 (팀장 등은 주간보고에 없으므로 생략) */
+/** 웹앱 휴가와 같이 만든 채용 캘린더 일정 지우기 */
+function dropRecruitLeaveEvent_(ctx, id) {
+  if (!id || !recruitCalendarId_(ctx.cfg)) return;
+  try { const ev = getRecruitCalendar_(ctx).getEventById(String(id)); if (ev) { ev.deleteEvent(); bumpCalendar_(); } } catch (e) { /* 권한 없음 */ }
+}
+
+/** 웹앱 휴가와 같이 만든 채용 캘린더 일정 날짜 맞추기 */
+function moveRecruitLeaveEvent_(ctx, id, start, end) {
+  if (!id || !recruitCalendarId_(ctx.cfg)) return;
+  try { const ev = getRecruitCalendar_(ctx).getEventById(String(id)); if (ev) ev.setAllDayDates(start, addDays(end, 1)); } catch (e) { /* 권한 없음 */ }
+}
+
 function leavePatch_(ctx, name) {
   return ctx.members.some(m => m.name === name && m.write) ? memberPatch_(ctx, name) : {};
 }
@@ -2880,7 +2904,10 @@ function syncLeaveEvents_(ctx, events, from, to, cal, opt) {
   const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
   const rows = leaveRows_(sh);
   const known = {};
-  rows.forEach(r => { if (r[LCOL.EVENT - 1]) known[String(r[LCOL.EVENT - 1])] = true; });
+  rows.forEach(r => {
+    if (r[LCOL.EVENT - 1]) known[String(r[LCOL.EVENT - 1])] = true;
+    if (r[LCOL.REC_EVENT - 1]) known[String(r[LCOL.REC_EVENT - 1])] = true; // 웹앱 휴가와 같이 만든 채용 캘린더 일정
+  });
   const mine = r => (String(r[LCOL.SOURCE - 1]) === RECRUIT_LEAVE_SOURCE) === fromRecruit; // 이 캘린더가 맡은 줄
   // 다른 캘린더(또는 웹앱)에 같은 사람·같은 날짜·같은 종류 휴가가 이미 있으면 또 넣지 않는다
   const same = {};
@@ -2919,10 +2946,14 @@ function syncLeaveEvents_(ctx, events, from, to, cal, opt) {
   lock.waitLock(30000);
   try {
     const target = sh || setupLeaveSheet_(ctx.ss);
-    gone.forEach(row => target.getRange(row, LCOL.DELETED).setValue('Y'));
+    gone.forEach(row => {
+      target.getRange(row, LCOL.DELETED).setValue('Y');
+      if (!fromRecruit) dropRecruitLeaveEvent_(ctx, rows[row - 2][LCOL.REC_EVENT - 1]);
+    });
     update.forEach(([row, f]) => {
       target.getRange(row, LCOL.TYPE).setValue(f.type);
       target.getRange(row, LCOL.START, 1, 2).setValues([[f.start, f.end]]);
+      if (!fromRecruit) moveRecruitLeaveEvent_(ctx, rows[row - 2][LCOL.REC_EVENT - 1], f.start, f.end);
     });
     if (add.length) {
       let id = nextLeaveId_(target);

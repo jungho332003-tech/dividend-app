@@ -2225,7 +2225,7 @@
     // 팀 캘린더가 없으면 모두 각자 캘린더로 들어간다
     let target = eventTarget === 'recruit' && rec ? 'recruit' : both ? (eventTarget === 'recruit' ? 'team' : eventTarget) : 'mine';
     const where = () => {
-      const text = kind === 'leave' ? ''
+      const text = kind === 'leave' ? (rec ? '팀 캘린더와 채용 캘린더에 함께 등록됩니다.' : '')
         : target === 'recruit' ? '채용 캘린더에만 등록됩니다. (채용담당만 보입니다)'
         : !both ? '내 구글 캘린더에 등록됩니다.'
         : target === 'mine' ? '나만 보는 비공개 일정으로 등록됩니다.'
