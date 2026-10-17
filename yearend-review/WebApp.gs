@@ -289,7 +289,7 @@ function apiBootstrap() {
     closed: ctx.closed.indexOf(ctx.year) >= 0,
     eventKinds: EVENT_KINDS,
     events: can('dash') ? cached_(CK.events, () => readEvents_(ss)) : [],
-    sheetUrl: ss.getUrl(),
+    sheetUrl: me.isAdmin ? ss.getUrl() : '', // 원본 시트 단추는 관리자에게만
     me: me,
     staff: ctx.members.map(m => ({ name: m.name, role: m.role })),
     cols: COLS.map(c => ({ k: c.k, l: c.l, t: c.t || '', g: c.g, who: c.who, re: c.re || '', loose: !!c.loose })),

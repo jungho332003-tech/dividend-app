@@ -242,7 +242,7 @@ window.MockApi = (function () {
       const m = meInfo();
       const can = k => m.menus.indexOf(k) >= 0;
       return {
-        stamp: { year: curYear() }, team: settings.team, year: curYear(), baseYear: settings.year, years: years(), closedYears: closed.slice(), closed: closed.indexOf(curYear()) >= 0, eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: 'https://docs.google.com/spreadsheets/', me: m,
+        stamp: { year: curYear() }, team: settings.team, year: curYear(), baseYear: settings.year, years: years(), closedYears: closed.slice(), closed: closed.indexOf(curYear()) >= 0, eventKinds: ['마감', '일정', '교육', '휴무', '기타'], events: can('dash') ? events : [], sheetUrl: m.isAdmin ? 'https://docs.google.com/spreadsheets/' : '', me: m,
         staff: staff.map(s => ({ name: s.name, role: s.role })), cols: COLS,
         logKinds: ['전화', '메일', '메신저', '방문', '보완요청', '기타'],
         noticeCategories: ['공지', '응대지침', '자료', '질문'], noticeLeaderOnly: ['공지', '응대지침'],

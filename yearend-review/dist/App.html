@@ -11,6 +11,7 @@
     --ink-2: #44504a;
     --muted: #6b7771;
     --line: #d8dfdb;
+    --tline: #e3e8e5;   /* 표 칸 선 (인사팀 주간보고와 같은 연한 선) */
     --line-strong: #6f7b75;
     --accent: #146b58;
     --accent-2: #0f5445;
@@ -37,6 +38,7 @@
       --ink-2: #c1cbc6;
       --muted: #93a19a;
       --line: #313a36;
+      --tline: #27302c;
       --line-strong: #83918a;
       --accent: #52c3a4;
       --accent-2: #6fd4b8;
@@ -61,6 +63,7 @@
     --ink-2: #c1cbc6;
     --muted: #93a19a;
     --line: #313a36;
+    --tline: #27302c;
     --line-strong: #83918a;
     --accent: #52c3a4;
     --accent-2: #6fd4b8;
@@ -621,6 +624,36 @@
     .head-actions { width: auto; }
     .head-actions .btn { flex: 0 0 auto; }
   }
+
+  /* ===== 관리자: 스프레드시트 열기 단추 ===== */
+  .sheet-link { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; font-size: 13.5px; font-weight: 600; background: var(--panel); }
+  .sheet-link:hover { border-color: var(--accent); color: var(--accent-2); background: var(--accent-soft); text-decoration: none; }
+  .sheet-link .ico { color: var(--accent); font-style: normal; }
+  .sheet-link .ext { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .mtop-r { display: flex; align-items: center; gap: 8px; }
+  @media (max-width: 760px) { .sheet-link { display: none !important; } }
+
+  /* ===== 표: 인사팀 주간보고와 같은 모양 =====
+   * 표 전체를 연한 선 + 둥근 모서리로 감싸고, 칸 사이에는 연한 선만 긋는다.
+   * 머리글은 연회색 바탕·진한 글씨·가운데 정렬, 마우스를 올린 줄은 옅게 칠한다. */
+  table.sheet-grid, table.t { border-collapse: separate; border-spacing: 0; border: 1px solid var(--tline); border-radius: 10px; overflow: hidden; background: var(--panel); }
+  table.sheet-grid th, table.sheet-grid td, table.t th, table.t td { border: 0; border-right: 1px solid var(--tline); border-bottom: 1px solid var(--tline); }
+  table.sheet-grid tr > :last-child, table.t tr > :last-child { border-right: 0; }
+  table.sheet-grid tbody tr:last-child td, table.t tbody tr:last-child td { border-bottom: 0; }
+  table.sheet-grid thead th, table.t thead th { background: var(--panel-2); color: var(--ink-2); font-weight: 700; font-size: 12.5px; text-align: center; vertical-align: middle; white-space: nowrap; height: 40px; padding: 8px 10px; }
+  table.sheet-grid td { padding: 8px 10px; vertical-align: middle; }
+  table.t td { padding: 10px 12px; vertical-align: middle; text-align: center; }
+  table.t td.c-file, table.t td.c-left { text-align: left; }
+  table.sheet-grid tbody tr:hover td, table.t tbody tr:hover td { background: var(--panel-2); }
+  table.sheet-grid tr.picked td, table.sheet-grid tr.picked:hover td { background: var(--accent-soft); }
+  table.sheet-grid th.sortable:hover { background: var(--accent-soft); }
+  table.sheet-grid th.sorted { color: var(--accent-2); }
+  /* 휴대폰에서 카드로 바뀌는 표는 바깥 테두리 없이 카드만 */
+  @media (max-width: 760px) {
+    table.t.cards { border: 0; border-radius: 0; overflow: visible; background: none; }
+    table.t.cards td { border: 0 !important; padding: 0; }
+    table.t.cards tbody tr:hover td { background: none; }
+  }
 </style>
 
 <div class="demo-bar" id="demoBar" hidden></div>
@@ -638,6 +671,7 @@
       <button data-page="files"><span class="ni"><i class="ico">⎙</i><span class="full">첨부파일</span><span class="short">첨부</span></span></button>
       <button data-page="admin" hidden><span class="ni"><i class="ico">⚙</i><span class="full">권한 관리</span><span class="short">권한</span></span><span id="cAdmin"></span></button>
     </nav>
+    <a class="sheet-link" id="sheetLink" target="_blank" rel="noopener" hidden title="원본 구글 스프레드시트를 새 창으로 엽니다 (관리자)"><i class="ico">▦</i><span>스프레드시트 열기</span><span class="ext">↗</span></a>
     <div class="me" id="meBox"></div>
   </aside>
 
@@ -907,7 +941,11 @@
     $('#brandYear').innerHTML = yearSel;
     const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
     $('#mtop').innerHTML = `<div><b>${esc(D.team)}</b><span>${D.years.length > 1 ? `<select id="yearSelM" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${isClosedYear(y) ? ' (마감)' : ''}</option>`).join('')}</select>` : `${esc(D.year)}년 귀속 연말정산${D.closed ? ' (마감)' : ''}`}</span></div>
-      <span class="avatar" title="${esc(D.me.email || '')}">${esc(D.me.name ? D.me.name.slice(-2) : '?')}</span>`;
+      <span class="mtop-r">${D.me.isAdmin && D.sheetUrl ? `<a class="btn small" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener" title="구글 스프레드시트 열기">▦ 시트</a>` : ''}<span class="avatar" title="${esc(D.me.email || '')}">${esc(D.me.name ? D.me.name.slice(-2) : '?')}</span></span>`;
+    // 관리자만: 원본 스프레드시트로 가는 단추
+    const sl = $('#sheetLink');
+    sl.hidden = !(D.me.isAdmin && D.sheetUrl);
+    if (!sl.hidden) sl.href = D.sheetUrl;
     $('#meBox').innerHTML = D.me.name
       ? `<b>${esc(D.me.name)} · ${esc(role)}</b><span>${esc(D.me.email)}</span>`
       : `<b>등록되지 않은 사용자</b><span>${esc(D.me.email || '')}</span>`;
@@ -1247,7 +1285,7 @@
       <div class="head">
         <div><h1>서류 검토</h1></div>
         <div class="head-actions">
-          <a class="btn small" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">시트 열기</a>
+          ${D.me.isAdmin && D.sheetUrl ? `<a class="btn small" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener">▦ 시트 열기</a>` : ''}
           ${isLead() && !ro() ? `<details class="menu"><summary class="btn small primary">명단 관리 ▾</summary><div class="menu-pop">
             <button onclick="this.closest('details').open=false;openImport()">대상자 업로드</button>
             <button onclick="this.closest('details').open=false;openTemplate()">양식 다운로드</button>
@@ -1955,7 +1993,7 @@
     const list = filesFiltered();
     const rows = list.map(f => `
       <tr>
-        <td data-label="파일" class="c-wide">${fileRow(f, { link: true })}</td>
+        <td data-label="파일" class="c-wide c-file">${fileRow(f, { link: true })}</td>
         <td data-label="구분"><span class="chip ${f.area === 'person' ? 'info' : 'plain'}">${esc(D.fileAreas[f.area] || f.area)}</span></td>
         <td data-label="대상 · 메모">${refCell(f)}</td>
         <td data-label="올린 사람">${esc(f.uploader)}</td>
