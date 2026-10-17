@@ -415,7 +415,7 @@
   /* ===== 내 주간업무 ===== */
   .edit-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .items { display: flex; flex-direction: column; gap: 8px; }
-  .item { display: grid; grid-template-columns: minmax(0, 1fr) 142px auto auto auto; gap: 6px; align-items: start; }
+  .item { display: grid; grid-template-columns: auto minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
   .toggle.imp-btn { color: var(--muted); }
   .toggle.imp-btn[aria-pressed="true"] { background: #fff4d6; color: #a15c00; border-color: #e0a526; font-weight: 700; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toggle.imp-btn[aria-pressed="true"] { background: #3a2c0a; color: #f5c451; border-color: #b8860b; } }
@@ -764,9 +764,9 @@
   }
   @media (max-width: 520px) {
     .kpi .value { font-size: 24px; }
-    .item { grid-template-columns: minmax(0, 1fr) auto auto auto; }
-    .item .task-in { grid-column: 1 / -1; }
-    .item .date-in { grid-column: 1 / 2; }
+    .item { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+    .item .task-in { grid-column: 2 / -1; }
+    .item .date-in { grid-column: 1 / 3; }
     .form .two { grid-template-columns: 1fr; }
     .list-row { grid-template-columns: 60px auto; }
     .list-row .meta { grid-column: 1 / -1; }
@@ -881,7 +881,7 @@
     .mcards { display: flex; flex-direction: column; gap: 10px; }
     .desk { display: none; }
 
-    .item { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+    .item { grid-template-columns: auto minmax(0, 1fr) auto auto; }
     .item > input[data-f="task"] { grid-column: 1 / -1; }
     .save-bar { position: static; box-shadow: var(--shadow-sm); padding: 14px; gap: 10px; }
     .desk-only { display: none; }
@@ -2927,9 +2927,9 @@
   function itemsHtml(key) {
     return draft[key].map((it, i) => `
       <div class="item">
+        <button class="toggle imp-btn" data-k="${key}" data-i="${i}" data-f="imp" aria-pressed="${!!it.imp}" title="중요 업무: 팀 주간보고에 굵게 표시됩니다">${it.imp ? '★' : '☆'} 중요</button>
         <textarea class="field-in task-in" rows="1" data-k="${key}" data-i="${i}" data-f="task" placeholder="업무 내용" aria-label="업무 내용">${esc(it.task)}</textarea>
         <input class="field-in date-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-k="${key}" data-i="${i}" data-f="dueIso" value="${esc(it.dueIso)}" ${it.cont ? 'disabled' : ''} aria-label="기한">
-        <button class="toggle imp-btn" data-k="${key}" data-i="${i}" data-f="imp" aria-pressed="${!!it.imp}" title="중요 업무: 팀 주간보고에 굵게 표시됩니다">${it.imp ? '★' : '☆'} 중요</button>
         <button class="toggle" data-k="${key}" data-i="${i}" data-f="cont" aria-pressed="${it.cont}">지속</button>
         <button class="icon-btn" data-k="${key}" data-i="${i}" data-f="del" aria-label="삭제">${ic('x', 'sm')}</button>
       </div>`).join('');
