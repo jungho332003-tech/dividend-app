@@ -218,10 +218,18 @@ function recruitCategory_(title) {
   return pick(head) || pick(t);
 }
 
-/** "정하은) [인터뷰] 경력직 후보 A" → "경력직 후보 A" */
+/**
+ * 제목에서 구분 표시를 뺀 나머지 → 인사현황 "대상 및 내용"
+ *  "정하은) [인터뷰] 경력직 후보 A" → "경력직 후보 A"
+ *  "** 인터뷰] 경력직 후보 A" → "경력직 후보 A"  ( ']'만 붙인 형식, 앞의 기호는 버린다)
+ *  "홍길동 입사] 재무팀" → "홍길동 재무팀"
+ */
 function recruitTarget_(title) {
   const t = String(title || '').trim();
-  return t.replace(/^\s*[가-힣A-Za-z]{2,10}\)\s*/, '').replace(/^\s*\[[^\]]*\]\s*/, '').trim() || t;
+  let s = t.replace(/^\s*[가-힣A-Za-z]{2,10}\)\s*/, '').replace(/^\s*\[[^\]]*\]\s*/, '');
+  const m = /^([^\[\]]*?)\s*(?:입사|인터뷰|면접)\s*\]\s*(.*)$/.exec(s);
+  if (m) s = [m[1].replace(/^[^0-9A-Za-z가-힣]+/, '').trim(), m[2].trim()].filter(Boolean).join(' ');
+  return s.trim() || t;
 }
 
 function syncRecruitHr_(ctx) {
