@@ -206,7 +206,7 @@ function syncLeaveEvents_(ctx, events, from, to) {
     const title = ev.getTitle();
     const word = title.match(LEAVE.WORDS);
     if (!word) return;
-    const name = names.find(n => title.indexOf(n) >= 0);
+    const name = leaveName_(title, names);
     if (!name) return;
     const allDay = ev.isAllDayEvent();
     const start = allDay ? ev.getAllDayStartDate() : startOfDay_(ev.getStartTime());
@@ -306,7 +306,7 @@ function teamCalendarSet_(ctx) {
  */
 function leaveTitle_(title, names) {
   const word = String(title).match(LEAVE.WORDS);
-  const name = names.filter(Boolean).sort((a, b) => b.length - a.length).find(n => title.indexOf(n) >= 0);
+  const name = leaveName_(title, names);
   if (!word || !name) return '';
   const type = leaveType_(word[1], title);
   // 웹앱에서 만든 "[정기휴가] 윤수아"처럼 이미 대괄호 종류가 있으면 그 종류를 쓴다
@@ -316,7 +316,29 @@ function leaveTitle_(title, names) {
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */
 function isLeaveTitle_(title, names) {
-  return LEAVE.WORDS.test(title) && names.some(n => n && title.indexOf(n) >= 0);
+  return LEAVE.WORDS.test(title) && !!leaveName_(title, names);
+}
+
+/**
+ * 일정 제목에서 팀원 찾기 → [팀원] 시트의 이름(성 포함)
+ *  1) "김정호 연차"처럼 이름 전체가 있으면 그 사람
+ *  2) "연차] 정호"처럼 성을 뺀 이름만 있어도, 그 이름을 쓰는 팀원이 한 명뿐이면 그 사람
+ *     (앞에 다른 한글이 붙은 "박정호"는 다른 사람으로 보고 건너뛴다)
+ */
+function leaveName_(title, names) {
+  const t = String(title || '');
+  const list = names.filter(Boolean).slice().sort((a, b) => b.length - a.length);
+  const full = list.find(n => t.indexOf(n) >= 0);
+  if (full) return full;
+  const given = {};
+  list.forEach(n => {
+    if (!/^[가-힣]{3,4}$/.test(n)) return;
+    const g = n.slice(1);
+    given[g] = given[g] ? '!' : n; // 같은 이름이 둘이면 누군지 모르므로 쓰지 않는다
+  });
+  const hit = Object.keys(given).filter(g => given[g] !== '!')
+    .find(g => new RegExp('(^|[^가-힣])' + g).test(t));
+  return hit ? given[hit] : '';
 }
 
 function leaveType_(word, title) {
