@@ -386,7 +386,7 @@ function syncLeavesFromCalendar_(ctx) {
 }
 
 /**
- * 채용 캘린더에 적힌 연차·반차·휴가 → [휴가] (채용담당으로 표시된 사람 것만, 출처 "채용캘린더")
+ * 채용 캘린더에 적힌 연차·반차·휴가 → [휴가] (채용담당이 넣은 일정 중 채용담당 본인 휴가만, 출처 "채용캘린더")
  * 팀 캘린더에 같은 휴가가 이미 있으면 한 번만 들어간다.
  */
 const RECRUIT_LEAVE_SOURCE = '채용캘린더';
@@ -398,7 +398,9 @@ function syncRecruitLeaves_(ctx) {
   const to = addDays(ctx.afterWeek.monday, 7);
   try {
     const cal = getRecruitCalendar_(ctx);
-    return syncLeaveEvents_(ctx, cal.getEvents(from, to), from, to, cal, { source: RECRUIT_LEAVE_SOURCE, names: names });
+    // 채용담당이 넣은 일정만
+    const events = cal.getEvents(from, to).filter(e => recruitCreator_(e, ctx));
+    return syncLeaveEvents_(ctx, events, from, to, cal, { source: RECRUIT_LEAVE_SOURCE, names: names });
   } catch (e) {
     return false; // 채용 캘린더 권한 없음
   }

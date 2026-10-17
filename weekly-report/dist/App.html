@@ -3502,7 +3502,7 @@
   function hrData() { return D.hr || { thisWeek: [], nextWeek: [] }; }
   function hrCount() { const h = hrData(); return h.thisWeek.length + h.nextWeek.length; }
   function hrCats() { return D.hrCategories || ['입사', '휴직', '복직', '퇴사', '인터뷰', '기타']; }
-  function hrCanEdit(x) { return !!D.me.name && (x.author === D.me.name || D.me.isLeader || D.me.isAdmin || (x.author === '채용캘린더' && D.me.recruiter)); }
+  function hrCanEdit(x) { return !!D.me.name && (x.author === D.me.name || D.me.isLeader || D.me.isAdmin || ((x.imported || x.author === '채용캘린더') && D.me.recruiter)); }
   function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek, h.later || []).find(x => x.id === id); }
 
   /** 시트와 같은 모양: 구분별로 금주·차주를 나란히 (빈 줄 없이) */

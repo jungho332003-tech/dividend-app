@@ -15,7 +15,7 @@ const HR = {
   MIN_ROWS: 1, // 빈 줄 없이 등록한 만큼만
 };
 
-const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11, REC_EVENT: 12 };
+const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11, REC_EVENT: 12, SOURCE: 13 };
 // 채용 캘린더에도 같이 넣는 구분
 const HR_RECRUIT_CATS = ['인터뷰', '입사'];
 
@@ -38,7 +38,7 @@ function readHr_(ctx) {
   const out = { thisWeek: [], nextWeek: [], later: [] };
   if (!sh || sh.getLastRow() < 2) return out;
   const thisKey = ctx.thisWeek.key, nextKey = ctx.nextWeek.key;
-  sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.DELETED).getValues().forEach(r => {
+  sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.SOURCE).getValues().forEach(r => {
     if (!String(r[0]) || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
     const start = r[HCOL.START - 1], end = r[HCOL.END - 1];
     // 주차: 일자가 있으면 그 날짜의 주, 없으면 (예전에 금주/차주를 골라 저장한) 주차 칸
@@ -55,6 +55,7 @@ function readHr_(ctx) {
       end: end instanceof Date ? ymd(end) : '',
       when: hrPeriod_(start, end),
       memo: String(r[HCOL.MEMO - 1] || ''),
+      imported: hrImported_(r), // 채용 캘린더에서 가져온 항목
       week: week,
       weekLabel: list === out.later ? getWeekInfo(mondayOf(start), ctx.holidays).label : '',
     });
@@ -117,15 +118,15 @@ function apiSaveHr(entry) {
   let row, oldEvent = '', oldRec = '', imported = false;
   try {
     const last = sh.getLastRow();
-    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.REC_EVENT).getValues() : [];
+    const ids = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.SOURCE).getValues() : [];
     if (entry.id) {
       const idx = ids.findIndex(r => String(r[0]) === String(entry.id));
       if (idx < 0) throw new Error('항목을 찾을 수 없습니다.');
-      if (!canEditHrRow_(me, ids[idx][2])) throw new Error('본인이 등록한 항목만 고칠 수 있습니다.');
+      if (!canEditHrRow_(me, ids[idx])) throw new Error('본인이 등록한 항목만 고칠 수 있습니다.');
       row = idx + 2;
       oldEvent = String(ids[idx][HCOL.EVENT - 1] || '');
       oldRec = String(ids[idx][HCOL.REC_EVENT - 1] || '');
-      imported = ids[idx][2] === RECRUIT_AUTHOR;
+      imported = hrImported_(ids[idx]);
       if (imported && HR_RECRUIT_CATS.indexOf(category) < 0) throw new Error('채용 캘린더에서 가져온 항목은 입사·인터뷰로만 둘 수 있습니다. 구분을 바꾸려면 채용 캘린더에서 제목을 고쳐 주세요.');
       sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
     } else {
@@ -219,12 +220,26 @@ function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo, i
 }
 
 /** 본인 등록분 · 팀장 · 관리자. 채용 캘린더에서 가져온 항목은 채용담당도 */
-function canEditHrRow_(me, author) {
-  return author === me.name || me.isLeader || me.isAdmin || (author === RECRUIT_AUTHOR && !!me.recruiter);
+function canEditHrRow_(me, r) {
+  return r[HCOL.AUTHOR - 1] === me.name || me.isLeader || me.isAdmin || (hrImported_(r) && !!me.recruiter);
+}
+
+/** 채용 캘린더에서 가져온 줄인지 (출처 칸, 예전에는 등록자 칸이 "채용캘린더") */
+function hrImported_(r) {
+  return String(r[HCOL.SOURCE - 1] || '') === RECRUIT_AUTHOR || String(r[HCOL.AUTHOR - 1] || '') === RECRUIT_AUTHOR;
+}
+
+/** 채용 캘린더 일정을 만든 사람이 채용담당이면 그 이름, 아니면 '' (담당자가 넣은 일정만 가져온다) */
+function recruitCreator_(ev, ctx) {
+  let emails = [];
+  try { emails = (ev.getCreators() || []).map(x => String(x).toLowerCase()); } catch (e) { return ''; }
+  const m = ctx.members.find(x => x.recruit && x.email && emails.indexOf(x.email.toLowerCase()) >= 0);
+  return m ? m.name : '';
 }
 
 /* ---------- 채용 캘린더 → 인사현황 ----------
- * 채용 캘린더에 직접 넣은 입사·인터뷰(면접) 일정을 인사현황으로 가져온다. (등록자: "채용캘린더")
+ * 채용담당이 채용 캘린더에 직접 넣은 입사·인터뷰(면접) 일정을 인사현황으로 가져온다. (등록자: 그 일정을 넣은 채용담당, 출처: "채용캘린더")
+ *  - 채용담당이 아닌 사람이 넣은 일정은 가져오지 않는다 (구글 캘린더의 "만든 사람" 기준)
  *  - 제목이 "[입사] …", "[인터뷰] …", "… 면접 …"처럼 입사·인터뷰·면접이 들어간 일정만
  *  - 캘린더에서 날짜·제목을 고치면 따라 바뀌고, 지우면 인사현황에서도 지워진다
  *  - 웹앱에서 등록해 채용 캘린더로 보낸 항목은 날짜가 바뀐 것만 맞춘다
@@ -263,6 +278,7 @@ function syncRecruitHr_(ctx) {
   const sh = ctx.ss.getSheetByName(HR.SHEET) || (setupHrSheet_(ctx.ss), ctx.ss.getSheetByName(HR.SHEET));
   ensureHeader_(sh, HCOL.EVENT, '캘린더ID');
   ensureHeader_(sh, HCOL.REC_EVENT, '채용캘린더ID');
+  ensureHeader_(sh, HCOL.SOURCE, '출처');
   const day = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const hm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   const key = v => (v instanceof Date ? ymd(v) : '');
@@ -272,7 +288,7 @@ function syncRecruitHr_(ctx) {
   let changed = false;
   try {
     const last = sh.getLastRow();
-    const rows = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.REC_EVENT).getValues() : [];
+    const rows = last >= 2 ? sh.getRange(2, 1, last - 1, HCOL.SOURCE).getValues() : [];
     const linked = {};
     rows.forEach((r, i) => {
       const id = String(r[HCOL.REC_EVENT - 1] || '');
@@ -285,6 +301,8 @@ function syncRecruitHr_(ctx) {
       const cat = recruitCategory_(e.getTitle());
       const id = e.getId();
       if (!cat || seen[id]) return; // 반복 일정은 첫 번만
+      const creator = recruitCreator_(e, ctx);
+      if (!creator) return; // 채용담당이 넣은 일정만 (다른 사람이 넣은 것은 가져오지 않는다)
       seen[id] = true;
       const start = day(e.getStartTime());
       let end = e.isAllDayEvent() ? addDays(day(e.getEndTime()), -1) : day(e.getEndTime());
@@ -294,13 +312,18 @@ function syncRecruitHr_(ctx) {
       const week = ymd(mondayOf(start));
       const i = linked[id];
       if (i == null) {
-        add.push([String(++nextId), new Date(), RECRUIT_AUTHOR, week, cat, target, start, end, memo, '', '', id]);
+        add.push([String(++nextId), new Date(), creator, week, cat, target, start, end, memo, '', '', id, RECRUIT_AUTHOR]);
         return;
       }
       const r = rows[i];
       const row = i + 2;
-      if (r[HCOL.AUTHOR - 1] === RECRUIT_AUTHOR) {
-        // 캘린더에서 가져온 항목: 캘린더가 기준
+      if (hrImported_(r)) {
+        // 캘린더에서 가져온 항목: 캘린더가 기준 (등록자 = 그 일정을 넣은 채용담당)
+        if (r[HCOL.AUTHOR - 1] !== creator || String(r[HCOL.SOURCE - 1] || '') !== RECRUIT_AUTHOR) {
+          sh.getRange(row, HCOL.AUTHOR).setValue(creator);
+          sh.getRange(row, HCOL.SOURCE).setValue(RECRUIT_AUTHOR);
+          changed = true;
+        }
         if (r[HCOL.CATEGORY - 1] !== cat || r[HCOL.TARGET - 1] !== target || key(r[HCOL.START - 1]) !== ymd(start)
           || key(r[HCOL.END - 1]) !== key(end) || String(r[HCOL.MEMO - 1] || '') !== memo) {
           sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, cat, target, start, end, memo]]);
@@ -315,14 +338,14 @@ function syncRecruitHr_(ctx) {
     });
     if (add.length) {
       sh.getRange(last + 1, HCOL.WEEK, add.length, 1).setNumberFormat('@');
-      sh.getRange(last + 1, 1, add.length, HCOL.REC_EVENT).setValues(add);
+      sh.getRange(last + 1, 1, add.length, HCOL.SOURCE).setValues(add);
       changed = true;
     }
     // 캘린더에서 지운 일정 → 가져온 항목도 지운다 (맞추는 기간 안의 것만)
     rows.forEach((r, i) => {
       const id = String(r[HCOL.REC_EVENT - 1] || '');
       const st = r[HCOL.START - 1];
-      if (!id || seen[id] || r[HCOL.AUTHOR - 1] !== RECRUIT_AUTHOR || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
+      if (!id || seen[id] || !hrImported_(r) || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
       if (!(st instanceof Date) || st < from || st >= to) return;
       sh.getRange(i + 2, HCOL.DELETED).setValue('Y');
       changed = true;
@@ -358,7 +381,7 @@ function syncTeamHr_(ctx) {
   const byId = {};
   events.forEach(e => { byId[e.getId()] = e; });
   const key = v => (v instanceof Date ? ymd(v) : '');
-  const width = Math.max(HCOL.EVENT, Math.min(HCOL.REC_EVENT, sh.getLastColumn()));
+  const width = Math.max(HCOL.EVENT, Math.min(HCOL.SOURCE, sh.getLastColumn()));
   const rows = sh.getRange(2, 1, sh.getLastRow() - 1, width).getValues();
   const changes = [];
   rows.forEach((r, i) => {
@@ -404,7 +427,7 @@ function syncTeamHr_(ctx) {
       sh.getRange(c.row, HCOL.WEEK, 1, 5).setValues([[ymd(mondayOf(c.start)), c.category, c.target, c.start, c.end]]);
       // 채용 캘린더에도 같이 걸려 있으면 그쪽도 맞춘다 (서로 되돌리지 않도록)
       if (rec || HR_RECRUIT_CATS.indexOf(c.category) >= 0) {
-        const next = hrRecruitEvent_(ctx, { name: author }, rec, c.category, c.target, c.start, c.end instanceof Date ? c.end : '', String(c.r[HCOL.MEMO - 1] || ''), author === RECRUIT_AUTHOR);
+        const next = hrRecruitEvent_(ctx, { name: author }, rec, c.category, c.target, c.start, c.end instanceof Date ? c.end : '', String(c.r[HCOL.MEMO - 1] || ''), hrImported_(c.r));
         if (next !== rec && sh.getLastColumn() >= HCOL.EVENT) sh.getRange(c.row, HCOL.REC_EVENT).setValue(next);
       }
     });
@@ -427,10 +450,10 @@ function apiDeleteHr(id) {
   requireMenu_(me, 'weekly');
   const sh = ctx.ss.getSheetByName(HR.SHEET);
   if (!sh || sh.getLastRow() < 2) throw new Error('항목을 찾을 수 없습니다.');
-  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.AUTHOR).getValues();
+  const rows = sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.SOURCE).getValues();
   const idx = rows.findIndex(r => String(r[0]) === String(id));
   if (idx < 0) throw new Error('항목을 찾을 수 없습니다.');
-  if (!canEditHrRow_(me, rows[idx][2])) throw new Error('본인이 등록한 항목만 삭제할 수 있습니다.');
+  if (!canEditHrRow_(me, rows[idx])) throw new Error('본인이 등록한 항목만 삭제할 수 있습니다.');
   sh.getRange(idx + 2, HCOL.DELETED).setValue('Y');
   // 팀 캘린더 일정도 지운다
   const eventId = sh.getLastColumn() >= HCOL.EVENT ? String(sh.getRange(idx + 2, HCOL.EVENT).getValue() || '') : '';
