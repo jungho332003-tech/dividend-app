@@ -2008,6 +2008,8 @@ const HR = {
 const HCOL = { ID: 1, DATE: 2, AUTHOR: 3, WEEK: 4, CATEGORY: 5, TARGET: 6, START: 7, END: 8, MEMO: 9, DELETED: 10, EVENT: 11, REC_EVENT: 12, SOURCE: 13 };
 // 채용 캘린더에도 같이 넣는 구분
 const HR_RECRUIT_CATS = ['인터뷰', '입사'];
+// 팀 캘린더에는 넣지 않고 채용 캘린더에만 넣는 구분
+const HR_RECRUIT_ONLY = ['인터뷰'];
 
 function setupHrSheet_(ss) {
   if (ss.getSheetByName(HR.SHEET)) return;
@@ -2130,7 +2132,14 @@ function apiSaveHr(entry) {
   }
   // 팀 캘린더에도 같은 내용으로 (권한이 없으면 인사현황에만 저장)
   // 채용 캘린더에서 가져온 항목은 팀 캘린더에 새로 만들지 않는다 (팀 캘린더에 이미 같은 일정을 넣어 두는 경우가 많아 두 번 생기지 않게)
-  const ev = imported && !oldEvent ? { id: '' } : hrEvent_(me, oldEvent, category, target, start, end, memo);
+  // 인터뷰는 채용 캘린더에만 → 팀 캘린더 일정이 있었으면(예전 등록·구분 변경) 지운다
+  let ev;
+  if (HR_RECRUIT_ONLY.indexOf(category) >= 0) {
+    if (oldEvent) { try { const old = getTeamCalendar_().getEventById(oldEvent); if (old) { old.deleteEvent(); bumpCalendar_(); } } catch (e) { /* 권한 없음 */ } }
+    ev = { id: '' };
+  } else {
+    ev = imported && !oldEvent ? { id: '' } : hrEvent_(me, oldEvent, category, target, start, end, memo);
+  }
   if (ev.id !== oldEvent) sh.getRange(row, HCOL.EVENT).setValue(ev.id);
   // 인터뷰·입사는 채용 캘린더에도 (채용 캘린더가 정해져 있을 때만, 권한이 없으면 조용히 건너뛴다)
   const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo, imported);
@@ -2378,6 +2387,8 @@ function syncTeamHr_(ctx) {
     const id = String(r[HCOL.EVENT - 1] || '');
     if (!id || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
     const st = r[HCOL.START - 1];
+    // 예전에 팀 캘린더에도 넣었던 인터뷰 → 팀 캘린더에서 빼고 채용 캘린더에만 둔다
+    if (HR_RECRUIT_ONLY.indexOf(String(r[HCOL.CATEGORY - 1])) >= 0) { changes.push({ row: i + 2, r: r, teamOff: id }); return; }
     let ev = byId[id];
     if (!ev) {
       if (!(st instanceof Date) || st < from || st >= to) return; // 읽은 범위 밖은 건드리지 않는다
@@ -2407,6 +2418,16 @@ function syncTeamHr_(ctx) {
     changes.forEach(c => {
       const rec = String(c.r[HCOL.REC_EVENT - 1] || '');
       const author = String(c.r[HCOL.AUTHOR - 1] || '');
+      if (c.teamOff) {
+        try { const ev = byId[c.teamOff] || cal.getEventById(c.teamOff); if (ev) ev.deleteEvent(); } catch (e) { return; } // 권한 없으면 다음에
+        sh.getRange(c.row, HCOL.EVENT).setValue('');
+        if (!rec) {
+          const st = c.r[HCOL.START - 1], en = c.r[HCOL.END - 1];
+          const next = hrRecruitEvent_(ctx, { name: author }, '', String(c.r[HCOL.CATEGORY - 1]), String(c.r[HCOL.TARGET - 1]), st, en instanceof Date ? en : '', String(c.r[HCOL.MEMO - 1] || ''), false);
+          if (next) sh.getRange(c.row, HCOL.REC_EVENT).setValue(next);
+        }
+        return;
+      }
       if (c.del) {
         sh.getRange(c.row, HCOL.DELETED).setValue('Y');
         if (rec && recruitCalendarId_(ctx.cfg)) {

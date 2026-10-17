@@ -3605,10 +3605,14 @@
       const k = key === D.week.key ? 'thisWeek' : key === nextKey ? 'nextWeek' : key > nextKey ? 'later' : null;
       if (k) { h[k] = (h[k] || []).concat(item).sort((a, b) => (a.start || '9').localeCompare(b.start || '9')); }
       // 일정에도 바로 (서버에서 진짜 일정이 오면 sameEv 로 바뀐다)
-      const ev = { id: 'tmp-hr-' + item.id, title: `${entry.category}] ${entry.target}`, start: entry.start,
-        end: dkey(addD(parseD(entry.end || entry.start), 1)), allDay: true, location: '', desc: entry.memo, kind: 'event' };
-      calPending.push(ev);
-      Object.values(calCache).forEach(c => { if (c && c.events) c.events.push(ev); });
+      // 인터뷰는 팀 캘린더에 안 들어가고 채용 캘린더에만 → 채용담당 화면에만 채용 일정으로
+      const recOnly = entry.category === '인터뷰';
+      if (!recOnly || D.recruitCalendar) {
+        const ev = { id: 'tmp-hr-' + item.id, title: `${entry.category}] ${entry.target}`, start: entry.start,
+          end: dkey(addD(parseD(entry.end || entry.start), 1)), allDay: true, location: '', desc: entry.memo, kind: recOnly ? 'recruit' : 'event' };
+        calPending.push(ev);
+        Object.values(calCache).forEach(c => { if (c && c.events) c.events.push(ev); });
+      }
     }
     calForget(); upcoming = null;
     return () => { D.hr = JSON.parse(before); calCache = JSON.parse(calBefore); calPending = pendBefore; };
@@ -3658,7 +3662,7 @@
       const undo = hrLocal(x, entry);
       closeModal(); render();
       call('apiSaveHr', entry)
-        .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
+        .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : entry.category === '인터뷰' ? (x ? '수정했습니다. (채용 캘린더에 반영)' : '등록했습니다. (채용 캘린더에만 등록)') : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
         .catch(e2 => { undo(); render(); fail(e2); });
     };
     if (x) $('#hDel').onclick = () => {
