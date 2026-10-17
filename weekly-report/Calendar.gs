@@ -165,12 +165,12 @@ function apiCalendar(startIso, endIso, fresh) {
  * 구글 캘린더에 공휴일이 일정으로 들어 있으면(공휴일 캘린더를 합쳐 둔 경우 등) [공휴일] 시트의 공휴일과 두 번 보인다.
  * 같은 날의 종일 일정 중 이름이 공휴일과 같거나 서로 포함되면 빼고, 빨간 공휴일만 남긴다.
  */
-/** "연차] 민경", "[오전반차] 소영" → "[연차] 민경" (휴가 단어로 시작하는 제목). 아니면 '' */
+/** "[연차] 민경", "오전반차] 소영" → 팀 양식 "연차] 민경" (휴가 단어로 시작하는 제목). 아니면 '' */
 function leaveTagTitle_(title) {
   const m = /^\s*\[?\s*([가-힣]+?)\s*\]\s*(.+)$/.exec(String(title || ''));
   if (!m) return '';
   const w = m[1].match(LEAVE.WORDS);
-  return w && w[0] === m[1] ? `[${leaveType_(w[1], m[1])}] ${m[2].trim()}` : '';
+  return w && w[0] === m[1] ? leaveLabel_(leaveType_(w[1], m[1]), m[2].trim()) : '';
 }
 
 /**

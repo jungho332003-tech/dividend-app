@@ -4,7 +4,7 @@
  *  구 분 | 금주: 대상 및 내용 | 일자/기간 | 차주: 대상 및 내용 | 발령일 | 비고
  *
  * [인사현황]  번호 | 등록일시 | 등록자 | 주차(월요일) | 구분 | 대상 및 내용 | 시작일 | 종료일 | 비고 | 삭제(Y) | 캘린더ID
- * 등록하면 팀 캘린더에도 "[구분] 대상 및 내용" 종일 일정으로 만든다 (고치면 같이 고치고, 지우면 같이 지운다).
+ * 등록하면 팀 캘린더에도 "구분] 대상 및 내용" 종일 일정으로 만든다 (고치면 같이 고치고, 지우면 같이 지운다).
  * 주차는 일자(시작일)가 속한 주의 월요일로 정한다 → 날짜만 넣으면 그 주에 맞게 들어가고,
  * 다음 주가 되면 "차주"였던 항목이 자동으로 "금주"로 보인다. 더 뒤의 날짜는 미리 등록해 두면 그 주가 됐을 때 나타난다.
  */
@@ -147,10 +147,10 @@ function apiSaveHr(entry) {
   return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
 }
 
-/** 인사현황 1건 → 팀 캘린더 종일 일정 "[구분] 대상 및 내용". 이미 있으면 고친다. { id, warning } */
+/** 인사현황 1건 → 팀 캘린더 종일 일정 "구분] 대상 및 내용". 이미 있으면 고친다. { id, warning } */
 function hrEvent_(me, eventId, category, target, start, end, memo) {
   if (allowedMenus_(me).indexOf('calendar') < 0) return { id: eventId };
-  const title = `[${category}] ${target}`;
+  const title = hrLabel_(category, target);
   const last = end instanceof Date ? end : start;
   const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
   try {
@@ -195,7 +195,7 @@ function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo, i
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
       return '';
     }
-    const title = `[${category}] ${target}`;
+    const title = hrLabel_(category, target);
     const last = end instanceof Date ? end : start;
     const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
     if (ev) {
@@ -329,18 +329,18 @@ function syncRecruitHr_(ctx) {
   return changed;
 }
 
-/** 가져온 일정의 제목에서 "대상" 부분만 바꾼다. 형식을 알아볼 수 없으면 "[구분] 대상" */
+/** 가져온 일정의 제목에서 "대상" 부분만 바꾼다. 형식을 알아볼 수 없으면 "구분] 대상" */
 function recruitRetitle_(old, category, target) {
   const cur = recruitTarget_(old);
   if (cur === target) return old;
   const keep = old.lastIndexOf(cur) >= 0 && old.endsWith(cur) ? old.slice(0, old.length - cur.length) : '';
   const next = keep && /\S/.test(keep) ? (keep.endsWith(' ') || keep.endsWith(']') ? keep : keep + ' ') + target : '';
   // 새 제목에서도 같은 구분으로 읽혀야 다음 맞추기에서 사라지지 않는다
-  return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : `[${category}] ${target}`;
+  return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : hrLabel_(category, target);
 }
 
 /* ---------- 팀 캘린더 → 인사현황 ----------
- * 웹앱 인사현황이 팀 캘린더에 만든 "[구분] 대상" 일정을 구글 캘린더에서 고치면(제목·날짜) 인사현황도 따라간다.
+ * 웹앱 인사현황이 팀 캘린더에 만든 "구분] 대상" 일정을 구글 캘린더에서 고치면(제목·날짜) 인사현황도 따라간다.
  * 캘린더에서 지우면 인사현황에서도 지운다. 이번 주 월요일부터 석 달을 맞춘다.
  */
 function syncTeamHr_(ctx) {
@@ -369,7 +369,7 @@ function syncTeamHr_(ctx) {
       if (!ev) { changes.push({ row: i + 2, del: true, r: r }); return; }
     }
     const title = String(ev.getTitle() || '').trim();
-    const m = /^\s*\[([^\]]+)\]\s*(.*)$/.exec(title);
+    const m = /^\s*\[?\s*([가-힣]+)\s*\]\s*(.*)$/.exec(title); // "입사] 대상" · 예전 "[입사] 대상"
     const category = m && HR.CATEGORIES.indexOf(m[1].trim()) >= 0 ? m[1].trim() : String(r[HCOL.CATEGORY - 1]);
     const target = (m ? m[2] : title).trim() || String(r[HCOL.TARGET - 1]);
     const allDay = ev.isAllDayEvent();
@@ -409,6 +409,11 @@ function syncTeamHr_(ctx) {
   bumpCalendar_();
   refreshHr_(ctx);
   return true;
+}
+
+/** 인사현황 일정 제목 — 팀 양식 "입사] 대상" */
+function hrLabel_(category, target) {
+  return `${category}] ${target}`;
 }
 
 function apiDeleteHr(id) {

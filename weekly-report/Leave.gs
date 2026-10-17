@@ -107,7 +107,7 @@ function apiAddLeave(leave) {
   let eventId = '', warning = '';
   if (allowedMenus_(me).indexOf('calendar') >= 0) {
     try {
-      const ev = getTeamCalendar_().createAllDayEvent(`[${type}] ${me.name}`, start, addDays(end, 1),
+      const ev = getTeamCalendar_().createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') });
       eventId = ev.getId();
     } catch (e) {
@@ -118,7 +118,7 @@ function apiAddLeave(leave) {
   let recEventId = '';
   if (canRecruitCal_(ctx, me)) {
     try {
-      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(`[${type}] ${me.name}`, start, addDays(end, 1),
+      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();
     } catch (e) {
       warning = warning || '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.';
@@ -413,17 +413,31 @@ function teamCalendarSet_(ctx) {
 }
 
 /**
- * 휴가 일정 제목을 "[연차] 김민지" 형식으로 맞춘다 (화면 표시용, 캘린더 원본은 그대로).
- * 휴가 일정이 아니면 '' 를 돌려준다.
+ * 휴가 일정 제목을 팀 양식 "연차] 지선" 으로 맞춘다 (화면 표시용, 캘린더 원본은 그대로).
+ * 이름은 성을 뺀 이름 (같은 이름이 둘이면 성까지). 휴가 일정이 아니면 '' 를 돌려준다.
  */
 function leaveTitle_(title, names) {
   const word = String(title).match(LEAVE.WORDS);
   const who = leaveNames_(title, names);
   if (!word || !who.length) return '';
   const type = leaveType_(word[1], title);
-  // 웹앱에서 만든 "[정기휴가] 윤수아"처럼 이미 대괄호 종류가 있으면 그 종류를 쓴다
-  const tagged = String(title).match(/^\s*\[([^\]]+)\]/);
-  return `[${tagged ? tagged[1].trim() : type}] ${who.join(', ')}`;
+  // "[정기휴가] 윤수아", "출장] 수아"처럼 앞에 종류를 적어 두었으면 그 종류를 쓴다
+  const tagged = String(title).match(/^\s*\[?\s*([가-힣]+)\s*\]/);
+  const tag = tagged && LEAVE.TYPES.concat(['반차', '반반차', '휴가', '휴무']).indexOf(tagged[1]) >= 0 ? tagged[1] : type;
+  return leaveLabel_(tag, who.map(n => shortName_(n, names)).join(', '));
+}
+
+/** 팀 양식: "연차] 지선" */
+function leaveLabel_(type, who) {
+  return `${type}] ${who}`;
+}
+
+/** 성을 뺀 이름 ("안지선" → "지선"). 같은 이름을 쓰는 팀원이 또 있거나 형식이 다르면 그대로 */
+function shortName_(name, names) {
+  const ok = n => /^[가-힣]{3,4}$/.test(n);
+  if (!ok(name)) return name;
+  const g = name.slice(1);
+  return (names || []).filter(n => ok(n) && n.slice(1) === g).length <= 1 ? g : name;
 }
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */

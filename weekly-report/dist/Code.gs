@@ -1545,12 +1545,12 @@ function apiCalendar(startIso, endIso, fresh) {
  * 구글 캘린더에 공휴일이 일정으로 들어 있으면(공휴일 캘린더를 합쳐 둔 경우 등) [공휴일] 시트의 공휴일과 두 번 보인다.
  * 같은 날의 종일 일정 중 이름이 공휴일과 같거나 서로 포함되면 빼고, 빨간 공휴일만 남긴다.
  */
-/** "연차] 민경", "[오전반차] 소영" → "[연차] 민경" (휴가 단어로 시작하는 제목). 아니면 '' */
+/** "[연차] 민경", "오전반차] 소영" → 팀 양식 "연차] 민경" (휴가 단어로 시작하는 제목). 아니면 '' */
 function leaveTagTitle_(title) {
   const m = /^\s*\[?\s*([가-힣]+?)\s*\]\s*(.+)$/.exec(String(title || ''));
   if (!m) return '';
   const w = m[1].match(LEAVE.WORDS);
-  return w && w[0] === m[1] ? `[${leaveType_(w[1], m[1])}] ${m[2].trim()}` : '';
+  return w && w[0] === m[1] ? leaveLabel_(leaveType_(w[1], m[1]), m[2].trim()) : '';
 }
 
 /**
@@ -1994,7 +1994,7 @@ function apiDeleteRule(id) {
  *  구 분 | 금주: 대상 및 내용 | 일자/기간 | 차주: 대상 및 내용 | 발령일 | 비고
  *
  * [인사현황]  번호 | 등록일시 | 등록자 | 주차(월요일) | 구분 | 대상 및 내용 | 시작일 | 종료일 | 비고 | 삭제(Y) | 캘린더ID
- * 등록하면 팀 캘린더에도 "[구분] 대상 및 내용" 종일 일정으로 만든다 (고치면 같이 고치고, 지우면 같이 지운다).
+ * 등록하면 팀 캘린더에도 "구분] 대상 및 내용" 종일 일정으로 만든다 (고치면 같이 고치고, 지우면 같이 지운다).
  * 주차는 일자(시작일)가 속한 주의 월요일로 정한다 → 날짜만 넣으면 그 주에 맞게 들어가고,
  * 다음 주가 되면 "차주"였던 항목이 자동으로 "금주"로 보인다. 더 뒤의 날짜는 미리 등록해 두면 그 주가 됐을 때 나타난다.
  */
@@ -2137,10 +2137,10 @@ function apiSaveHr(entry) {
   return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
 }
 
-/** 인사현황 1건 → 팀 캘린더 종일 일정 "[구분] 대상 및 내용". 이미 있으면 고친다. { id, warning } */
+/** 인사현황 1건 → 팀 캘린더 종일 일정 "구분] 대상 및 내용". 이미 있으면 고친다. { id, warning } */
 function hrEvent_(me, eventId, category, target, start, end, memo) {
   if (allowedMenus_(me).indexOf('calendar') < 0) return { id: eventId };
-  const title = `[${category}] ${target}`;
+  const title = hrLabel_(category, target);
   const last = end instanceof Date ? end : start;
   const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
   try {
@@ -2185,7 +2185,7 @@ function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo, i
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
       return '';
     }
-    const title = `[${category}] ${target}`;
+    const title = hrLabel_(category, target);
     const last = end instanceof Date ? end : start;
     const desc = [memo, `인사현황 (등록 ${me.name})`].filter(Boolean).join('\n');
     if (ev) {
@@ -2319,18 +2319,18 @@ function syncRecruitHr_(ctx) {
   return changed;
 }
 
-/** 가져온 일정의 제목에서 "대상" 부분만 바꾼다. 형식을 알아볼 수 없으면 "[구분] 대상" */
+/** 가져온 일정의 제목에서 "대상" 부분만 바꾼다. 형식을 알아볼 수 없으면 "구분] 대상" */
 function recruitRetitle_(old, category, target) {
   const cur = recruitTarget_(old);
   if (cur === target) return old;
   const keep = old.lastIndexOf(cur) >= 0 && old.endsWith(cur) ? old.slice(0, old.length - cur.length) : '';
   const next = keep && /\S/.test(keep) ? (keep.endsWith(' ') || keep.endsWith(']') ? keep : keep + ' ') + target : '';
   // 새 제목에서도 같은 구분으로 읽혀야 다음 맞추기에서 사라지지 않는다
-  return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : `[${category}] ${target}`;
+  return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : hrLabel_(category, target);
 }
 
 /* ---------- 팀 캘린더 → 인사현황 ----------
- * 웹앱 인사현황이 팀 캘린더에 만든 "[구분] 대상" 일정을 구글 캘린더에서 고치면(제목·날짜) 인사현황도 따라간다.
+ * 웹앱 인사현황이 팀 캘린더에 만든 "구분] 대상" 일정을 구글 캘린더에서 고치면(제목·날짜) 인사현황도 따라간다.
  * 캘린더에서 지우면 인사현황에서도 지운다. 이번 주 월요일부터 석 달을 맞춘다.
  */
 function syncTeamHr_(ctx) {
@@ -2359,7 +2359,7 @@ function syncTeamHr_(ctx) {
       if (!ev) { changes.push({ row: i + 2, del: true, r: r }); return; }
     }
     const title = String(ev.getTitle() || '').trim();
-    const m = /^\s*\[([^\]]+)\]\s*(.*)$/.exec(title);
+    const m = /^\s*\[?\s*([가-힣]+)\s*\]\s*(.*)$/.exec(title); // "입사] 대상" · 예전 "[입사] 대상"
     const category = m && HR.CATEGORIES.indexOf(m[1].trim()) >= 0 ? m[1].trim() : String(r[HCOL.CATEGORY - 1]);
     const target = (m ? m[2] : title).trim() || String(r[HCOL.TARGET - 1]);
     const allDay = ev.isAllDayEvent();
@@ -2399,6 +2399,11 @@ function syncTeamHr_(ctx) {
   bumpCalendar_();
   refreshHr_(ctx);
   return true;
+}
+
+/** 인사현황 일정 제목 — 팀 양식 "입사] 대상" */
+function hrLabel_(category, target) {
+  return `${category}] ${target}`;
 }
 
 function apiDeleteHr(id) {
@@ -2774,7 +2779,7 @@ function apiAddLeave(leave) {
   let eventId = '', warning = '';
   if (allowedMenus_(me).indexOf('calendar') >= 0) {
     try {
-      const ev = getTeamCalendar_().createAllDayEvent(`[${type}] ${me.name}`, start, addDays(end, 1),
+      const ev = getTeamCalendar_().createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') });
       eventId = ev.getId();
     } catch (e) {
@@ -2785,7 +2790,7 @@ function apiAddLeave(leave) {
   let recEventId = '';
   if (canRecruitCal_(ctx, me)) {
     try {
-      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(`[${type}] ${me.name}`, start, addDays(end, 1),
+      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();
     } catch (e) {
       warning = warning || '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.';
@@ -3080,17 +3085,31 @@ function teamCalendarSet_(ctx) {
 }
 
 /**
- * 휴가 일정 제목을 "[연차] 김민지" 형식으로 맞춘다 (화면 표시용, 캘린더 원본은 그대로).
- * 휴가 일정이 아니면 '' 를 돌려준다.
+ * 휴가 일정 제목을 팀 양식 "연차] 지선" 으로 맞춘다 (화면 표시용, 캘린더 원본은 그대로).
+ * 이름은 성을 뺀 이름 (같은 이름이 둘이면 성까지). 휴가 일정이 아니면 '' 를 돌려준다.
  */
 function leaveTitle_(title, names) {
   const word = String(title).match(LEAVE.WORDS);
   const who = leaveNames_(title, names);
   if (!word || !who.length) return '';
   const type = leaveType_(word[1], title);
-  // 웹앱에서 만든 "[정기휴가] 윤수아"처럼 이미 대괄호 종류가 있으면 그 종류를 쓴다
-  const tagged = String(title).match(/^\s*\[([^\]]+)\]/);
-  return `[${tagged ? tagged[1].trim() : type}] ${who.join(', ')}`;
+  // "[정기휴가] 윤수아", "출장] 수아"처럼 앞에 종류를 적어 두었으면 그 종류를 쓴다
+  const tagged = String(title).match(/^\s*\[?\s*([가-힣]+)\s*\]/);
+  const tag = tagged && LEAVE.TYPES.concat(['반차', '반반차', '휴가', '휴무']).indexOf(tagged[1]) >= 0 ? tagged[1] : type;
+  return leaveLabel_(tag, who.map(n => shortName_(n, names)).join(', '));
+}
+
+/** 팀 양식: "연차] 지선" */
+function leaveLabel_(type, who) {
+  return `${type}] ${who}`;
+}
+
+/** 성을 뺀 이름 ("안지선" → "지선"). 같은 이름을 쓰는 팀원이 또 있거나 형식이 다르면 그대로 */
+function shortName_(name, names) {
+  const ok = n => /^[가-힣]{3,4}$/.test(n);
+  if (!ok(name)) return name;
+  const g = name.slice(1);
+  return (names || []).filter(n => ok(n) && n.slice(1) === g).length <= 1 ? g : name;
 }
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */
