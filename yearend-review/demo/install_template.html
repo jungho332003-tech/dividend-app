@@ -1,0 +1,236 @@
+<title>연말정산 설치 코드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* 왼쪽: 붙여넣을 파일 목록(체크리스트) / 오른쪽: 선택한 파일의 안내 + 복사 버튼 + 코드 */
+  :root {
+    --bg: #eef1ef;
+    --panel: #ffffff;
+    --panel-2: #f6f8f7;
+    --ink: #17201c;
+    --muted: #66726c;
+    --line: #d8dfdb;
+    --accent: #146b58;
+    --accent-ink: #ffffff;
+    --accent-soft: #dcefe8;
+    --code-bg: #f7f9f8;
+    --done: #1d6a2b;
+    --done-bg: #dff1e2;
+    --tag-html: #7a5300;
+    --tag-html-bg: #fdf0cf;
+    --tag-json: #5a3d8a;
+    --tag-json-bg: #ece4f8;
+    --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111513; --panel: #1a201d; --panel-2: #212824; --ink: #e3ebe7; --muted: #93a19a; --line: #313a36;
+      --accent: #52c3a4; --accent-ink: #0b1914; --accent-soft: #1b3a31; --code-bg: #151a17;
+      --done: #a2dcab; --done-bg: #1d3a24; --tag-html: #f1cd7a; --tag-html-bg: #3d3217; --tag-json: #cdb6f2; --tag-json-bg: #2e2440;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111513; --panel: #1a201d; --panel-2: #212824; --ink: #e3ebe7; --muted: #93a19a; --line: #313a36;
+    --accent: #52c3a4; --accent-ink: #0b1914; --accent-soft: #1b3a31; --code-bg: #151a17;
+    --done: #a2dcab; --done-bg: #1d3a24; --tag-html: #f1cd7a; --tag-html-bg: #3d3217; --tag-json: #cdb6f2; --tag-json-bg: #2e2440;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.55; padding-block: 20px 32px; padding-inline: 16px; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; text-wrap: balance; }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+  .progress { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+  .progress .bar { flex: 1; height: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+  .progress .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .progress b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); }
+  .group { font-size: 11.5px; color: var(--muted); letter-spacing: .04em; padding: 10px 10px 4px; }
+  .file {
+    display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+    padding: 8px 10px; border: 0; background: none; border-radius: 7px; cursor: pointer; text-align: left;
+  }
+  .file:hover { background: var(--panel-2); }
+  .file[aria-current="true"] { background: var(--accent-soft); }
+  .file .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .ext { color: var(--muted); font-weight: 400; }
+  .file .sz { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tick { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: transparent; }
+  .file.done .tick { background: var(--done); border-color: var(--done); color: var(--panel); }
+
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .pane-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .pane-head h2 { margin: 0; font-size: 20px; font-family: var(--mono); font-weight: 500; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .tag { display: inline-block; font-family: var(--font); font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 99px; margin-left: 8px; vertical-align: 3px; background: var(--accent-soft); color: var(--accent); }
+  .tag.html { background: var(--tag-html-bg); color: var(--tag-html); }
+  .tag.json { background: var(--tag-json-bg); color: var(--tag-json); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 9px 16px; cursor: pointer; white-space: nowrap; min-height: 42px; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; min-width: 150px; }
+
+  .how { background: var(--panel-2); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .how ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+  .how code, .note code { font-family: var(--mono); font-size: 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
+  .note { margin: 0; font-size: 13px; color: var(--muted); }
+
+  textarea {
+    width: 100%; min-height: 56vh; resize: vertical; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; tab-size: 2;
+    color: var(--ink); background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; white-space: pre; overflow: auto;
+  }
+
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px); z-index: 10; }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .list { position: static; flex-direction: row; overflow-x: auto; padding: 6px; }
+    .group { display: none; }
+    .file { grid-template-columns: 18px auto; white-space: nowrap; }
+    .file .sz { display: none; }
+    .pane { padding: 14px; }
+    .actions { width: 100%; }
+    .actions .btn { flex: 1 1 auto; }
+    textarea { min-height: 50vh; font-size: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .progress .bar i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>연말정산 검토 관리 설치 코드</h1>
+      <p>붙여넣을 파일은 <b>3개</b>입니다. 차례로 <b>복사</b>를 누르고 Apps Script에 붙여넣으세요. 복사한 파일은 ✓ 표시가 남습니다.</p>
+    </div>
+    <div class="progress" aria-live="polite"><div class="bar"><i id="bar"></i></div><b id="count">0 / 0</b></div>
+  </header>
+
+  <div class="layout">
+    <nav class="list" id="list" aria-label="파일 목록"></nav>
+    <section class="pane" id="pane"></section>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="application/json" id="files">__FILES__</script>
+<script>
+  const FILES = JSON.parse(document.getElementById('files').textContent);
+  const KEY = 'ye-install-copied-v1';
+  let copied = {};
+  try { copied = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { copied = {}; }
+  let current = 0;
+
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const kb = n => n >= 1024 ? `${Math.round(n / 1024)}KB` : `${n}B`;
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(copied)); } catch (e) { /* 저장 불가 */ } }
+
+  function toast(text) {
+    const t = $('#toast');
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => { t.hidden = true; }, 3500);
+  }
+
+  function howTo(f) {
+    if (f.kind === 'json') {
+      return `<ol>
+        <li>Apps Script 왼쪽 <b>⚙ 프로젝트 설정</b> → <b>"편집기에 appsscript.json 매니페스트 파일 표시"</b> 체크</li>
+        <li>편집기로 돌아와 <code>appsscript.json</code>을 열고 <b>전체 선택(Ctrl+A) → 붙여넣기</b></li>
+      </ol>`;
+    }
+    if (f.name === 'Code') {
+      return `<ol>
+        <li>스프레드시트에서 <b>확장 프로그램 → Apps Script</b></li>
+        <li>처음부터 있는 <code>Code.gs</code>를 열고 <b>전체 선택(Ctrl+A) → 지우기</b></li>
+        <li>복사한 내용 붙여넣기 → 💾 저장(Ctrl+S)</li>
+      </ol>`;
+    }
+    const menu = f.kind === 'html' ? 'HTML' : '스크립트';
+    const first = '';
+    return `<ol>
+      <li>Apps Script 왼쪽 <b>파일</b> 옆 <b>+</b> → <b>${menu}</b></li>
+      <li>이름에 <code>${esc(f.name)}</code> 입력 (확장자 없이) → Enter</li>
+      <li>안에 있던 기본 내용을 <b>전부 지우고</b> 붙여넣기 → 💾 저장(Ctrl+S)</li>
+      ${first}
+    </ol>`;
+  }
+
+  function render() {
+    const groups = [['script', '스크립트'], ['html', 'HTML'], ['json', '설정']];
+    $('#list').innerHTML = groups.map(([k, label]) => {
+      const items = FILES.map((f, i) => ({ f, i })).filter(x => x.f.kind === k);
+      if (!items.length) return '';
+      return `<div class="group">${label}</div>` + items.map(({ f, i }) => `
+        <button class="file ${copied[f.file] ? 'done' : ''}" aria-current="${i === current}" data-i="${i}">
+          <span class="tick" aria-hidden="true">✓</span>
+          <span class="nm">${esc(f.name)}<span class="ext">${esc(f.ext)}</span></span>
+          <span class="sz">${kb(f.size)}</span>
+        </button>`).join('');
+    }).join('');
+
+    const f = FILES[current];
+    const tagClass = f.kind === 'script' ? '' : f.kind;
+    const tagText = f.kind === 'script' ? '스크립트' : f.kind === 'html' ? 'HTML' : '설정 파일';
+    $('#pane').innerHTML = `
+      <div class="pane-head">
+        <h2>${esc(f.file)}<span class="tag ${tagClass}">${tagText}</span></h2>
+        <div class="actions">
+          <button class="btn primary" id="copyBtn">${copied[f.file] ? '다시 복사' : '복사'}</button>
+          <button class="btn" id="nextBtn" ${current === FILES.length - 1 ? 'disabled' : ''}>다음 파일 →</button>
+        </div>
+      </div>
+      <div class="how">${howTo(f)}</div>
+      <p class="note">${f.lines.toLocaleString()}줄 · ${kb(f.size)} · 아래 상자는 내용 확인용입니다. 복사 버튼이 안 되면 상자를 눌러 Ctrl+A → Ctrl+C 하세요.</p>
+      <textarea id="code" readonly spellcheck="false" aria-label="${esc(f.file)} 코드">${esc(f.code)}</textarea>`;
+
+    const n = FILES.filter(x => copied[x.file]).length;
+    $('#count').textContent = `${n} / ${FILES.length} 복사`;
+    $('#bar').style.width = `${n / FILES.length * 100}%`;
+  }
+
+  function markCopied(f) {
+    copied[f.file] = true;
+    save();
+    render();
+  }
+
+  function copyCurrent() {
+    const f = FILES[current];
+    const ta = $('#code');
+    const fallback = () => {
+      ta.focus();
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      if (ok) { markCopied(f); toast(`${f.file} 복사했습니다. Apps Script에 붙여넣으세요.`); }
+      else toast('코드를 선택했습니다. Ctrl+C(맥은 ⌘+C)로 복사하세요.');
+    };
+    try {
+      navigator.clipboard.writeText(f.code).then(() => {
+        markCopied(f);
+        toast(`${f.file} 복사했습니다. Apps Script에 붙여넣으세요.`);
+      }, fallback);
+    } catch (e) { fallback(); }
+  }
+
+  document.addEventListener('click', e => {
+    const item = e.target.closest('.file');
+    if (item) { current = Number(item.dataset.i); render(); window.scrollTo({ top: 0 }); return; }
+    if (e.target.closest('#copyBtn')) { copyCurrent(); return; }
+    if (e.target.closest('#nextBtn') && current < FILES.length - 1) { current += 1; render(); }
+  });
+
+  render();
+</script>
