@@ -2134,7 +2134,8 @@ function apiSaveHr(entry) {
   // 인터뷰·입사는 채용 캘린더에도 (채용 캘린더가 정해져 있을 때만, 권한이 없으면 조용히 건너뛴다)
   const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo, imported);
   if (rec !== oldRec) sh.getRange(row, HCOL.REC_EVENT).setValue(rec);
-  return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
+  const warning = [ev.warning, ctx._recWarn].filter(Boolean).join(' ');
+  return Object.assign(refreshHr_(ctx), warning ? { warning: warning } : {});
 }
 
 /** 인사현황 1건 → 팀 캘린더 종일 일정 "구분] 대상 및 내용". 이미 있으면 고친다. { id, warning } */
@@ -2199,7 +2200,11 @@ function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo, i
     bumpCalendar_();
     return created.getId();
   } catch (e) {
-    return eventId; // 채용 캘린더 권한이 없는 사람이 등록한 경우 등
+    // 채용 캘린더 권한이 없는 사람이 등록한 경우 등 → 인사현황·팀 캘린더에는 그대로 두고 알린다
+    ctx._recWarn = /찾을 수 없|접근할 수 없/.test(String(e && e.message))
+      ? '채용 캘린더를 찾을 수 없어 팀 캘린더에만 넣었습니다. 관리 → 설정의 채용 캘린더 ID와 공유를 확인해 주세요.'
+      : '채용 캘린더에 일정을 넣을 권한이 없어 팀 캘린더에만 넣었습니다. 채용 캘린더를 "일정 변경" 권한으로 공유받아야 합니다.';
+    return eventId;
   }
 }
 

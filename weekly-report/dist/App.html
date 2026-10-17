@@ -2044,7 +2044,9 @@
   const calLoading = {}, calSynced = {};
   // 방금 등록해 서버에서 아직 안 내려온 일정 (불러온 달력에 같은 일정이 생기면 뺀다)
   let calPending = [];
-  const sameEv = (a, b) => a.title === b.title && String(a.start).slice(0, 10) === String(b.start).slice(0, 10);
+  // 같은 일정인지: 제목 + 시작 날짜 (종일 일정은 서버가 "전날 15:00Z"처럼 UTC로 주므로 한국 날짜로 비교)
+  const evDay = x => /^\d{4}-\d{2}-\d{2}$/.test(String(x.start)) ? String(x.start) : dkey(new Date(x.start));
+  const sameEv = (a, b) => String(a.title).replace(/\s+/g, '') === String(b.title).replace(/\s+/g, '') && evDay(a) === evDay(b);
   function loadMonth(force, monthDate) {
     const m = monthDate || calMonth;
     const k = dkey(m).slice(0, 7);
