@@ -2070,6 +2070,7 @@ function apiSaveHr(entry) {
       oldEvent = String(ids[idx][HCOL.EVENT - 1] || '');
       oldRec = String(ids[idx][HCOL.REC_EVENT - 1] || '');
       imported = ids[idx][2] === RECRUIT_AUTHOR;
+      if (imported && HR_RECRUIT_CATS.indexOf(category) < 0) throw new Error('채용 캘린더에서 가져온 항목은 입사·인터뷰로만 둘 수 있습니다. 구분을 바꾸려면 채용 캘린더에서 제목을 고쳐 주세요.');
       sh.getRange(row, HCOL.WEEK, 1, 6).setValues([[week, category, target, start, end, memo]]);
     } else {
       const id = ids.reduce((m, r) => Math.max(m, Number(r[0]) || 0), 0) + 1;
@@ -2085,7 +2086,7 @@ function apiSaveHr(entry) {
   const ev = imported && !oldEvent ? { id: '' } : hrEvent_(me, oldEvent, category, target, start, end, memo);
   if (ev.id !== oldEvent) sh.getRange(row, HCOL.EVENT).setValue(ev.id);
   // 인터뷰·입사는 채용 캘린더에도 (채용 캘린더가 정해져 있을 때만, 권한이 없으면 조용히 건너뛴다)
-  const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo);
+  const rec = hrRecruitEvent_(ctx, me, oldRec, category, target, start, end, memo, imported);
   if (rec !== oldRec) sh.getRange(row, HCOL.REC_EVENT).setValue(rec);
   return Object.assign(refreshHr_(ctx), ev.warning ? { warning: ev.warning } : {});
 }
@@ -2115,11 +2116,25 @@ function hrEvent_(me, eventId, category, target, start, end, memo) {
 }
 
 /** 인사현황 → 채용 캘린더 일정 (인터뷰·입사만). 구분이 바뀌어 대상이 아니면 지운다. 새 일정 ID(없으면 '') */
-function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo) {
+function hrRecruitEvent_(ctx, me, eventId, category, target, start, end, memo, imported) {
   if (!recruitCalendarId_(ctx.cfg)) return eventId;
   try {
     const cal = getRecruitCalendar_(ctx);
     const ev = eventId ? cal.getEventById(eventId) : null;
+    // 캘린더에서 가져온 일정: 원래 제목 형식("** 인터뷰] …")·시간·메모는 그대로 두고, 바뀐 내용과 날짜만 고친다
+    if (ev && imported) {
+      const title = recruitRetitle_(ev.getTitle(), category, target);
+      if (title !== ev.getTitle()) ev.setTitle(title);
+      if (ev.isAllDayEvent()) {
+        ev.setAllDayDates(start, addDays(end instanceof Date ? end : start, 1));
+      } else {
+        const s0 = ev.getStartTime(), e0 = ev.getEndTime();
+        const s1 = new Date(start.getFullYear(), start.getMonth(), start.getDate(), s0.getHours(), s0.getMinutes());
+        if (s1.getTime() !== s0.getTime()) ev.setTime(s1, new Date(s1.getTime() + (e0 - s0)));
+      }
+      bumpCalendar_();
+      return eventId;
+    }
     if (HR_RECRUIT_CATS.indexOf(category) < 0) {
       if (ev) { ev.deleteEvent(); bumpCalendar_(); }
       return '';
@@ -2256,6 +2271,16 @@ function syncRecruitHr_(ctx) {
   }
   if (changed) refreshHr_(ctx);
   return changed;
+}
+
+/** 가져온 일정의 제목에서 "대상" 부분만 바꾼다. 형식을 알아볼 수 없으면 "[구분] 대상" */
+function recruitRetitle_(old, category, target) {
+  const cur = recruitTarget_(old);
+  if (cur === target) return old;
+  const keep = old.lastIndexOf(cur) >= 0 && old.endsWith(cur) ? old.slice(0, old.length - cur.length) : '';
+  const next = keep && /\S/.test(keep) ? (keep.endsWith(' ') || keep.endsWith(']') ? keep : keep + ' ') + target : '';
+  // 새 제목에서도 같은 구분으로 읽혀야 다음 맞추기에서 사라지지 않는다
+  return next && recruitCategory_(next) === category ? next.replace(/\]\S/, m => m[0] + ' ' + m[1]) : `[${category}] ${target}`;
 }
 
 function apiDeleteHr(id) {
