@@ -583,6 +583,7 @@
   .meet-min { display: flex; flex-direction: column; gap: 10px; }
   input[data-date].field-in, input.due-val.field-in { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; background-size: 15px; font-variant-numeric: tabular-nums; }
   input[data-date].field-in:disabled { background-image: none; }
+  #datePick::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; }
   .m-edit .field-in.due-val { width: 100%; min-width: 0; padding: 6px 26px 6px 6px; font-size: inherit; text-align: center; background-position: right 7px center; }
   .own-btn { width: 100%; min-height: 34px; padding: 6px 8px; text-align: center; cursor: pointer; background: var(--panel); font-size: inherit; line-height: 1.4; word-break: keep-all; }
   .own-btn .ph { color: var(--muted); }
@@ -1750,24 +1751,44 @@
     if (iso) { el.value = iso; fireDate(el); }
     else { el.value = ''; fireDate(el); toast('날짜는 20261001 처럼 숫자 8자리로 입력해 주세요.'); }
   }, true);
-  // 오른쪽 달력 아이콘을 누르면 달력을 띄운다
-  document.addEventListener('click', e => {
-    const el = e.target;
-    if (!el.matches || !el.matches('input[data-date], input.due-val') || el.disabled || el.readOnly) return;
-    const r = el.getBoundingClientRect();
-    if (e.clientX < r.right - 32) return;
+  // 오른쪽 달력 아이콘: 웹앱은 구글 iframe 안이라 showPicker()가 막혀 있다.
+  // → 진짜 날짜 칸(투명)을 아이콘 위에 겹쳐 두고, 사용자가 그걸 직접 누르게 한다.
+  function datePicker() {
     let pk = $('#datePick');
-    if (!pk) {
-      pk = document.createElement('input'); pk.type = 'date'; pk.id = 'datePick'; pk.tabIndex = -1; pk.setAttribute('aria-hidden', 'true');
-      pk.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;border:0;padding:0;z-index:2000';
-      document.body.appendChild(pk);
-      pk.addEventListener('change', () => { const t = pk._for; if (t && pk.value) { t.value = pk.value; fireDate(t); t.focus(); } });
-    }
+    if (pk) return pk;
+    pk = document.createElement('input');
+    pk.type = 'date'; pk.id = 'datePick'; pk.tabIndex = -1; pk.title = '달력에서 고르기';
+    pk.setAttribute('aria-label', '달력에서 날짜 고르기');
+    pk.style.cssText = 'position:fixed;opacity:0;border:0;padding:0;margin:0;z-index:3000;cursor:pointer;display:none';
+    document.body.appendChild(pk);
+    pk.addEventListener('change', () => {
+      const t = pk._for;
+      if (t && pk.value) { t.value = pk.value; fireDate(t); t.focus(); }
+    });
+    pk.addEventListener('mouseleave', () => { if (document.activeElement !== pk) pk.style.display = 'none'; });
+    pk.addEventListener('blur', () => { pk.style.display = 'none'; });
+    return pk;
+  }
+  const isDateField = el => el && el.matches && el.matches('input[data-date], input.due-val') && !el.disabled && !el.readOnly;
+  function placePicker(el) {
+    const pk = datePicker();
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
     pk._for = el;
     pk.value = el.dataset.iso || (DATE_RE.test(el.value) ? el.value : (parseDateText(el.value) || ''));
-    pk.style.left = Math.max(0, r.right - 32) + 'px'; pk.style.top = r.bottom + 'px';
-    try { pk.showPicker(); } catch (er) { pk.focus(); }
-  });
+    Object.assign(pk.style, { display: 'block', left: (r.right - 32) + 'px', top: r.top + 'px', width: '32px', height: r.height + 'px' });
+  }
+  // 마우스가 날짜 칸의 아이콘 쪽에 오면 투명 달력 칸을 그 위에 둔다
+  document.addEventListener('mousemove', e => {
+    const el = e.target;
+    if (el.id === 'datePick') return;
+    if (!isDateField(el)) { const pk = $('#datePick'); if (pk && document.activeElement !== pk) pk.style.display = 'none'; return; }
+    const r = el.getBoundingClientRect();
+    if (e.clientX >= r.right - 32) placePicker(el);
+  }, true);
+  // 터치(휴대폰): 날짜 칸을 한 번 누르면 아이콘 위에 달력 칸이 놓인다 → 아이콘을 누르면 달력
+  document.addEventListener('focusin', e => { if (isDateField(e.target)) placePicker(e.target); });
+  document.addEventListener('scroll', () => { const pk = $('#datePick'); if (pk && document.activeElement !== pk) pk.style.display = 'none'; }, true);
   // ↑↓: 날짜를 바꾸지 않고 위·아래 칸으로 옮긴다
   function moveVert(el, dir) {
     const td = el.closest('td'), tr = el.closest('tr');
