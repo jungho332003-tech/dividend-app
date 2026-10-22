@@ -441,6 +441,11 @@
   .me-mail:hover { opacity: 1; }
   .mail-prefs { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 4px; }
   .mail-pref { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .mail-addr { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .mail-addr b { font-weight: 600; overflow-wrap: anywhere; }
+  .mail-addr small { color: var(--muted); font-size: 12px; }
+  .mail-add { display: flex; gap: 8px; margin-top: 10px; }
+  .mail-add .field-in { flex: 1; min-width: 0; }
   .ord { display: flex; align-items: center; gap: 4px; justify-content: center; }
   .ord-in { width: 52px; padding: 5px 4px !important; text-align: center; }
   .ord-btns { display: inline-flex; }
@@ -2197,22 +2202,63 @@
     return `<textarea class="field-in" id="memoIn" data-day="${day}" placeholder="${memos ? '이 날의 메모 (나만 보입니다)' : '메모를 불러오는 중…'}" ${memos ? '' : 'disabled'}>${esc((memos && memos[day]) || '')}</textarea>`;
   }
   /** 지난 메모: 날짜순으로 모아 보고, 검색하고, 누르면 그날 일정 화면으로 */
-  /* ---------- 내 알림 메일 (받을지 각자 선택) ---------- */
+  /* ---------- 내 알림 메일 (받을 종류·받을 주소 각자 선택) ---------- */
   function openMailPrefs() {
     const m = D.mail;
     if (!D.me.name || !m) return toast('[팀원] 시트에 등록된 사람만 설정할 수 있습니다.');
+    const to = (m.to || []).slice();
+    let choices = (m.choices || []).map(c => Object.assign({}, c));
     const rows = m.kinds.map(k => `<label class="mail-pref"><input type="checkbox" class="check" data-k="${k.key}" ${m.off.indexOf(k.key) < 0 ? 'checked' : ''}><span>${esc(k.label)}</span></label>`).join('');
     openModal(`<h3>내 알림 메일</h3>
-      <p class="sub">받을 메일만 체크하세요. 받는 주소: <b>${esc(m.to || '(없음)')}</b>${m.to ? '' : ' — 관리자에게 이메일 등록을 요청하세요'}</p>
-      <div class="mail-prefs">${rows || '<p class="dd-empty">나에게 오는 알림 메일이 없습니다.</p>'}</div>
+      <p class="sub">받을 메일만 체크하세요.</p>
+      <div class="mail-prefs" id="mpKinds">${rows || '<p class="dd-empty">나에게 오는 알림 메일이 없습니다.</p>'}</div>
+      ${rows ? `<p class="sub" style="margin-top:14px">받을 주소 <span class="key-sub">여러 개 고를 수 있어요</span></p>
+      <div class="mail-prefs" id="mpTo"></div>
+      <div class="mail-add"><input class="field-in" id="mpNew" type="email" placeholder="다른 주소 추가 (예: me@company.com)"><button class="btn" id="mpAdd" type="button">추가</button></div>` : ''}
       <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button>${rows ? '<button class="btn primary" id="mpOk">저장</button>' : ''}</div>`);
     const ok = $('#mpOk');
     if (!ok) return;
+    const valid = a => /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(a);
+    const drawTo = () => {
+      $('#mpTo').innerHTML = choices.map((c, i) => `<label class="mail-pref"><input type="checkbox" class="check" data-a="${esc(c.address)}" ${to.indexOf(c.address) >= 0 ? 'checked' : ''}>
+        <span class="mail-addr"><b>${esc(c.address)}</b><small>${esc(c.label)}</small></span>
+        ${c.label === '직접 추가' ? `<button type="button" class="icon-btn" data-del="${i}" title="이 주소 지우기" aria-label="이 주소 지우기">${ic('x', 'sm')}</button>` : ''}</label>`).join('')
+        || '<p class="dd-empty">등록된 주소가 없습니다. 아래에서 추가하세요.</p>';
+      $('#mpTo').querySelectorAll('input').forEach(c => c.onchange = () => {
+        const a = c.dataset.a, k = to.indexOf(a);
+        if (c.checked && k < 0) to.push(a); else if (!c.checked && k >= 0) to.splice(k, 1);
+      });
+      $('#mpTo').querySelectorAll('[data-del]').forEach(b => b.onclick = e => {
+        e.preventDefault();
+        const a = choices[+b.dataset.del].address;
+        choices.splice(+b.dataset.del, 1);
+        if (to.indexOf(a) >= 0) to.splice(to.indexOf(a), 1);
+        drawTo();
+      });
+    };
+    drawTo();
+    const add = () => {
+      const a = $('#mpNew').value.trim().toLowerCase();
+      if (!a) return;
+      if (!valid(a)) return toast('메일 주소 형식을 확인해 주세요.');
+      if (choices.some(c => c.address === a)) { if (to.indexOf(a) < 0) to.push(a); }
+      else {
+        if (choices.filter(c => c.label === '직접 추가').length >= 5) return toast('직접 추가하는 주소는 5개까지입니다.');
+        choices.push({ address: a, label: '직접 추가' }); to.push(a);
+      }
+      $('#mpNew').value = ''; drawTo();
+    };
+    $('#mpAdd').onclick = add;
+    $('#mpNew').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
     ok.onclick = () => {
-      const off = [...document.querySelectorAll('.mail-prefs input')].filter(c => !c.checked).map(c => c.dataset.k);
-      const before = m.off;
-      m.off = off; closeModal(); toast(off.length ? '알림 메일 설정을 저장했습니다. (일부 끔)' : '알림 메일을 모두 받습니다.');
-      call('apiSaveMailPrefs', off).then(applyData).catch(e => { m.off = before; fail(e); });
+      if ($('#mpNew').value.trim()) add();
+      if (!to.length) return toast('받을 주소를 하나 이상 골라 주세요.');
+      const off = [...document.querySelectorAll('#mpKinds input')].filter(c => !c.checked).map(c => c.dataset.k);
+      const extra = choices.filter(c => c.label === '직접 추가').map(c => c.address);
+      const before = D.mail;
+      D.mail = Object.assign({}, m, { off, to: to.slice(), choices });
+      closeModal(); toast(off.length ? '알림 메일 설정을 저장했습니다. (일부 끔)' : to.length > 1 ? `알림 메일을 ${to.length}개 주소로 받습니다.` : '알림 메일을 모두 받습니다.');
+      call('apiSaveMailPrefs', off, to, extra).then(applyData).catch(e => { D.mail = before; fail(e); });
     };
   }
 

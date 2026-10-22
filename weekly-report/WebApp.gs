@@ -141,29 +141,44 @@ function baseData_(ctx) {
   };
 }
 
-/** 내 알림 메일: 나에게 해당하는 종류 + 끈 종류 + 받는 주소 */
+/** 내 알림 메일: 나에게 해당하는 종류 + 끈 종류 + 받을 주소 (고를 수 있는 주소 목록 포함) */
 function mailPrefs_(ctx, me) {
   const m = ctx.members.find(x => x.email && x.email.toLowerCase() === me.email) || {};
   const kinds = [];
   if (me.writer) kinds.push('remind');
   if (me.isLeader) kinds.push('close');
   if (me.recruiter) kinds.push('recruit');
+  const p = mailPrefMap_()[me.email] || { off: [], to: [], extra: [] };
+  const base = [m.email, m.notify].map(x => String(x || '').toLowerCase()).filter(Boolean);
+  const choices = base.concat(p.extra || []).filter((v, i, a) => a.indexOf(v) === i);
   return {
     kinds: kinds.map(k => ({ key: k, label: MAIL_KINDS[k] })),
-    off: mailOffMap_()[me.email] || [],
-    to: mailTo_(m),
+    off: p.off || [],
+    to: (p.to && p.to.length ? p.to : [String(m.notify || m.email || '').toLowerCase()]).filter(Boolean),
+    choices: choices.map(a => ({ address: a, label: a === String(m.email || '').toLowerCase() ? '구글 계정' : a === String(m.notify || '').toLowerCase() ? '회사 메일 (관리자 등록)' : '직접 추가' })),
   };
 }
 
-/** 내 알림 메일 끄기/켜기. off: 끌 종류 키 목록 */
-function apiSaveMailPrefs(off) {
+/** 내 알림 메일 저장. off: 끌 종류, to: 받을 주소, extra: 직접 추가한 주소 */
+function apiSaveMailPrefs(off, to, extra) {
   const ctx = getContext();
   const me = currentMember_(ctx.members);
   if (!me.email || !me.name) throw new Error('[팀원] 시트에 등록된 사람만 설정할 수 있습니다.');
-  const keys = (off || []).map(String).filter((k, i, a) => MAIL_KINDS[k] && a.indexOf(k) === i);
+  const ok = a => /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(a);
+  const clean = list => (list || []).map(x => String(x || '').trim().toLowerCase()).filter((v, i, a) => v && a.indexOf(v) === i);
+  const keys = clean(off).filter(k => MAIL_KINDS[k]);
+  const ex = clean(extra);
+  const bad = ex.concat(clean(to)).find(a => !ok(a));
+  if (bad) throw new Error(`메일 주소 형식을 확인해 주세요: ${bad}`);
+  if (ex.length > MAIL_MAX_ADDR) throw new Error(`직접 추가하는 주소는 ${MAIL_MAX_ADDR}개까지입니다.`);
+  const m = ctx.members.find(x => x.email && x.email.toLowerCase() === me.email) || {};
+  const allowed = [m.email, m.notify].map(x => String(x || '').toLowerCase()).filter(Boolean).concat(ex);
+  const dest = clean(to).filter(a => allowed.indexOf(a) >= 0);
+  if (!dest.length) throw new Error('받을 주소를 하나 이상 골라 주세요.');
   const props = PropertiesService.getDocumentProperties();
-  if (keys.length) props.setProperty(MAIL_OFF_PREFIX + me.email, keys.join(','));
-  else props.deleteProperty(MAIL_OFF_PREFIX + me.email);
+  props.setProperty(MAIL_PREF_PREFIX + me.email, JSON.stringify({ off: keys, to: dest, extra: ex }));
+  props.deleteProperty(MAIL_OFF_PREFIX + me.email); // 예전 형식 정리
+  MAIL_PREF_CACHE = null;
   return { mail: mailPrefs_(ctx, me) };
 }
 

@@ -176,13 +176,18 @@ function getMembers() {
     .sort((a, b) => a.order - b.order);
 }
 
-/** 알림 메일 받는 주소: [팀원] 알림메일 칸이 있으면 그 주소(회사 메일 등), 없으면 구글 계정 이메일 */
+/**
+ * 알림 메일 받는 주소: 본인이 고른 주소(여러 개면 쉼표) → 없으면 [팀원] 알림메일 칸(회사 메일 등) → 구글 계정 이메일
+ */
 function mailTo_(m) {
+  const own = m && m.email ? (mailPrefMap_()[String(m.email).toLowerCase()] || {}).to : null;
+  if (own && own.length) return own.join(',');
   return (m && (m.notify || m.email)) || '';
 }
 
-/* ---------- 알림 메일 받기/끄기 (각자 선택) ----------
- * 문서 속성 "mailOff:<구글 계정>" = 끈 종류 (쉼표). 기본은 모두 받기.
+/* ---------- 알림 메일: 받을 종류·받을 주소 (각자 선택) ----------
+ * 문서 속성 "mailPref:<구글 계정>" = {"off":[끈 종류], "to":[받을 주소], "extra":[직접 추가한 주소]}
+ * 기본: 모두 받기, 주소는 알림메일 칸(없으면 구글 계정). (예전 "mailOff:<계정>" 도 읽는다)
  */
 const MAIL_KINDS = {
   remind: '주간업무 미작성 알림',
@@ -190,16 +195,38 @@ const MAIL_KINDS = {
   recruit: '채용 안내 (입사 70일 수습평가 · 인터뷰 전날)',
 };
 const MAIL_OFF_PREFIX = 'mailOff:';
+const MAIL_PREF_PREFIX = 'mailPref:';
+const MAIL_MAX_ADDR = 5;
+let MAIL_PREF_CACHE = null; // 한 번 실행하는 동안만
 
-/** { 이메일(소문자): [끈 종류] } */
-function mailOffMap_() {
+/** { 이메일(소문자): {off, to, extra} } */
+function mailPrefMap_() {
+  if (MAIL_PREF_CACHE) return MAIL_PREF_CACHE;
   const out = {};
   try {
     const all = PropertiesService.getDocumentProperties().getProperties();
     Object.keys(all).forEach(k => {
-      if (k.indexOf(MAIL_OFF_PREFIX) === 0) out[k.slice(MAIL_OFF_PREFIX.length)] = String(all[k] || '').split(',').filter(Boolean);
+      if (k.indexOf(MAIL_OFF_PREFIX) === 0) {
+        const e = k.slice(MAIL_OFF_PREFIX.length);
+        out[e] = out[e] || { off: [], to: [], extra: [] };
+        out[e].off = String(all[k] || '').split(',').filter(Boolean);
+      } else if (k.indexOf(MAIL_PREF_PREFIX) === 0) {
+        const e = k.slice(MAIL_PREF_PREFIX.length);
+        let v = {};
+        try { v = JSON.parse(all[k]) || {}; } catch (err) { v = {}; }
+        out[e] = { off: v.off || [], to: v.to || [], extra: v.extra || [] };
+      }
     });
-  } catch (e) { /* 못 읽으면 모두 받기 */ }
+  } catch (e) { /* 못 읽으면 기본값 */ }
+  MAIL_PREF_CACHE = out;
+  return out;
+}
+
+/** { 이메일(소문자): [끈 종류] } */
+function mailOffMap_() {
+  const out = {};
+  const pref = mailPrefMap_();
+  Object.keys(pref).forEach(e => { out[e] = pref[e].off || []; });
   return out;
 }
 
