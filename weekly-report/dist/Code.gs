@@ -1439,6 +1439,17 @@ function userCached_(key, build, ttl) {
   return value;
 }
 
+/** 구글 캘린더 설명은 HTML(목록·굵게 등)로 저장되기도 한다 → 글자만 (목록은 "· " 줄) */
+function htmlText_(s) {
+  return String(s || '')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '\n· ')
+    .replace(/<\s*\/(p|div|li|ul|ol|h[1-6]|tr)\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
+}
+
 function eventJson_(e, kind) {
   return {
     id: e.getId(),
@@ -1447,7 +1458,7 @@ function eventJson_(e, kind) {
     end: e.getEndTime().toISOString(),
     allDay: e.isAllDayEvent(),
     location: e.getLocation() || '',
-    desc: e.getDescription() || '',
+    desc: htmlText_(e.getDescription()),
     kind: kind,
   };
 }

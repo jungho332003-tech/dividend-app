@@ -644,7 +644,7 @@
   .ag .tm { color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
   .ag .tt { font-weight: 600; overflow-wrap: anywhere; }
   .ag .tt.holiday { color: var(--warn-ink); }
-  .ag .ds { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+  .ag .ds { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; white-space: pre-line; }
   .ag-day { font-size: 12px; font-weight: 700; color: var(--muted); padding: 12px 0 2px; letter-spacing: .02em; }
   .ag-day:first-child { padding-top: 0; }
 
@@ -1996,8 +1996,17 @@
     return +s === +e ? hm(s) : `${hm(s)}–${hm(e)}`;
   }
   /** 팀 일정 표시: "이름) 업무명" — 예전에 이름 없이 만든 일정도 설명의 "등록: 이름"으로 붙인다 */
+  /** 캘린더 설명의 HTML(<ul><li>…)을 글자로 (저장해 둔 예전 데이터도) */
+  const htmlText = s => String(s || '')
+      .replace(/<\s*br\s*\/?>/gi, '\n')
+      .replace(/<\s*li[^>]*>/gi, '\n· ')
+      .replace(/<\s*\/(p|div|li|ul|ol|h[1-6]|tr)\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+      .replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n').trim();
   function tidyEvents(res) {
     (res && res.events || []).forEach(e => {
+      if (e.desc && /<[a-z/][^>]*>|&[a-z#0-9]+;/i.test(e.desc)) e.desc = htmlText(e.desc);
       if (e.kind !== 'event' || !e.desc) return;
       const m = String(e.desc).match(/(?:^|\n)등록: ([^\s(]+)/);
       if (!m) return;
@@ -2041,7 +2050,7 @@
   }
   function loadUpcoming() {
     const today = new Date(now().getFullYear(), now().getMonth(), now().getDate());
-    const st = calStored('up');
+    const st = tidyEvents(calStored('up'));
     if (st) { upcoming = st; const el = $('#upcoming'); if (el) el.innerHTML = upcomingHtml(); }
     call('apiCalendar', today.toISOString(), addD(today, 7).toISOString())
       .then(r => { upcoming = tidyEvents(r); calStore('up', r); })
@@ -2074,7 +2083,7 @@
     const redraw = () => { if (page === 'calendar' && dkey(calMonth).slice(0, 7) === k) $('#main').innerHTML = PAGES.calendar(); };
     if (calLoading[k] || (calCache[k] && !calCache[k].stale && !force)) return;
     if (!calCache[k]) {
-      const st = calStored(k);
+      const st = tidyEvents(calStored(k));
       if (st) { calCache[k] = Object.assign(st, { stale: true }); redraw(); }
     }
     const r = monthRange(m);
