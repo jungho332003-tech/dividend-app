@@ -417,7 +417,10 @@
   .items { display: flex; flex-direction: column; gap: 8px; }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
   /* 내 메모 메뉴 */
-  .memo-search { width: 100%; margin-bottom: 14px; }
+  .memo-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .memo-filter select { width: auto; min-width: 110px; }
+  .memo-filter .memo-search { flex: 1 1 240px; min-width: 0; margin: 0; }
+  .memo-count { font-size: 13px; color: var(--muted); }
   .memo-month { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
   .memo-item { display: grid; grid-template-columns: 130px minmax(0, 1fr) 56px 32px; gap: 10px; align-items: start; border-top: 1px solid var(--line); padding-top: 10px; }
   .memo-item:first-of-type { border-top: 0; padding-top: 0; }
@@ -2182,12 +2185,15 @@
   }
   /** 지난 메모: 날짜순으로 모아 보고, 검색하고, 누르면 그날 일정 화면으로 */
   /* ---------- 내 메모 메뉴: 날짜별 메모를 모아 보고 바로 고친다 ---------- */
-  let memoQuery = '', memoAddDay = null, memoFileUrl = '';
+  let memoQuery = '', memoAddDay = null, memoFileUrl = '', memoYear = '', memoMonth = ''; // 년/월 조회 ('' = 전체)
   const memoPageTimers = {};
   PAGES.memo = function () {
     if (!memos) { loadMemos(); return `<div class="head"><div><h1>내 메모</h1></div></div><div class="loading">불러오는 중…</div>`; }
     const q = memoQuery.trim().toLowerCase();
-    let days = Object.keys(memos).filter(d => memos[d] && (!q || memos[d].toLowerCase().indexOf(q) >= 0 || d.indexOf(q) >= 0));
+    const allDays = Object.keys(memos).filter(d => memos[d]);
+    const years = [...new Set(allDays.map(d => d.slice(0, 4)).concat(dkey(now()).slice(0, 4)))].sort().reverse();
+    const inPeriod = d => (!memoYear || d.slice(0, 4) === memoYear) && (!memoMonth || d.slice(5, 7) === memoMonth);
+    let days = allDays.filter(d => inPeriod(d) && (!q || memos[d].toLowerCase().indexOf(q) >= 0 || d.indexOf(q) >= 0));
     if (memoAddDay && days.indexOf(memoAddDay) < 0) days.push(memoAddDay); // 새로 쓰는 날
     days.sort().reverse();
     const byMonth = {};
@@ -2213,8 +2219,21 @@
           <button class="btn primary" onclick="memoPageAdd()">${ic('plus', 'sm')}메모 쓰기</button>
         </div>
       </div>
-      <input class="search memo-search" id="memoSearch" type="search" placeholder="메모 검색 (내용·날짜)" value="${esc(memoQuery)}" aria-label="메모 검색">
-      ${groups || `<section class="panel"><div class="empty">${q ? '찾는 메모가 없습니다.' : '아직 쓴 메모가 없습니다. [메모 쓰기]나 일정 화면에서 날짜를 골라 써 보세요.'}</div></section>`}`;
+      <div class="memo-filter">
+        <select class="field-in" onchange="memoYear=this.value;memoAddDay=null;render()" aria-label="연도">
+          <option value="" ${!memoYear ? 'selected' : ''}>전체 연도</option>
+          ${years.map(y => `<option value="${y}" ${memoYear === y ? 'selected' : ''}>${y}년</option>`).join('')}
+        </select>
+        <select class="field-in" onchange="memoMonth=this.value;memoAddDay=null;render()" aria-label="월">
+          <option value="" ${!memoMonth ? 'selected' : ''}>전체 월</option>
+          ${Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map(m => `<option value="${m}" ${memoMonth === m ? 'selected' : ''}>${+m}월</option>`).join('')}
+        </select>
+        <button class="btn small" onclick="memoYear=dkey(now()).slice(0,4);memoMonth=dkey(now()).slice(5,7);render()">이번 달</button>
+        ${memoYear || memoMonth ? `<button class="btn small ghost" onclick="memoYear='';memoMonth='';render()">전체 보기</button>` : ''}
+        <input class="search memo-search" id="memoSearch" type="search" placeholder="메모 검색 (내용·날짜)" value="${esc(memoQuery)}" aria-label="메모 검색">
+        <span class="ph memo-count">${days.filter(d => memos[d]).length}개</span>
+      </div>
+      ${groups || `<section class="panel"><div class="empty">${q || memoYear || memoMonth ? '이 조건에 맞는 메모가 없습니다.' : '아직 쓴 메모가 없습니다. [메모 쓰기]나 일정 화면에서 날짜를 골라 써 보세요.'}</div></section>`}`;
   };
   function memoPageAdd() {
     const d = ($('#memoNewDay') && $('#memoNewDay').value) || dkey(now());
