@@ -3240,10 +3240,13 @@ function apiUpdateLeaveEvent(eventId, leave) {
     who = leaveNames_(leaveNameZone_(ev.getTitle()), names);
     if (!who.length) throw new Error('휴가 일정에서 팀원 이름을 찾지 못했습니다.');
   }
+  // 여러 명 중 일부만 고르면 그 사람들만 새 일정으로 떼어 낸다
+  let sel = Array.isArray(leave.who) && leave.who.length ? leaveNames_(leave.who.join(', '), who) : who.slice();
+  if (!sel.length) sel = who.slice();
   if (!me.isLeader && !me.isAdmin) {
-    if (who.length > 1) throw new Error('여러 명이 함께 적힌 휴가 일정은 팀장·관리자만 고칠 수 있습니다.');
-    if (who[0] !== me.name) throw new Error('본인 휴가만 고칠 수 있습니다.');
+    if (sel.length !== 1 || sel[0] !== me.name) throw new Error(who.length > 1 ? '여러 명이 함께 적힌 휴가는 본인 것만 고칠 수 있습니다. (팀장·관리자는 모두)' : '본인 휴가만 고칠 수 있습니다.');
   }
+  if (sel.length < who.length) return splitLeave_(ctx, me, { sh, rows, idxs, ev, cal, who, sel, type, start, end, memo, names });
 
   const title = leaveEventTitle_(type, who.map(n => shortName_(n, names)).join(', '), memo);
   const fix = e => {
@@ -3269,6 +3272,49 @@ function apiUpdateLeaveEvent(eventId, leave) {
   ctx._leaves = null;
   if (who.length === 1) return leavePatch_(ctx, who[0]);
   // 여러 명: 주간보고 휴무계획을 통째로 다시 읽는다
+  try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
+  return { members: forViewer_(me, cached_(CK.members(ctx), () => readMembers_(ctx))) };
+}
+
+/**
+ * 여러 명 휴가에서 고른 사람만 바꾸기: 고른 사람은 새 일정("오전반차] 지애"), 나머지는 원래 일정에 남긴다("연차] 소영").
+ * [휴가] 줄의 일정ID 칸도 새 일정에 맞춘다 (한 명이면 "일정ID", 여러 명이면 "일정ID#이름").
+ */
+function splitLeave_(ctx, me, o) {
+  if (!o.ev) throw new Error('캘린더 일정을 찾을 수 없어 일부만 바꿀 수 없습니다. 새로고침 후 다시 시도하세요.');
+  const rest = o.who.filter(n => o.sel.indexOf(n) < 0);
+  const short = list => list.map(n => o.names.indexOf(n) >= 0 ? shortName_(n, o.names) : n).join(', ');
+  const rowOf = n => o.idxs.find(i => String(o.rows[i][LCOL.NAME - 1]).trim() === n);
+  // 남는 사람: 원래 종류·메모 그대로
+  const restRow = rowOf(rest[0]);
+  const oldTitle = o.ev.getTitle();
+  const word = leaveWord_(oldTitle);
+  const tagged = String(oldTitle).match(/^\s*\[?\s*([가-힣]+)\s*\]/);
+  const oldType = restRow !== undefined ? String(o.rows[restRow][LCOL.TYPE - 1])
+    : tagged && LEAVE.TYPES.indexOf(tagged[1]) >= 0 ? tagged[1] : word ? leaveType_(word[1], oldTitle) : '기타';
+  const oldMemo = restRow !== undefined ? String(o.rows[restRow][LCOL.MEMO - 1] || '') : '';
+  let made;
+  try {
+    made = o.cal.createAllDayEvent(leaveEventTitle_(o.type, short(o.sel), o.memo), o.start, addDays(o.end, 1),
+      { description: [o.memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') });
+    tomato_(made);
+    o.ev.setTitle(leaveEventTitle_(oldType, short(rest), oldMemo));
+  } catch (e) {
+    throw new Error('캘린더 일정을 고칠 권한이 없습니다. 팀 캘린더 "일정 변경" 권한을 확인하세요.');
+  }
+  const idOf = (id, list, n) => list.length > 1 ? `${id}#${n}` : id;
+  o.idxs.forEach(i => {
+    const n = String(o.rows[i][LCOL.NAME - 1]).trim();
+    const r = i + 2;
+    if (o.sel.indexOf(n) >= 0) {
+      o.sh.getRange(r, LCOL.TYPE).setValue(o.type);
+      o.sh.getRange(r, LCOL.START, 1, 4).setValues([[o.start, o.end, o.memo, idOf(made.getId(), o.sel, n)]]);
+    } else {
+      o.sh.getRange(r, LCOL.EVENT).setValue(idOf(o.ev.getId(), rest, n));
+    }
+  });
+  bumpCalendar_();
+  ctx._leaves = null;
   try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
   return { members: forViewer_(me, cached_(CK.members(ctx), () => readMembers_(ctx))) };
 }

@@ -238,6 +238,9 @@
   .dd-row svg { color: var(--muted); }
   .later-row em small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); text-align: right; }
   .later-row[disabled] { cursor: default; }
+  .who-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip-check { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; cursor: pointer; }
+  .chip-check:has(input:disabled) { opacity: .6; cursor: default; }
   .hist-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 10px; }
   .hist-bar .field-in { width: auto; padding: 6px 10px; }
   .hist-bar select.field-in { width: auto !important; flex: none; padding-right: 28px; }
@@ -2152,7 +2155,12 @@
   /** 내가 등록한 일정(팀·채용·내 캘린더)과 내 휴가는 눌러서 고치거나 지운다 */
   function canEditEv(ev) {
     if (!ev || ev.ro || String(ev.id).startsWith('tmp-')) return false;
-    if (ev.kind === 'leave') return canDelLeaveEv(ev);
+    if (ev.kind === 'leave') {
+      if (canDelLeaveEv(ev)) return true;
+      // 여러 명 휴가는 그중 본인 것만 고칠 수 있다 (지우기는 팀장·관리자)
+      const ppl = leavePeople(ev);
+      return !ev.ro && !String(ev.id).startsWith('tmp-') && !!D.me.name && ppl.length > 1 && (ppl.indexOf(shortName(D.me.name)) >= 0 || ppl.indexOf(D.me.name) >= 0);
+    }
     if (['event', 'mine', 'recruit'].indexOf(ev.kind) < 0) return false;
     if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) { // 인사현황 일정 → 인사현황 수정 창
       const x = hrOfEvent(ev);
@@ -4197,15 +4205,21 @@
   }
   /** 휴가 고치기: 종류·기간·메모 (여러 명이 함께 적힌 일정은 지우기만) */
   function openLeaveEdit(ev) {
-    const many = String(ev.title).replace(/ \([^)]*\)$/, '').indexOf(', ') >= 0;
+    const people = leavePeople(ev);
+    const many = people.length > 1;
+    const boss = !!(D.me.isLeader || D.me.isAdmin);
+    const meShort = D.me.name ? shortName(D.me.name) : '';
     const t = (String(ev.title).match(/^(\S+)\] /) || [])[1] || '';
     const type = LEAVE_TYPES.indexOf(t) >= 0 ? t : '기타';
     const paren = type === '기타' ? (String(ev.title).match(/\(([^)]*)\)$/) || [])[1] : '';
     const memo = paren || String(ev.desc || '').split('\n').filter(l => l && l.indexOf('등록: ') !== 0)[0] || '';
     const start = evDay(ev), end = evEndDay(ev);
     openModal(`<h3>휴가 수정</h3>
-      <p class="sub">${many ? `${esc(String(ev.title).replace(/^\S+\] /, '').replace(/ \([^)]*\)$/, ''))} · 함께 적힌 사람 모두 바뀝니다. ` : ''}팀 캘린더와 주간보고 휴무계획이 같이 바뀝니다.</p>
+      <p class="sub">팀 캘린더와 주간보고 휴무계획이 같이 바뀝니다.</p>
       <form class="form" id="yForm" novalidate>
+        ${many ? `<div class="fld"><label>바꿀 사람 <span class="key-sub">${boss ? '일부만 고르면 그 사람만 따로 바뀌고, 나머지는 그대로 남습니다' : '본인 것만 바꿀 수 있습니다'}</span></label>
+          <div class="who-pick" id="yWho">${people.map(n => { const on = boss || n === meShort || n === D.me.name;
+            return `<label class="chip-check"><input type="checkbox" class="check" value="${esc(n)}" ${boss ? 'checked' : on ? 'checked disabled' : 'disabled'}> ${esc(n)}</label>`; }).join('')}</div></div>` : ''}
         <div class="fld"><label for="yType">종류</label><select class="field-in" id="yType">${LEAVE_TYPES.map(x => `<option ${x === type ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
         <div class="two">
           <div class="fld"><label for="yStart">시작일</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="yStart" value="${esc(start)}"></div>
@@ -4220,11 +4234,19 @@
       x.preventDefault();
       const lv = { type: $('#yType').value, start: $('#yStart').value.trim(), end: $('#yEnd').value.trim(), memo: $('#yMemo').value.trim() };
       const err = m => { $('#yErr').textContent = m; $('#yErr').hidden = false; };
+      if (many) {
+        lv.who = [...document.querySelectorAll('#yWho input:checked')].map(c => c.value);
+        if (!lv.who.length) return err('바꿀 사람을 골라 주세요.');
+      }
       if (!DATE_RE.test(lv.start)) return err('시작일을 확인해 주세요.');
       if (lv.end && (!DATE_RE.test(lv.end) || lv.end < lv.start)) return err('종료일을 확인해 주세요.');
       closeModal(); toast('저장하는 중…');
       call('apiUpdateLeaveEvent', ev.id, lv).then(data => { applyData(data); calChanged(); toast('휴가를 고쳤습니다.'); }).catch(fail);
     };
+  }
+  /** 휴가 일정에 적힌 사람들 ("연차] 지애, 소영 (사유)" → ['지애', '소영']) */
+  function leavePeople(ev) {
+    return String(ev.title).replace(/^\S+\]\s*/, '').replace(/ \([^)]*\)$/, '').split(/\s*,\s*/).filter(Boolean);
   }
   function deleteLeaveEvent(eventId) {
     const ev = Object.values(calCache).concat(upcoming ? [upcoming] : []).map(c => (c && c.events || []).find(e => e.id === eventId)).find(Boolean);
