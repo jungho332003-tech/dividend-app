@@ -585,11 +585,10 @@
   .memo-row:hover { background: var(--panel-2); }
   .memo-row b { font-size: 13px; white-space: nowrap; }
   .memo-row span { white-space: pre-line; font-size: 13px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  /* 팀 주간보고 | 회의록 나란히 (좁으면 위아래로) */
-  .report-split { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(400px, 1fr); gap: 16px; align-items: start; }
+  /* 팀 주간보고 아래에 회의록 */
+  .report-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
   .report-split .report.team { min-width: 700px; font-size: 13.5px; }
   .report-split .report.team th, .report-split .report.team td { padding: 8px 8px; }
-  @media (max-width: 1450px) { .report-split { grid-template-columns: minmax(0, 1fr); } }
   .min-top { flex-wrap: wrap; gap: 8px; }
   .min-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .min-actions select { width: auto; padding: 5px 8px; font-size: 12.5px; }
@@ -1686,7 +1685,7 @@
   }
   const minStatusCls = s => s === '완료' ? 'done' : s === '진행중' ? 'ing' : s === '진행예정' ? 'plan' : s === '보류' ? 'hold' : '';
 
-  /** 팀 주간보고 오른쪽 회의록 패널 */
+  /** 팀 주간보고 맨 아래 회의록 패널 */
   /** 회의록 탭: 왼쪽 회의 목록 + 오른쪽 회의록 (보기·수정·새 회의록) */
   VIEWS.minutes = function () {
     if (minDraft) return minEditorHtml();
