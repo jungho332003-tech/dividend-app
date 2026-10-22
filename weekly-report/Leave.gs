@@ -116,7 +116,7 @@ function apiAddLeave(leave) {
   }
   // 채용담당은 채용 캘린더에도 같이 넣는다
   let recEventId = '';
-  if (canRecruitCal_(ctx, me)) {
+  if (me.recruiter && canRecruitCal_(ctx, me)) { // 채용담당 본인 휴가만 (팀장 휴가는 팀 캘린더에만)
     try {
       recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();

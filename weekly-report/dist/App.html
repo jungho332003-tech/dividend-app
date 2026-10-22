@@ -2383,7 +2383,7 @@
             <span><i class="lg event"></i>${D.teamCalendar ? '팀 일정' : '일정'}</span>
             ${D.teamCalendar ? '<span><i class="lg mine"></i>내 일정 (나만 보기)</span>' : ''}
             <span><i class="lg leave"></i>휴가</span>
-            ${data && data.recruitCalendar ? (data.recruitCalendar.ok ? '<span><i class="lg recruit rec"></i>채용 캘린더 (채용담당만)</span>' : '<span class="lg-warn">채용 캘린더: 볼 권한이 없습니다</span>') : ''}
+            ${data && data.recruitCalendar ? (data.recruitCalendar.ok ? '<span><i class="lg recruit rec"></i>채용 캘린더 (채용담당·팀장)</span>' : '<span class="lg-warn">채용 캘린더: 볼 권한이 없습니다</span>') : ''}
             ${data && data.extraCalendars ? data.extraCalendars.map(x => x.ok ? `<span><i class="lg extra c${x.cal}"></i>${esc(x.name)}</span>` : `<span class="lg-warn">함께 볼 캘린더 ${x.cal + 1}: 볼 권한이 없습니다</span>`).join('') : ''}
           </div>
         </section>
@@ -2460,7 +2460,7 @@
     let target = eventTarget === 'recruit' && rec ? 'recruit' : both ? (eventTarget === 'recruit' ? 'team' : eventTarget) : 'mine';
     const where = () => {
       const text = kind === 'leave' ? (rec ? '팀 캘린더와 채용 캘린더에 함께 등록됩니다.' : '')
-        : target === 'recruit' ? '채용 캘린더에만 등록됩니다. (채용담당만 보입니다)'
+        : target === 'recruit' ? '채용 캘린더에만 등록됩니다. (채용담당·팀장만 보입니다)'
         : !both ? '내 구글 캘린더에 등록됩니다.'
         : target === 'mine' ? '나만 보는 비공개 일정으로 등록됩니다.'
         : rec && $('#eRec') && $('#eRec').checked ? '팀 캘린더와 채용 캘린더 두 곳에 등록됩니다.'
@@ -2977,10 +2977,10 @@
             <textarea class="field-in" id="sXcal" rows="3" placeholder="회사 공용 캘린더, 다른 팀 캘린더 등의 캘린더 ID&#10;예) company-all@group.calendar.google.com">${esc(st.extraCalendars || '')}</textarea>
             ${!res.extra ? (st.extraCalendars ? status(null) : '') : res.extra.map(x => `<div class="hint" style="color:${x.ok ? 'var(--ok-ink)' : 'var(--warn-ink)'}">${x.ok ? `✓ ${esc(x.name)}` : `${esc(x.id)} — ${esc(x.error)}`}</div>`).join('')}
             <div class="hint">[일정]에 팀 캘린더와 같이 색을 달리해서 보입니다. 팀원도 그 캘린더를 볼 수 있게 공유되어 있어야 각자 화면에 보입니다.</div></div>
-          <div class="fld"><label for="sRcal">채용 캘린더 ID <span class="hint" style="display:inline">(채용담당만 보고 등록)</span></label>
+          <div class="fld"><label for="sRcal">채용 캘린더 ID <span class="hint" style="display:inline">(채용담당·팀장이 보고 등록)</span></label>
             <input class="field-in" id="sRcal" value="${esc(st.recruitCalendarId || '')}" placeholder="예) recruit@group.calendar.google.com">
             ${st.recruitCalendarId ? status(res.recruit) : ''}
-            <div class="hint">[팀원 관리]에서 채용담당으로 표시한 사람(${esc((A.members || []).filter(m => m.recruit).map(m => m.name).join(', ') || '없음')})만 [일정]에서 보고 일정을 넣을 수 있습니다. 채용담당에게 "일정 변경" 권한으로 공유해 주세요. 인사현황의 인터뷰·입사도 이 캘린더에 같이 들어갑니다.</div></div>
+            <div class="hint">[팀원 관리]에서 채용담당으로 표시한 사람(${esc((A.members || []).filter(m => m.recruit).map(m => m.name).join(', ') || '없음')})과 팀장이 [일정]에서 보고 일정을 넣을 수 있습니다. 채용 안내 메일은 채용담당에게만 갑니다. 채용담당에게 "일정 변경" 권한으로 공유해 주세요. 인사현황의 인터뷰·입사도 이 캘린더에 같이 들어갑니다.</div></div>
           <div class="fld"><label for="sFolder">첨부 폴더 (폴더 주소 또는 ID)</label><input class="field-in" id="sFolder" value="${esc(st.folderId)}" placeholder="https://drive.google.com/drive/folders/... 를 그대로 붙여넣어도 됩니다">${status(res.folder)}</div>
           <div class="msg err" id="sErr" hidden></div>
           <div><button class="btn primary" id="sOk">저장</button></div>

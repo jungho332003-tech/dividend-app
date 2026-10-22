@@ -48,7 +48,7 @@ function initialize() {
     ]);
     sh.getRange('B8').setNote('드라이브에서 폴더를 열었을 때 주소 .../folders/ 뒤의 값. 팀원에게 편집자로 공유해야 합니다.');
     sh.getRange('B9').setNote('회사 공용 캘린더·다른 팀 캘린더 등 [일정]에 같이 보여줄 캘린더 ID. 쉼표로 여러 개 (최대 6개). 보기만 하고 일정은 넣지 않습니다.');
-    sh.getRange('B10').setNote('채용 전용 캘린더 ID. [팀원] 시트에서 채용담당=Y인 사람만 [일정]에서 보고 일정을 넣을 수 있습니다. 채용담당에게 "일정 변경" 권한으로 공유하세요.');
+    sh.getRange('B10').setNote('채용 전용 캘린더 ID. [팀원] 시트에서 채용담당=Y인 사람과 팀장이 [일정]에서 보고 일정을 넣을 수 있습니다. (채용 안내 메일은 채용담당에게만) 채용담당에게 "일정 변경" 권한으로 공유하세요.');
     sh.getRange('B3').setNumberFormat('yyyy-mm-dd (ddd)');
     sh.getRange('B7').setNote('구글 캘린더 > 설정 > 팀 캘린더 선택 > "캘린더 통합"의 캘린더 ID. 팀원에게 캘린더를 공유해야 합니다.');
     sh.getRange('B4').setNumberFormat('yyyy-mm-dd hh:mm').setNote('명절 등으로 이번 주만 마감이 다르면 입력. 예) 2026-09-23 14:00\n다음 주차로 넘어가면 자동으로 비워집니다.');

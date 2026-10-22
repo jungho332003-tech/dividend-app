@@ -339,7 +339,7 @@ function initialize() {
     ]);
     sh.getRange('B8').setNote('드라이브에서 폴더를 열었을 때 주소 .../folders/ 뒤의 값. 팀원에게 편집자로 공유해야 합니다.');
     sh.getRange('B9').setNote('회사 공용 캘린더·다른 팀 캘린더 등 [일정]에 같이 보여줄 캘린더 ID. 쉼표로 여러 개 (최대 6개). 보기만 하고 일정은 넣지 않습니다.');
-    sh.getRange('B10').setNote('채용 전용 캘린더 ID. [팀원] 시트에서 채용담당=Y인 사람만 [일정]에서 보고 일정을 넣을 수 있습니다. 채용담당에게 "일정 변경" 권한으로 공유하세요.');
+    sh.getRange('B10').setNote('채용 전용 캘린더 ID. [팀원] 시트에서 채용담당=Y인 사람과 팀장이 [일정]에서 보고 일정을 넣을 수 있습니다. (채용 안내 메일은 채용담당에게만) 채용담당에게 "일정 변경" 권한으로 공유하세요.');
     sh.getRange('B3').setNumberFormat('yyyy-mm-dd (ddd)');
     sh.getRange('B7').setNote('구글 캘린더 > 설정 > 팀 캘린더 선택 > "캘린더 통합"의 캘린더 ID. 팀원에게 캘린더를 공유해야 합니다.');
     sh.getRange('B4').setNumberFormat('yyyy-mm-dd hh:mm').setNote('명절 등으로 이번 주만 마감이 다르면 입력. 예) 2026-09-23 14:00\n다음 주차로 넘어가면 자동으로 비워집니다.');
@@ -1394,9 +1394,9 @@ function extraCalendarIds_(cfg) {
     .filter((v, i, a) => a.indexOf(v) === i && v !== team).slice(0, EXTRA_CAL_MAX);
 }
 
-/** 채용 캘린더: [팀원] 채용담당=Y 인 사람만 보고 쓴다 */
+/** 채용 캘린더: [팀원] 채용담당=Y 인 사람과 팀장이 보고 쓴다 (채용 안내 메일은 채용담당에게만) */
 function recruitCalendarId_(cfg) { return String(cfg[CFG.RECRUIT_CAL] || '').trim(); }
-function canRecruitCal_(ctx, me) { return !!(me && me.recruiter && recruitCalendarId_(ctx.cfg)); }
+function canRecruitCal_(ctx, me) { return !!(me && (me.recruiter || me.isLeader) && recruitCalendarId_(ctx.cfg)); }
 function getRecruitCalendar_(ctx) {
   const cal = CalendarApp.getCalendarById(recruitCalendarId_(ctx.cfg));
   if (!cal) throw new Error('채용 캘린더에 접근할 수 없습니다. 캘린더가 공유되어 있는지 관리자에게 확인하세요.');
@@ -1663,7 +1663,7 @@ function apiAddEvent(ev) {
   const ctx = sheetBase_(); // 캐시 (설정·팀원)
   const recruitOnly = ev.target === 'recruit';
   const alsoRecruit = !!ev.recruit && !recruitOnly && ev.target !== 'mine';
-  if ((recruitOnly || alsoRecruit) && !canRecruitCal_(ctx, currentMember_(ctx.members))) throw new Error('채용 캘린더는 채용담당만 쓸 수 있습니다.');
+  if ((recruitOnly || alsoRecruit) && !canRecruitCal_(ctx, currentMember_(ctx.members))) throw new Error('채용 캘린더는 채용담당과 팀장만 쓸 수 있습니다.');
   const mine = ev.target === 'mine';
   // 팀 일정은 "이름) 업무명" 으로 만든다 (구글 캘린더에서도 누가 넣었는지 보이게). 나만 보기 일정은 그대로
   const fullTitle = !mine && me.name && title.indexOf(me.name + ')') !== 0 ? `${me.name}) ${title}` : title;
@@ -2848,7 +2848,7 @@ function apiAddLeave(leave) {
   }
   // 채용담당은 채용 캘린더에도 같이 넣는다
   let recEventId = '';
-  if (canRecruitCal_(ctx, me)) {
+  if (me.recruiter && canRecruitCal_(ctx, me)) { // 채용담당 본인 휴가만 (팀장 휴가는 팀 캘린더에만)
     try {
       recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();
