@@ -454,6 +454,10 @@
   .mail-addr b { font-weight: 600; overflow-wrap: anywhere; }
   .mail-addr small { color: var(--muted); font-size: 12px; }
   .mail-add { display: flex; gap: 8px; margin-top: 10px; }
+  .mail-table { width: 100%; }
+  .mail-table td.mail-to { text-align: left; overflow-wrap: anywhere; }
+  .mail-table td.mail-to small { display: block; font-size: 11.5px; color: var(--muted); }
+  .mail-table .muted { color: var(--muted); }
   .mail-add .field-in { flex: 1; min-width: 0; }
   .ord { display: flex; align-items: center; gap: 4px; justify-content: center; }
   .ord-in { width: 52px; padding: 5px 4px !important; text-align: center; }
@@ -1247,7 +1251,7 @@
   const SUB_NAMES = {
     weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
     budget: () => (budgetTab === 'copy' && D.me.budgetManager ? '월별 정리' : budgetTab === 'setup' && canBudgetSetup() ? '예산 설정' : '신청 내역'),
-    admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', settings: '설정', guide: '접속 안내' })[adminTab],
+    admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', mail: '알림 메일', settings: '설정', guide: '접속 안내' })[adminTab],
   };
   /** 위쪽 줄: 현재 위치(경로) · 이번 주 · 내 이름 */
   function renderTopbar(initials, role) {
@@ -3034,8 +3038,8 @@
   VIEWS.admin = function () {
     if (!A) return '<div class="loading">관리 정보를 불러오는 중…</div>';
     const tab = (k, label) => `<button role="tab" aria-selected="${adminTab === k}" onclick="adminTab='${k}';render()">${label}</button>`;
-    const body = { members: adminMembers, menus: adminMenus, settings: adminSettings, guide: adminGuide }[adminTab]();
-    return `<div class="subtabs" role="tablist">${tab('members', '팀원·권한')}${tab('menus', '메뉴 권한')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
+    const body = { members: adminMembers, menus: adminMenus, mail: adminMail, settings: adminSettings, guide: adminGuide }[adminTab]();
+    return `<div class="subtabs" role="tablist">${tab('members', '팀원·권한')}${tab('menus', '메뉴 권한')}${tab('mail', '알림 메일')}${tab('settings', '설정')}${tab('guide', '접속 안내')}</div>${body}`;
   };
 
   function adminMembers() {
@@ -3216,6 +3220,25 @@
       .catch(err => { $('#sOk').disabled = false; $('#sErr').textContent = err.message || String(err); $('#sErr').hidden = false; });
   });
 
+  /** 팀원별 알림 메일 설정 보기 (각자 오른쪽 위 이름 → 내 알림 메일에서 바꾼 것) */
+  function adminMail() {
+    const list = A.mailPrefs || [];
+    const cell = (p, k) => p.kinds.indexOf(k) < 0 ? '<td class="c muted" data-label="">–</td>'
+      : p.off.indexOf(k) >= 0 ? `<td class="c" data-label=""><span class="chip no">${ic('x')}끔</span></td>` : `<td class="c" data-label=""><span class="chip ok">${ic('check')}받음</span></td>`;
+    const offCount = list.filter(p => p.off.some(k => p.kinds.indexOf(k) >= 0)).length;
+    return `
+      <div class="head"><div><h1>알림 메일</h1><p>팀원이 각자 설정한 알림 메일 (오른쪽 위 이름 → 내 알림 메일). 관리자는 보기만 합니다.</p></div></div>
+      <section class="panel">
+        <p class="report-note">${list.length}명${offCount ? ` · 일부를 끈 사람 ${offCount}명` : ' · 모두 받는 중'} · – 는 해당 없는 알림</p>
+        <div class="table-wrap"><table class="report mail-table">
+          <thead><tr><th>이름</th><th>받는 주소</th><th>주간업무 미작성 알림</th><th>취합 완료 (팀장)</th><th>채용 안내</th></tr></thead>
+          <tbody>${list.map(p => `<tr>
+            <td class="nm" data-label="이름">${esc(p.name)}</td>
+            <td data-label="받는 주소" class="mail-to">${p.to ? esc(p.to).split(',').join('<br>') : '<span class="muted">(없음)</span>'}${p.custom ? '<small>직접 설정</small>' : ''}</td>
+            ${cell(p, 'remind')}${cell(p, 'close')}${cell(p, 'recruit')}</tr>`).join('')}</tbody>
+        </table></div>
+      </section>`;
+  }
   function adminGuide() {
     const url = A.webAppUrl || '(아직 웹앱으로 배포되지 않았습니다)';
     const msg = `[${D.team} 업무관리 안내]\n아래 주소로 접속해 주세요. (회사 구글 계정으로 로그인)\n${url}\n\n· 처음 접속하면 "권한 검토" 화면이 한 번 나옵니다. "허용"을 눌러주세요.\n· "Google에서 확인하지 않은 앱" 경고가 나오면 "고급 → 이동"을 누르면 됩니다.\n· 주간업무는 매주 목요일 오후 ${A.settings.deadlineHour > 12 ? A.settings.deadlineHour - 12 : A.settings.deadlineHour}시까지 작성해 주세요.`;

@@ -3847,8 +3847,23 @@ function adminData_(ctx, useCache) {
       folderId: String(cfg[CFG.DRIVE_FOLDER] || ''),
     },
     webAppUrl: ScriptApp.getService().getUrl() || '',
+    mailPrefs: adminMailPrefs_(ctx),
     status: useCache ? cachedOnly_('access') : freshStatus_(ctx),
   };
+}
+
+/** 팀원별 알림 메일 설정 (관리자 보기용): 해당 종류, 끈 종류, 받는 주소, 직접 바꿨는지 */
+function adminMailPrefs_(ctx) {
+  const pref = mailPrefMap_();
+  return ctx.members.filter(m => m.name).map(m => {
+    const key = String(m.email || '').toLowerCase();
+    const p = pref[key] || null;
+    const kinds = [];
+    if (m.write) kinds.push('remind');
+    if (m.role === '팀장') kinds.push('close');
+    if (m.recruit) kinds.push('recruit');
+    return { name: m.name, kinds: kinds, off: p ? p.off || [] : [], to: mailTo_(m), custom: !!(p && p.to && p.to.length) };
+  });
 }
 
 function freshStatus_(ctx) {
