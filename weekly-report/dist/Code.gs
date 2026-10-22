@@ -1616,7 +1616,7 @@ function apiCalendar(startIso, endIso, fresh) {
 function leaveTagTitle_(title) {
   const m = /^\s*\[?\s*([가-힣]+?)\s*\]\s*(.+)$/.exec(String(title || ''));
   if (!m) return '';
-  const w = m[1].match(LEAVE.WORDS);
+  const w = m[1].match(LEAVE.WORDS); // 다른 캘린더는 이름 확인 없이 보므로 출장·교육·기타 태그는 휴가로 보지 않는다
   return w && w[0] === m[1] ? leaveLabel_(leaveType_(w[1], m[1]), m[2].trim()) : '';
 }
 
@@ -2856,7 +2856,18 @@ const LEAVE = {
   TYPES: ['연차', '오전반차', '오후반차', '오전반반차', '오후반반차', '정기휴가', '경조휴가', '대체휴무', '출장', '교육', '기타'],
   // 캘린더 일정 제목에서 휴가로 볼 단어 (긴 것부터)
   WORDS: /(오전반반차|오후반반차|반반차|오전반차|오후반차|반차|정기휴가|경조휴가|하계휴가|여름휴가|대체휴무|연차|휴가|휴무)/,
+  // 이 단어들은 제목 맨 앞 "출장] 정호"처럼 태그로 쓸 때만 휴가로 본다 (본문에 흔히 나오는 말이라)
+  TAG_ONLY: ['출장', '교육', '기타'],
 };
+
+/** 제목에서 휴가 종류 단어 → match 결과처럼 [전체, 단어] (없으면 null) */
+function leaveWord_(title) {
+  const t = String(title || '');
+  const w = t.match(LEAVE.WORDS);
+  if (w) return w;
+  const tag = t.match(/^\s*\[?\s*([가-힣]+)\s*\]/);
+  return tag && LEAVE.TAG_ONLY.indexOf(tag[1]) >= 0 ? [tag[1], tag[1]] : null;
+}
 
 const LCOL = { ID: 1, DATE: 2, NAME: 3, TYPE: 4, START: 5, END: 6, MEMO: 7, EVENT: 8, SOURCE: 9, DELETED: 10, REC_EVENT: 11 };
 
@@ -3083,7 +3094,7 @@ function syncLeaveEvents_(ctx, events, from, to, cal, opt) {
   const leavesOfEvent = ev => {
     const out = {};
     const title = ev.getTitle();
-    const word = title.match(LEAVE.WORDS);
+    const word = leaveWord_(title);
     if (!word) return out;
     const who = leaveNames_(title, names);
     const allDay = ev.isAllDayEvent();
@@ -3261,7 +3272,7 @@ function teamCalendarSet_(ctx) {
  * 이름은 성을 뺀 이름 (같은 이름이 둘이면 성까지). 휴가 일정이 아니면 '' 를 돌려준다.
  */
 function leaveTitle_(title, names) {
-  const word = String(title).match(LEAVE.WORDS);
+  const word = leaveWord_(title);
   const who = leaveNames_(title, names);
   if (!word || !who.length) return '';
   const type = leaveType_(word[1], title);
@@ -3286,7 +3297,7 @@ function shortName_(name, names) {
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */
 function isLeaveTitle_(title, names) {
-  return LEAVE.WORDS.test(title) && !!leaveName_(title, names);
+  return !!leaveWord_(title) && !!leaveName_(title, names);
 }
 
 /**

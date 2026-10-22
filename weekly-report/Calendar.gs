@@ -180,7 +180,7 @@ function apiCalendar(startIso, endIso, fresh) {
 function leaveTagTitle_(title) {
   const m = /^\s*\[?\s*([가-힣]+?)\s*\]\s*(.+)$/.exec(String(title || ''));
   if (!m) return '';
-  const w = m[1].match(LEAVE.WORDS);
+  const w = m[1].match(LEAVE.WORDS); // 다른 캘린더는 이름 확인 없이 보므로 출장·교육·기타 태그는 휴가로 보지 않는다
   return w && w[0] === m[1] ? leaveLabel_(leaveType_(w[1], m[1]), m[2].trim()) : '';
 }
 
