@@ -416,6 +416,11 @@
   .edit-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .items { display: flex; flex-direction: column; gap: 8px; }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
+  .ord { display: flex; align-items: center; gap: 4px; justify-content: center; }
+  .ord-in { width: 52px; padding: 5px 4px !important; text-align: center; }
+  .ord-btns { display: inline-flex; }
+  .ord-btns .icon-btn { width: 26px; height: 26px; }
+  .ord-btns .icon-btn:disabled { opacity: .3; cursor: default; }
   .key-sub { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 4px; }
   .toggle.imp-btn { color: var(--muted); width: 38px; padding: 0; font-size: 17px; line-height: 1; }
   .toggle.imp-btn[aria-pressed="true"] { background: #fff4d6; color: #a15c00; border-color: #e0a526; font-weight: 700; }
@@ -2729,6 +2734,10 @@
       const st = A.status && A.status.people[m.name];
       const saved = A.members.some(x => x.name === m.name && x.email === m.email);
       return `<tr>
+        <td data-label="순서" class="ord-cell"><div class="ord">
+          <input class="field-in ord-in" type="number" min="1" max="${aDraft.length}" value="${i + 1}" onchange="aMoveTo(${i}, this.value)" aria-label="${esc(m.name || '새 팀원')} 표시 순서">
+          <span class="ord-btns"><button class="icon-btn" onclick="aMove(${i},-1)" ${i === 0 ? 'disabled' : ''} title="위로" aria-label="위로">↑</button><button class="icon-btn" onclick="aMove(${i},1)" ${i === aDraft.length - 1 ? 'disabled' : ''} title="아래로" aria-label="아래로">↓</button></span>
+        </div></td>
         <td data-label="이름"><input class="field-in" style="padding:5px 8px;min-width:80px" value="${esc(m.name)}" oninput="aEdit(${i},'name',this.value)" aria-label="이름"></td>
         <td data-label="이메일 (구글 계정)" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.email)}" placeholder="구글 계정 이메일" oninput="aEdit(${i},'email',this.value)" aria-label="이메일 (구글 계정)"></td>
         <td data-label="알림메일 (회사)" class="c-wide"><input class="field-in" style="padding:5px 8px;min-width:190px" value="${esc(m.notify || '')}" placeholder="비우면 구글 계정으로" oninput="aEdit(${i},'notify',this.value)" aria-label="알림메일 (회사 메일)"></td>
@@ -2744,7 +2753,7 @@
     }).join('');
     return `
       <div class="head">
-        <div><h1>팀원·권한</h1><p>등록 후 [권한 한 번에 적용] → 시트·폴더·캘린더 공유와 잠금 자동 처리</p></div>
+        <div><h1>팀원·권한</h1><p>등록 후 [권한 한 번에 적용] → 시트·폴더·캘린더 공유와 잠금 자동 처리 · <b>순서</b>대로 주간업무보고에 나옵니다</p></div>
         <div class="head-actions">
           <button class="btn" onclick="refreshAdmin()" ${statusLoading ? 'disabled' : ''}>${ic('refresh', 'sm')}${statusLoading ? '확인 중…' : '상태 새로고침'}</button>
           <button class="btn primary" onclick="applyAll()">${ic('shield', 'sm')}권한 한 번에 적용</button>
@@ -2759,7 +2768,7 @@
       <section class="panel">
         <div class="table-wrap">
           <table class="t cards admin-cards">
-            <thead><tr><th>이름</th><th>이메일 (구글 계정)</th><th>알림메일 (회사)</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th style="text-align:center" title="입사 70일 수습평가·인터뷰 전날 안내 메일을 받습니다">채용<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
+            <thead><tr><th title="주간업무보고·팀 주간보고·회의 모드에 나오는 순서">순서</th><th>이름</th><th>이메일 (구글 계정)</th><th>알림메일 (회사)</th><th>역할</th><th style="text-align:center">주간보고<br>작성</th><th style="text-align:center">관리자</th><th style="text-align:center">예산<br>담당</th><th style="text-align:center" title="입사 70일 수습평가·인터뷰 전날 안내 메일을 받습니다">채용<br>담당</th><th>스프레드시트</th><th>입력시트</th><th>첨부 폴더</th><th>팀 캘린더</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
@@ -2774,6 +2783,20 @@
     aDirty = true;
     const bar = $('#aBar');
     if (bar) bar.hidden = false;
+  }
+  /** 표시 순서: 팀 주간보고·회의 모드·주간보고 시트에 이 순서대로 나온다 (저장해야 반영) */
+  function aMove(i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= aDraft.length) return;
+    const t = aDraft[i]; aDraft[i] = aDraft[j]; aDraft[j] = t;
+    aDirty = true; render();
+  }
+  function aMoveTo(i, n) {
+    const j = Math.max(1, Math.min(aDraft.length, Math.round(Number(n)) || i + 1)) - 1;
+    if (j === i) { render(); return; }
+    const [m] = aDraft.splice(i, 1);
+    aDraft.splice(j, 0, m);
+    aDirty = true; render();
   }
   function aAdd() {
     aDraft.push({ order: aDraft.length + 1, name: '', email: '', role: A.roles[0], write: true, admin: false, budget: false, recruit: false, notify: '' });
