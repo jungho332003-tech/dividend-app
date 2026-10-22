@@ -58,6 +58,8 @@ function readHr_(ctx) {
       when: hrPeriod_(start, end),
       memo: String(r[HCOL.MEMO - 1] || ''),
       imported: hrImported_(r), // 채용 캘린더에서 가져온 항목
+      ev: String(r[HCOL.EVENT - 1] || ''), // 캘린더에서 눌러 고칠 때 찾는 용도
+      rec: String(r[HCOL.REC_EVENT - 1] || ''),
       week: week,
       weekLabel: list === out.later ? getWeekInfo(mondayOf(start), ctx.holidays).label : '',
     });

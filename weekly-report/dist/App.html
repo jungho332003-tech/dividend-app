@@ -2147,8 +2147,9 @@
   function canEditEv(ev) {
     if (!ev || ev.ro || String(ev.id).startsWith('tmp-')) return false;
     if (ev.kind === 'leave') return canDelLeaveEv(ev);
-    if (['event', 'mine', 'recruit'].indexOf(ev.kind) < 0 || !can('calendar')) return false;
-    if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) return false; // 인사현황 일정은 인사현황에서
+    if (['event', 'mine', 'recruit'].indexOf(ev.kind) < 0) return false;
+    if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) { const x = hrOfEvent(ev); return !!x && hrCanEdit(x); } // 인사현황 일정 → 인사현황 수정 창
+    if (!can('calendar')) return false;
     return ev.kind === 'mine' || !!D.me.isAdmin || (!!D.me.name && ev.by === D.me.name);
   }
   function agRow(ev) {
@@ -4060,6 +4061,14 @@
     upcoming = null;
     setTimeout(() => { const m = parseD(day); if (calCache[day.slice(0, 7)]) calCache[day.slice(0, 7)].stale = true; loadMonth(true, new Date(m.getFullYear(), m.getMonth(), 1)); }, 300);
   }
+  /** 캘린더의 인사현황 일정("입사] 홍길동") → 인사현황 항목 (일정 ID로, 없으면 제목·날짜로) */
+  function hrOfEvent(ev) {
+    if (!D.hr || !/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) return null;
+    const all = D.hr.thisWeek.concat(D.hr.nextWeek, D.hr.later || []);
+    const raw = String(ev.title).replace(/^[^\s)]+\)\s*/, '').trim();
+    return all.find(x => (x.ev && x.ev === ev.id) || (x.rec && x.rec === ev.id))
+      || all.find(x => raw === `${x.category}] ${x.target}` && x.start === evDay(ev)) || null;
+  }
   function findCalEv(id) {
     return Object.values(calCache).concat(upcoming ? [upcoming] : []).map(c => (c && c.events || []).find(e => e.id === id)).find(Boolean);
   }
@@ -4075,6 +4084,8 @@
     const ev = findCalEv(id);
     if (!canEditEv(ev)) return;
     if (ev.kind === 'leave') return openLeaveEdit(ev);
+    const hrx = hrOfEvent(ev);
+    if (hrx) return openHrForm(hrx.id);
     const where = evWhere(ev);
     const s = parseD(ev.start), e = parseD(ev.end);
     openModal(`<h3>일정 수정</h3>

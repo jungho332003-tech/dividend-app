@@ -2270,6 +2270,8 @@ function readHr_(ctx) {
       when: hrPeriod_(start, end),
       memo: String(r[HCOL.MEMO - 1] || ''),
       imported: hrImported_(r), // 채용 캘린더에서 가져온 항목
+      ev: String(r[HCOL.EVENT - 1] || ''), // 캘린더에서 눌러 고칠 때 찾는 용도
+      rec: String(r[HCOL.REC_EVENT - 1] || ''),
       week: week,
       weekLabel: list === out.later ? getWeekInfo(mondayOf(start), ctx.holidays).label : '',
     });
@@ -2974,6 +2976,11 @@ function leaveNameZone_(title) {
   return /^\s*\[?\s*기타\s*\]/.test(t) ? t.replace(/\([^)]*\)\s*$/, '') : t;
 }
 
+/** 웹앱에서 등록·수정한 휴가 일정은 토마토색 (구글 캘린더 색 11) */
+function tomato_(ev) {
+  try { ev.setColor(CalendarApp.EventColor.RED); } catch (e) { /* 색은 못 바꿔도 일정은 그대로 */ }
+}
+
 /** 제목에서 휴가 종류 단어 → match 결과처럼 [전체, 단어] (없으면 null) */
 function leaveWord_(title) {
   const t = String(title || '');
@@ -3077,6 +3084,7 @@ function apiAddLeave(leave) {
       const ev = getTeamCalendar_().createAllDayEvent(leaveEventTitle_(type, shortName_(me.name, ctx.members.map(m => m.name)), memo), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') });
       eventId = ev.getId();
+      tomato_(ev);
     } catch (e) {
       warning = '팀 캘린더에 일정을 만들 권한이 없어 주간보고에만 반영했습니다.';
     }
@@ -3086,7 +3094,9 @@ function apiAddLeave(leave) {
   if (me.recruiter && canRecruitCal_(ctx, me)) { // 채용담당 본인 휴가만 (팀장 휴가는 팀 캘린더에만)
     try {
       recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveEventTitle_(type, shortName_(me.name, ctx.members.map(m => m.name)), memo), start, addDays(end, 1),
-        { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();
+        { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') });
+      tomato_(recEventId);
+      recEventId = recEventId.getId();
     } catch (e) {
       warning = warning || '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.';
     }
@@ -3198,6 +3208,7 @@ function apiUpdateLeaveEvent(eventId, leave) {
 
   const title = leaveEventTitle_(type, shortName_(name, names), memo);
   const fix = e => {
+    tomato_(e);
     e.setTitle(title);
     e.setAllDayDates(start, addDays(end, 1));
     const keep = htmlText_(e.getDescription()).split('\n').filter(l => l.indexOf('등록: ') === 0);
