@@ -333,6 +333,103 @@ function apiAddEvent(ev) {
   return warning ? { warning: warning } : true;
 }
 
+/* ---------- 내가 등록한 일정 고치기·지우기 ---------- */
+
+/** where: 'team' | 'mine' | 'recruit' → 캘린더 */
+function eventCalendar_(ctx, me, where) {
+  if (where === 'mine') return CalendarApp.getDefaultCalendar();
+  if (where === 'recruit') {
+    if (!canRecruitCal_(ctx, me)) throw new Error('채용 캘린더는 채용담당과 팀장만 쓸 수 있습니다.');
+    return getRecruitCalendar_(ctx);
+  }
+  return getTeamCalendar_();
+}
+
+/** 이 일정을 내가 등록했는지: "이름) 제목" 이거나 설명에 "등록: 이름" (내 캘린더는 모두 내 것, 관리자는 모두) */
+function ownsEvent_(me, ev, where) {
+  if (where === 'mine' || me.isAdmin) return true;
+  if (!me.name) return false;
+  const desc = htmlText_(ev.getDescription());
+  return ev.getTitle().indexOf(me.name + ')') === 0 || desc.split('\n').some(l => l.indexOf('등록: ' + me.name) === 0);
+}
+
+/** 웹앱 휴가·인사현황 일정은 각자 화면에서 고친다 */
+function plainEventTitle_(title) {
+  const t = String(title || '').replace(/^[^\s)]+\)\s*/, '');
+  return !/^\s*\[?\s*[가-힣*\s]+\]/.test(t);
+}
+
+/** 팀 캘린더에 넣으면서 채용 캘린더에도 같이 넣은 같은 일정 (제목·시작·끝이 같은 것) */
+function twinEvents_(ctx, me, ev) {
+  if (!canRecruitCal_(ctx, me)) return [];
+  try {
+    const s = ev.getStartTime(), e = ev.getEndTime();
+    return getRecruitCalendar_(ctx).getEvents(s, e).filter(x => x.getTitle() === ev.getTitle()
+      && x.getStartTime().getTime() === s.getTime() && x.getEndTime().getTime() === e.getTime());
+  } catch (err) { return []; }
+}
+
+function findMyEvent_(id, where) {
+  const ctx = sheetBase_();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'calendar');
+  const cal = eventCalendar_(ctx, me, where);
+  const ev = cal.getEventById(String(id || ''));
+  if (!ev) throw new Error('일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
+  if (!ownsEvent_(me, ev, where)) throw new Error('내가 등록한 일정만 고치거나 지울 수 있습니다.');
+  if (!plainEventTitle_(ev.getTitle())) throw new Error('휴가·인사현황 일정은 각 화면에서 고쳐 주세요.');
+  return { ctx: ctx, me: me, ev: ev };
+}
+
+/** ev: { id, where, title, date:'yyyy-mm-dd', allDay, startTime, endTime, location, desc } */
+function apiUpdateEvent(x) {
+  const title = String(x.title || '').trim();
+  const m = String(x.date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!title || !m) throw new Error('제목과 날짜를 입력해 주세요.');
+  const { ctx, me, ev } = findMyEvent_(x.id, x.where);
+  const twins = x.where === 'team' ? twinEvents_(ctx, me, ev) : [];
+  // 앞의 "이름) " 과 설명의 "등록: 이름" 은 그대로 둔다
+  const prefix = (ev.getTitle().match(/^[^\s)]+\)\s*/) || [''])[0];
+  const fullTitle = prefix + title.replace(/^[^\s)]+\)\s*/, '');
+  const keep = htmlText_(ev.getDescription()).split('\n').filter(l => l.indexOf('등록: ') === 0);
+  const desc = [String(x.desc || '').trim()].concat(keep).filter(Boolean).join('\n');
+  const day = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const days = ev.isAllDayEvent() ? Math.max(1, Math.round((ev.getAllDayEndDate() - ev.getAllDayStartDate()) / 86400000)) : 1;
+  const at = (t, fallback) => {
+    const [h, mi] = String(t || fallback).split(':').map(Number);
+    const d = new Date(day.getTime());
+    d.setHours(h || 0, mi || 0, 0, 0);
+    return d;
+  };
+  const apply = e => {
+    e.setTitle(fullTitle);
+    e.setLocation(String(x.location || '').trim());
+    e.setDescription(desc);
+    if (x.allDay) {
+      if (days > 1) e.setAllDayDates(day, addDays(day, days)); else e.setAllDayDate(day);
+    } else {
+      const s = at(x.startTime, '09:00');
+      let en = at(x.endTime, '10:00');
+      if (en <= s) en = new Date(s.getTime() + 3600 * 1000);
+      e.setTime(s, en);
+    }
+  };
+  try { apply(ev); } catch (err) { throw new Error('일정을 고칠 권한이 없습니다. 캘린더 "일정 변경" 권한을 확인하세요.'); }
+  let warning = '';
+  twins.forEach(t => { try { apply(t); } catch (err) { warning = '팀 캘린더는 고쳤지만 채용 캘린더 일정은 권한이 없어 고치지 못했습니다.'; } });
+  bumpCalendar_();
+  return warning ? { warning: warning } : true;
+}
+
+function apiDeleteEvent(id, where) {
+  const { ctx, me, ev } = findMyEvent_(id, where);
+  const twins = where === 'team' ? twinEvents_(ctx, me, ev) : [];
+  try { ev.deleteEvent(); } catch (err) { throw new Error('일정을 지울 권한이 없습니다. 캘린더 "일정 변경" 권한을 확인하세요.'); }
+  twins.forEach(t => { try { t.deleteEvent(); } catch (err) { /* 권한 없음 */ } });
+  bumpCalendar_();
+  return true;
+}
+
 /* ---------- 내 메모 (일별, 나만 보기) ----------
  * 각자 자기 구글 드라이브의 "업무관리 - 내 메모" 파일(JSON)에 저장한다.
  *  → 웹앱이 "접속한 사용자" 권한으로 돌아서 본인 드라이브에만 생기고, 다른 사람(관리자 포함)은 볼 수 없다.

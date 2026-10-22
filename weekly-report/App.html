@@ -579,6 +579,9 @@
   .ag.has-del { position: relative; padding-right: 34px; }
   .ag .ag-del { position: absolute; right: 0; top: 8px; color: var(--muted); }
   .ag .ag-del:hover { color: var(--warn-ink); }
+  .ag.editable { cursor: pointer; margin: 0 -8px; padding-left: 8px; padding-right: 8px; }
+  .ag.editable:hover { background: var(--panel-2); }
+  .ag.editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .memo-head .btn.ghost { margin-left: 4px; }
   .memo-list { display: flex; flex-direction: column; max-height: 55vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
   .memo-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 10px; align-items: start; text-align: left; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line); background: var(--panel); color: inherit; font: inherit; cursor: pointer; }
@@ -2115,8 +2118,11 @@
       // 기타 휴무: 제목에 나온 사유는 설명에서 뺀다
       const why = e.kind === 'leave' && e.desc && String(e.title).match(/^기타\] .*\(([^)]*)\)$/);
       if (why) e.desc = String(e.desc).split('\n').filter(l => l.trim() !== why[1].trim()).join('\n').trim();
+      if (e.kind === 'recruit' || e.kind === 'event') { const p = String(e.title).match(/^([^\s)]+)\) /); if (p) e.by = p[1]; }
+      if (e.kind === 'recruit' && e.desc) { const r = String(e.desc).match(/(?:^|\n)등록: ([^\s(]+)/); if (r) e.by = r[1]; }
       if (e.kind !== 'event' || !e.desc) return;
       const m = String(e.desc).match(/(?:^|\n)등록: ([^\s(]+)/);
+      if (m) e.by = m[1];
       if (!m) return;
       if (String(e.title).indexOf(m[1] + ')') !== 0) e.title = `${m[1]}) ${e.title}`;
       e.desc = String(e.desc).replace(/(?:^|\n)등록: [^\n]*/, '').trim();
@@ -2133,13 +2139,23 @@
   }
   function canDelLeaveEv(ev) {
     // 여러 명이 함께 적힌 휴가 일정("[오전반차] 김지애, 이소영")은 팀장·관리자만 (각자 것은 내 주간업무 휴무 일정에서 지운다)
-    const many = String(ev.title).indexOf(', ') >= 0;
-    return ev.kind === 'leave' && !ev.ro && !String(ev.id).startsWith('tmp-') && (D.me.isLeader || D.me.isAdmin || (!many && D.me.name && (String(ev.title).indexOf(D.me.name) >= 0 || String(ev.title).endsWith('] ' + shortName(D.me.name)))));
+    const t = String(ev.title).replace(/^(기타\] [^(]+?) \([^)]*\)$/, '$1'); // 기타] 정호 (사유) → 기타] 정호
+    const many = t.indexOf(', ') >= 0;
+    return ev.kind === 'leave' && !ev.ro && !String(ev.id).startsWith('tmp-') && (D.me.isLeader || D.me.isAdmin || (!many && D.me.name && (t.indexOf(D.me.name) >= 0 || t.endsWith('] ' + shortName(D.me.name)))));
+  }
+  /** 내가 등록한 일정(팀·채용·내 캘린더)과 내 휴가는 눌러서 고치거나 지운다 */
+  function canEditEv(ev) {
+    if (!ev || ev.ro || String(ev.id).startsWith('tmp-')) return false;
+    if (ev.kind === 'leave') return canDelLeaveEv(ev);
+    if (['event', 'mine', 'recruit'].indexOf(ev.kind) < 0 || !can('calendar')) return false;
+    if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) return false; // 인사현황 일정은 인사현황에서
+    return ev.kind === 'mine' || !!D.me.isAdmin || (!!D.me.name && ev.by === D.me.name);
   }
   function agRow(ev) {
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
-    const del = canDelLeaveEv(ev) ? `<button class="icon-btn ag-del" onclick="deleteLeaveEvent('${esc(ev.id)}')" title="휴가 지우기" aria-label="${esc(ev.title)} 지우기">${ic('x', 'sm')}</button>` : '';
-    return `<div class="ag${del ? ' has-del' : ''}">${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${ev.kind === 'extra' ? `<span class="cal-tag c${ev.cal}">${esc(ev.calName || '')}</span>` : ''}${ev.kind === 'recruit' ? '<span class="cal-tag rec">채용</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(ev.desc && /\n|^·/.test(ev.desc) ? '\n' : ' · '))}</div>` : ''}</div></div>`;
+    const del = canDelLeaveEv(ev) ? `<button class="icon-btn ag-del" onclick="event.stopPropagation();deleteLeaveEvent('${esc(ev.id)}')" title="휴가 지우기" aria-label="${esc(ev.title)} 지우기">${ic('x', 'sm')}</button>` : '';
+    const edit = canEditEv(ev);
+    return `<div class="ag${del ? ' has-del' : ''}${edit ? ' editable' : ''}"${edit ? ` role="button" tabindex="0" title="눌러서 수정·삭제" onclick="openEvEdit('${esc(ev.id)}')" onkeydown="if(event.key==='Enter'&&event.target===this)openEvEdit('${esc(ev.id)}')"` : ''}>${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${ev.kind === 'extra' ? `<span class="cal-tag c${ev.cal}">${esc(ev.calName || '')}</span>` : ''}${ev.kind === 'recruit' ? '<span class="cal-tag rec">채용</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(ev.desc && /\n|^·/.test(ev.desc) ? '\n' : ' · '))}</div>` : ''}</div></div>`;
   }
   function dayLabel(k) { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAY[d.getDay()]})`; }
 
@@ -2708,7 +2724,7 @@
         showNow({ id: tempId, title: leaveCalTitle(leave.type, D.me.name, leave.memo), start: leave.start, end: dkey(addD(parseD(leave.end || leave.start), 1)),
           allDay: true, location: '', desc: '', kind: 'leave' }, leave.start);
         call('apiAddLeave', leave)
-          .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : `${leave.type} 등록 완료`); })
+          .then(data => { applyData(data); if (page !== 'calendar') render(); calReloadSoon(leave.start); toast(data && data.warning ? data.warning : `${leave.type} 등록 완료`); })
           .catch(undo);
         return;
       }
@@ -2724,7 +2740,7 @@
       showNow({ id: tempId, title: teamEv && D.me.name && ev.title.indexOf(D.me.name + ')') !== 0 ? `${D.me.name}) ${ev.title}` : ev.title, allDay: ev.allDay, location: ev.location, desc: ev.desc, kind: evKind,
         start: ev.allDay ? ev.date : s0.toISOString(), end: ev.allDay ? dkey(addD(parseD(ev.date), 1)) : e0.toISOString() }, ev.date);
       call('apiAddEvent', ev)
-        .then(r => { toast(r && r.warning ? r.warning : target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : target === 'recruit' ? '채용 캘린더에 추가했습니다.' : ev.recruit ? '팀 캘린더와 채용 캘린더에 추가했습니다.' : '일정을 추가했습니다.'); })
+        .then(r => { calReloadSoon(ev.date); toast(r && r.warning ? r.warning : target === 'mine' && both ? '내 캘린더에 추가했습니다. (나만 보기)' : target === 'recruit' ? '채용 캘린더에 추가했습니다.' : ev.recruit ? '팀 캘린더와 채용 캘린더에 추가했습니다.' : '일정을 추가했습니다.'); })
         .catch(undo);
     };
   }
@@ -4039,6 +4055,99 @@
   }
 
   /** 일정 화면에서 휴가 지우기: 화면에서 먼저 빼고, 서버에서 [휴가]·캘린더를 지운다 (실패하면 되돌린다) */
+  /** 방금 등록한 일정의 진짜 ID를 받아 오도록 그 달을 조용히 다시 불러온다 (그래야 눌러서 고칠 수 있다) */
+  function calReloadSoon(day) {
+    upcoming = null;
+    setTimeout(() => { const m = parseD(day); if (calCache[day.slice(0, 7)]) calCache[day.slice(0, 7)].stale = true; loadMonth(true, new Date(m.getFullYear(), m.getMonth(), 1)); }, 300);
+  }
+  function findCalEv(id) {
+    return Object.values(calCache).concat(upcoming ? [upcoming] : []).map(c => (c && c.events || []).find(e => e.id === id)).find(Boolean);
+  }
+  const evWhere = ev => ev.kind === 'mine' ? 'mine' : ev.kind === 'recruit' ? 'recruit' : 'team';
+  const evEndDay = ev => { const e = evDay({ start: ev.end }); return ev.allDay ? dkey(addD(parseD(e), -1)) : e; };
+  /** 고친 뒤: 캘린더를 다시 불러온다 */
+  function calChanged() {
+    Object.values(calCache).forEach(c => { if (c) c.stale = true; });
+    calForget(); upcoming = null;
+    if (page === 'calendar') loadMonth(true); else render();
+  }
+  function openEvEdit(id) {
+    const ev = findCalEv(id);
+    if (!canEditEv(ev)) return;
+    if (ev.kind === 'leave') return openLeaveEdit(ev);
+    const where = evWhere(ev);
+    const s = parseD(ev.start), e = parseD(ev.end);
+    openModal(`<h3>일정 수정</h3>
+      <p class="sub">${where === 'mine' ? '내 캘린더 (나만 보기)' : where === 'recruit' ? '채용 캘린더' : '팀 캘린더'}${where === 'team' && D.recruitCalendar ? ' · 채용 캘린더에 같이 넣은 일정도 함께 바뀝니다' : ''}</p>
+      <form class="form" id="xForm" novalidate>
+        <div class="fld"><label for="xTitle">제목</label><input class="field-in" id="xTitle" value="${esc(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))}"></div>
+        <div class="two">
+          <div class="fld"><label for="xDate">날짜</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="xDate" value="${esc(evDay(ev))}"></div>
+          <div class="fld"><label>&nbsp;</label><label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="check" id="xAll" ${ev.allDay ? 'checked' : ''}> 종일</label></div>
+        </div>
+        <div class="two" id="xTimes" ${ev.allDay ? 'hidden' : ''}>
+          <div class="fld"><label for="xStart">시작</label><input class="field-in" type="time" id="xStart" value="${ev.allDay ? '10:00' : hm(s)}"></div>
+          <div class="fld"><label for="xEnd">종료</label><input class="field-in" type="time" id="xEnd" value="${ev.allDay ? '11:00' : hm(e)}"></div>
+        </div>
+        <div class="fld"><label for="xLoc">장소</label><input class="field-in" id="xLoc" value="${esc(ev.location || '')}"></div>
+        <div class="fld"><label for="xDesc">메모</label><textarea class="field-in" id="xDesc">${esc(String(ev.desc || '').split('\n').filter(l => l.indexOf('등록: ') !== 0).join('\n'))}</textarea></div>
+        <div class="msg err" id="xErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn danger" id="xDel" style="margin-right:auto">${ic('x', 'sm')}삭제</button><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary">저장</button></div>
+      </form>`);
+    $('#xAll').onchange = x => { $('#xTimes').hidden = x.target.checked; };
+    $('#xDel').onclick = () => {
+      openModal(`<h3>이 일정을 지울까요?</h3><p class="sub">${esc(ev.title)} · 구글 캘린더에서도 지워집니다.</p>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn danger" id="xDelOk">지우기</button></div>`);
+      $('#xDelOk').onclick = () => {
+        const before = JSON.stringify(calCache);
+        Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(x => x.id !== ev.id); });
+        upcoming = null; closeModal(); render();
+        call('apiDeleteEvent', ev.id, where).then(() => { calChanged(); toast('일정을 지웠습니다.'); })
+          .catch(err => { calCache = JSON.parse(before); render(); fail(err); });
+      };
+    };
+    $('#xForm').onsubmit = x => {
+      x.preventDefault();
+      const v = { id: ev.id, where, title: $('#xTitle').value.trim(), date: $('#xDate').value.trim(), allDay: $('#xAll').checked,
+        startTime: $('#xStart').value, endTime: $('#xEnd').value, location: $('#xLoc').value.trim(), desc: $('#xDesc').value.trim() };
+      if (!v.title || !DATE_RE.test(v.date)) { $('#xErr').textContent = '제목과 날짜를 확인해 주세요.'; $('#xErr').hidden = false; return; }
+      closeModal(); toast('저장하는 중…');
+      call('apiUpdateEvent', v).then(r => { calChanged(); toast(r && r.warning ? r.warning : '일정을 고쳤습니다.'); }).catch(fail);
+    };
+  }
+  /** 휴가 고치기: 종류·기간·메모 (여러 명이 함께 적힌 일정은 지우기만) */
+  function openLeaveEdit(ev) {
+    const many = String(ev.title).replace(/ \([^)]*\)$/, '').indexOf(', ') >= 0;
+    if (many) return deleteLeaveEvent(ev.id);
+    const t = (String(ev.title).match(/^(\S+)\] /) || [])[1] || '';
+    const type = LEAVE_TYPES.indexOf(t) >= 0 ? t : '기타';
+    const paren = type === '기타' ? (String(ev.title).match(/\(([^)]*)\)$/) || [])[1] : '';
+    const memo = paren || String(ev.desc || '').split('\n').filter(l => l && l.indexOf('등록: ') !== 0)[0] || '';
+    const start = evDay(ev), end = evEndDay(ev);
+    openModal(`<h3>휴가 수정</h3>
+      <p class="sub">팀 캘린더와 주간보고 휴무계획이 같이 바뀝니다.</p>
+      <form class="form" id="yForm" novalidate>
+        <div class="fld"><label for="yType">종류</label><select class="field-in" id="yType">${LEAVE_TYPES.map(x => `<option ${x === type ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div class="two">
+          <div class="fld"><label for="yStart">시작일</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="yStart" value="${esc(start)}"></div>
+          <div class="fld"><label for="yEnd">종료일 (하루면 비워두기)</label><input class="field-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" id="yEnd" value="${end > start ? esc(end) : ''}"></div>
+        </div>
+        <div class="fld"><label for="yMemo">${type === '기타' ? '사유 (캘린더에 함께 표시)' : '메모 (선택)'}</label><input class="field-in" id="yMemo" value="${esc(memo)}"></div>
+        <div class="msg err" id="yErr" hidden></div>
+        <div class="modal-actions"><button type="button" class="btn danger" id="yDel" style="margin-right:auto">${ic('x', 'sm')}삭제</button><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary">저장</button></div>
+      </form>`);
+    $('#yType').onchange = x => { $('label[for="yMemo"]').textContent = x.target.value === '기타' ? '사유 (캘린더에 함께 표시)' : '메모 (선택)'; };
+    $('#yDel').onclick = () => deleteLeaveEvent(ev.id);
+    $('#yForm').onsubmit = x => {
+      x.preventDefault();
+      const lv = { type: $('#yType').value, start: $('#yStart').value.trim(), end: $('#yEnd').value.trim(), memo: $('#yMemo').value.trim() };
+      const err = m => { $('#yErr').textContent = m; $('#yErr').hidden = false; };
+      if (!DATE_RE.test(lv.start)) return err('시작일을 확인해 주세요.');
+      if (lv.end && (!DATE_RE.test(lv.end) || lv.end < lv.start)) return err('종료일을 확인해 주세요.');
+      closeModal(); toast('저장하는 중…');
+      call('apiUpdateLeaveEvent', ev.id, lv).then(data => { applyData(data); calChanged(); toast('휴가를 고쳤습니다.'); }).catch(fail);
+    };
+  }
   function deleteLeaveEvent(eventId) {
     const ev = Object.values(calCache).concat(upcoming ? [upcoming] : []).map(c => (c && c.events || []).find(e => e.id === eventId)).find(Boolean);
     if (!ev) return;
