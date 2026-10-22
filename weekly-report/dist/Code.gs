@@ -1710,9 +1710,11 @@ function apiAddEvent(ev) {
 
 /* ---------- 내 메모 (일별, 나만 보기) ----------
  * 접속한 사람의 사용자 속성(UserProperties)에 저장한다 → 스프레드시트에 남지 않고, 관리자도 볼 수 없다.
- * 웹앱이 "접속한 사용자" 권한으로 돌아서 사람마다 따로 저장된다. 한 메모는 8,000자까지.
+ * 웹앱이 "접속한 사용자" 권한으로 돌아서 사람마다 따로 저장된다.
+ * 구글 제한: 한 날짜 9KB(한글 약 3,000자), 한 사람 전체 500KB(한글 약 17만 자).
  */
 const MEMO_PREFIX = 'memo:';
+const MEMO_MAX_BYTES = 8500;
 
 function apiMemos() {
   const all = PropertiesService.getUserProperties().getProperties();
@@ -1724,10 +1726,15 @@ function apiMemos() {
 function apiSaveMemo(ymd, text) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) throw new Error('날짜가 올바르지 않습니다.');
   const value = String(text || '').replace(/\s+$/, '');
-  if (value.length > 8000) throw new Error('메모는 8,000자까지 쓸 수 있습니다.');
+  // 구글 사용자 속성은 한 칸 9KB(한글 약 3,000자), 사람마다 전체 500KB까지
+  if (Utilities.newBlob(value).getBytes().length > MEMO_MAX_BYTES) throw new Error('한 날짜 메모가 너무 깁니다. (한글 약 2,800자까지) 나눠서 다른 날짜에 써 주세요.');
   const props = PropertiesService.getUserProperties();
-  if (value.trim()) props.setProperty(MEMO_PREFIX + ymd, value);
-  else props.deleteProperty(MEMO_PREFIX + ymd);
+  try {
+    if (value.trim()) props.setProperty(MEMO_PREFIX + ymd, value);
+    else props.deleteProperty(MEMO_PREFIX + ymd);
+  } catch (e) {
+    throw new Error('메모 저장 공간이 가득 찼습니다. 내 메모에서 오래된 메모를 지운 뒤 다시 저장해 주세요.');
+  }
   return true;
 }
 
