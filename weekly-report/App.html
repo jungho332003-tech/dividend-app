@@ -416,6 +416,7 @@
   .edit-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .items { display: flex; flex-direction: column; gap: 8px; }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
+  .key-sub { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 4px; }
   .toggle.imp-btn { color: var(--muted); width: 38px; padding: 0; font-size: 17px; line-height: 1; }
   .toggle.imp-btn[aria-pressed="true"] { background: #fff4d6; color: #a15c00; border-color: #e0a526; font-weight: 700; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toggle.imp-btn[aria-pressed="true"] { background: #3a2c0a; color: #f5c451; border-color: #b8860b; } }
@@ -1193,14 +1194,14 @@
       const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
       const monthAmt = s.monthReq.reduce((a, r) => a + r.amount, 0);
 
-      // 이번 주 중요 업무 = 팀장이 팀 주간보고에서 굵게 표시한 업무 (금주 먼저, 그다음 차주)
+      // 이번 주 중요 업무 = 팀원이 내 주간업무에서 ★ 표시한 업무 (금주 먼저, 그다음 차주)
       const keyRows = [];
       ['this', 'next'].forEach(w => D.members.forEach(m => (w === 'this' ? m.thisWeek : m.nextWeek).forEach(it => {
-        if (isMarked(m, w, it.task)) keyRows.push({ who: m.name, w, ...it });
+        if (it.imp) keyRows.push({ who: m.name, w, ...it });
       })));
       const dueRows = keyRows.map(d => `
         <div class="due-row key-row tap" ${tapAttr(`showMember('${esc(d.who)}')`)}><span class="d"><span class="wk ${d.w}">${d.w === 'this' ? '금주' : '차주'}</span></span><span class="n">${esc(d.who)}</span><span class="t">${esc(d.task)}</span><span class="dd">${dueHtml(d, d.w === 'this')}</span></div>`).join('')
-        || `<div class="empty">${D.me.isLeader ? '팀 주간보고에서 업무를 눌러 강조하세요.' : '팀장 강조 업무가 없습니다.'}</div>`;
+        || `<div class="empty">아직 ★ 표시한 중요 업무가 없습니다.<br><small>내 주간업무에서 업무 앞 ☆를 누르면 여기에 모입니다.</small></div>`;
 
       const boardPreview = D.board.slice(0, 4).map(p => `
         <div class="list-row tap" style="grid-template-columns:72px minmax(0,1fr)" ${tapAttr(`openPost='${esc(p.id)}';go('board')`)}>
@@ -1247,7 +1248,7 @@
             ${memoBoxHtml(dkey(now()))}
           </section>`,
         W && `<section class="panel">
-            <div class="panel-head"><h2>이번 주 중요 업무</h2><button class="btn small" onclick="setTab('weekly','team', true)">팀 주간보고</button></div>
+            <div class="panel-head"><h2>이번 주 중요 업무 <small class="key-sub">팀원 ★ 표시</small></h2><button class="btn small" onclick="setTab('weekly','team', true)">팀 주간보고</button></div>
             <div>${dueRows}</div>
           </section>`,
         BO && `<section class="panel">
