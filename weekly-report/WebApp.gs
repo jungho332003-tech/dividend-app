@@ -112,6 +112,23 @@ function apiBootstrap() {
   });
 }
 
+/** 화면을 열어 둔 동안 주기적으로: 다른 사람이 저장한 내용 (캐시에서 읽어 가볍다) */
+function apiRefresh() {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  const can = k => (me.menus || []).indexOf(k) >= 0;
+  const ss = ctx.ss;
+  const out = {};
+  if (can('weekly')) {
+    out.members = forViewer_(me, cached_(CK.members(ctx), () => readMembers_(ctx)));
+    out.hr = cached_(CK.hr(ctx), () => readHr_(ctx));
+    out.minutes = cached_(CK.minutes, () => readMinutes_(ss));
+  }
+  if (can('board')) out.board = cached_(CK.board, () => readBoard_(ss));
+  if (can('budget')) out.budget = cached_(CK.budget, () => readBudget_(ss));
+  return out;
+}
+
 /** 매번 계산해도 가벼운 부분 (접속자, 주차) */
 function baseData_(ctx) {
   const me = currentMember_(ctx.members);
