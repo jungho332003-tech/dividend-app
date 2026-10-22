@@ -581,6 +581,15 @@
   .m-edit td.m-act .icon-btn { width: 28px; height: 28px; }
   @media (max-width: 760px) { .m-grid { grid-template-columns: 1fr 1fr; } .m-grid .fld:last-child { grid-column: 1 / -1; } }
   .meet-min { display: flex; flex-direction: column; gap: 10px; }
+  /* 회의록 탭 */
+  .min-page { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 18px; align-items: start; }
+  .min-list { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 12px; max-height: calc(100vh - 140px); overflow: auto; }
+  .min-li { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit; color: inherit; }
+  .min-li:hover { background: var(--panel-2); }
+  .min-li.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .min-li span { font-size: 13px; color: var(--ink-2); }
+  .min-li small { font-size: 12px; color: var(--muted); }
+  @media (max-width: 900px) { .min-page { grid-template-columns: minmax(0, 1fr); } .min-list { position: static; max-height: none; } }
   input[data-date].field-in, input.due-val.field-in { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; background-size: 15px; font-variant-numeric: tabular-nums; }
   input[data-date].field-in:disabled { background-image: none; }
   #datePick::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; cursor: pointer; }
@@ -1274,8 +1283,9 @@
         <button role="tab" aria-selected="${weeklyTab === 'pre'}" onclick="setTab('weekly','pre')">다음 주 미리 쓰기 ${mine && mine.pre && mine.pre.exists ? '<span class="chip ok">✓</span>' : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'team'}" onclick="setTab('weekly','team')">팀 주간보고 <span class="chip plain">${s.done}/${s.total}</span></button>
         <button role="tab" aria-selected="${weeklyTab === 'hr'}" onclick="setTab('weekly','hr')">인사현황 ${hrCount() ? `<span class="chip plain">${hrCount()}</span>` : ''}</button>
+        <button role="tab" aria-selected="${weeklyTab === 'min'}" onclick="setTab('weekly','min')">회의록 ${minList().length ? `<span class="chip plain">${minList().length}</span>` : ''}</button>
       </div>`;
-      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : weeklyTab === 'hr' ? VIEWS.hr() : VIEWS.report());
+      return tabs + (weeklyTab === 'mine' ? VIEWS.mine() : weeklyTab === 'pre' ? VIEWS.pre() : weeklyTab === 'hr' ? VIEWS.hr() : weeklyTab === 'min' ? VIEWS.minutes() : VIEWS.report());
     },
 
     budget() {
@@ -1597,6 +1607,21 @@
   const minStatusCls = s => s === '완료' ? 'done' : s === '진행중' ? 'ing' : s === '진행예정' ? 'plan' : s === '보류' ? 'hold' : '';
 
   /** 팀 주간보고 오른쪽 회의록 패널 */
+  /** 회의록 탭: 왼쪽 회의 목록 + 오른쪽 회의록 (보기·수정·새 회의록) */
+  VIEWS.minutes = function () {
+    if (minDraft) return minEditorHtml();
+    const list = minList(), cur = minCur();
+    const items = list.map(x => `<button class="min-li ${cur && x.id === cur.id ? 'on' : ''}" onclick="minSel='${esc(x.id)}';render()">
+        <b>${esc(minDateText(x.date, x.time))}</b>
+        ${x.place ? `<span>${esc(x.place)}</span>` : ''}
+        <small>항목 ${(x.items || []).length}개 · ${esc(x.editor || '')}</small>
+      </button>`).join('');
+    return `<div class="min-page">
+        <section class="panel min-list"><div class="panel-head"><h2>회의 목록</h2></div>
+          ${items || '<div class="empty">아직 회의록이 없습니다.</div>'}</section>
+        ${minPanelHtml()}
+      </div>`;
+  };
   function minPanelHtml() {
     const m = minCur();
     const opts = minList().map(x => `<option value="${esc(x.id)}" ${m && x.id === m.id ? 'selected' : ''}>${esc(minDateText(x.date, ''))}${x.place ? ' · ' + esc(x.place) : ''}</option>`).join('');
@@ -1909,7 +1934,7 @@
     D.minutes = [local].concat((D.minutes || []).filter(x => x.id !== local.id)).sort((a, b) => b.date.localeCompare(a.date));
     minSel = local.id; minDraft = null; render();
     call('apiSaveMinutes', draft)
-      .then(data => { applyData(data); minSel = data.savedId; if (page === 'weekly' && weeklyTab === 'team' && !minDraft) render(); toast('회의록을 저장했습니다.'); })
+      .then(data => { applyData(data); minSel = data.savedId; if (page === 'weekly' && (weeklyTab === 'team' || weeklyTab === 'min') && !minDraft) render(); toast('회의록을 저장했습니다.'); })
       .catch(e => { D.minutes = JSON.parse(before); minDraft = draft; render(); fail(e); });
   }
   function minDelete() {
