@@ -4198,14 +4198,13 @@
   /** 휴가 고치기: 종류·기간·메모 (여러 명이 함께 적힌 일정은 지우기만) */
   function openLeaveEdit(ev) {
     const many = String(ev.title).replace(/ \([^)]*\)$/, '').indexOf(', ') >= 0;
-    if (many) return deleteLeaveEvent(ev.id);
     const t = (String(ev.title).match(/^(\S+)\] /) || [])[1] || '';
     const type = LEAVE_TYPES.indexOf(t) >= 0 ? t : '기타';
     const paren = type === '기타' ? (String(ev.title).match(/\(([^)]*)\)$/) || [])[1] : '';
     const memo = paren || String(ev.desc || '').split('\n').filter(l => l && l.indexOf('등록: ') !== 0)[0] || '';
     const start = evDay(ev), end = evEndDay(ev);
     openModal(`<h3>휴가 수정</h3>
-      <p class="sub">팀 캘린더와 주간보고 휴무계획이 같이 바뀝니다.</p>
+      <p class="sub">${many ? `${esc(String(ev.title).replace(/^\S+\] /, '').replace(/ \([^)]*\)$/, ''))} · 함께 적힌 사람 모두 바뀝니다. ` : ''}팀 캘린더와 주간보고 휴무계획이 같이 바뀝니다.</p>
       <form class="form" id="yForm" novalidate>
         <div class="fld"><label for="yType">종류</label><select class="field-in" id="yType">${LEAVE_TYPES.map(x => `<option ${x === type ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
         <div class="two">
@@ -4214,10 +4213,9 @@
         </div>
         <div class="fld"><label for="yMemo">${type === '기타' ? '사유 (캘린더에 함께 표시)' : '메모 (선택)'}</label><input class="field-in" id="yMemo" value="${esc(memo)}"></div>
         <div class="msg err" id="yErr" hidden></div>
-        <div class="modal-actions"><button type="button" class="btn danger" id="yDel" style="margin-right:auto">${ic('x', 'sm')}삭제</button><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary">저장</button></div>
+        <div class="modal-actions"><span class="sub" style="margin-right:auto">지우기는 목록 오른쪽 ✕</span><button type="button" class="btn" onclick="closeModal()">취소</button><button type="submit" class="btn primary">저장</button></div>
       </form>`);
     $('#yType').onchange = x => { $('label[for="yMemo"]').textContent = x.target.value === '기타' ? '사유 (캘린더에 함께 표시)' : '메모 (선택)'; };
-    $('#yDel').onclick = () => deleteLeaveEvent(ev.id);
     $('#yForm').onsubmit = x => {
       x.preventDefault();
       const lv = { type: $('#yType').value, start: $('#yStart').value.trim(), end: $('#yEnd').value.trim(), memo: $('#yMemo').value.trim() };

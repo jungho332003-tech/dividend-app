@@ -3226,22 +3226,26 @@ function apiUpdateLeaveEvent(eventId, leave) {
   const sh = ctx.ss.getSheetByName(LEAVE.SHEET);
   const rows = leaveRows_(sh);
   const live = r => String(r[LCOL.DELETED - 1]).toUpperCase() !== 'Y';
-  const idx = rows.findIndex(r => String(r[LCOL.EVENT - 1]) === eventId && live(r));
-  const fromRecruit = idx >= 0 && String(rows[idx][LCOL.SOURCE - 1]) === RECRUIT_LEAVE_SOURCE;
+  // 이 일정으로 등록된 휴가 줄: 한 명이면 "일정ID", 여러 명이면 "일정ID#이름" 이 사람 수만큼
+  const idxs = [];
+  rows.forEach((r, i) => { const e = String(r[LCOL.EVENT - 1]); if (live(r) && (e === eventId || e.indexOf(eventId + '#') === 0)) idxs.push(i); });
+  const fromRecruit = idxs.length > 0 && String(rows[idxs[0]][LCOL.SOURCE - 1]) === RECRUIT_LEAVE_SOURCE;
   const cal = fromRecruit ? getRecruitCalendar_(ctx) : getTeamCalendar_();
   const ev = cal.getEventById(eventId);
-  let name;
-  if (idx >= 0) {
-    name = String(rows[idx][LCOL.NAME - 1]).trim();
+  let who;
+  if (idxs.length) {
+    who = idxs.map(i => String(rows[i][LCOL.NAME - 1]).trim());
   } else {
     if (!ev) throw new Error('일정을 찾을 수 없습니다. 이미 지워졌을 수 있습니다.');
-    const who = leaveNames_(leaveNameZone_(ev.getTitle()), names);
-    if (who.length !== 1) throw new Error('여러 명이 함께 적힌 휴가 일정은 고칠 수 없습니다. 지우고 각자 다시 등록해 주세요.');
-    name = who[0];
+    who = leaveNames_(leaveNameZone_(ev.getTitle()), names);
+    if (!who.length) throw new Error('휴가 일정에서 팀원 이름을 찾지 못했습니다.');
   }
-  if (name !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인 휴가만 고칠 수 있습니다.');
+  if (!me.isLeader && !me.isAdmin) {
+    if (who.length > 1) throw new Error('여러 명이 함께 적힌 휴가 일정은 팀장·관리자만 고칠 수 있습니다.');
+    if (who[0] !== me.name) throw new Error('본인 휴가만 고칠 수 있습니다.');
+  }
 
-  const title = leaveEventTitle_(type, shortName_(name, names), memo);
+  const title = leaveEventTitle_(type, who.map(n => shortName_(n, names)).join(', '), memo);
   const fix = e => {
     tomato_(e);
     e.setTitle(title);
@@ -3252,18 +3256,21 @@ function apiUpdateLeaveEvent(eventId, leave) {
   if (ev) {
     try { fix(ev); } catch (e) { throw new Error('캘린더 일정을 고칠 권한이 없습니다. 팀 캘린더 "일정 변경" 권한을 확인하세요.'); }
   }
-  if (idx >= 0) {
-    const r = idx + 2;
+  idxs.forEach(i => {
+    const r = i + 2;
     sh.getRange(r, LCOL.TYPE).setValue(type);
     sh.getRange(r, LCOL.START, 1, 3).setValues([[start, end, memo]]);
-    const rec = rows[idx][LCOL.REC_EVENT - 1];
+    const rec = rows[i][LCOL.REC_EVENT - 1];
     if (rec && recruitCalendarId_(ctx.cfg)) {
       try { const re = getRecruitCalendar_(ctx).getEventById(String(rec)); if (re) fix(re); } catch (e) { /* 권한 없음 */ }
     }
-  }
+  });
   bumpCalendar_();
   ctx._leaves = null;
-  return leavePatch_(ctx, name);
+  if (who.length === 1) return leavePatch_(ctx, who[0]);
+  // 여러 명: 주간보고 휴무계획을 통째로 다시 읽는다
+  try { CacheService.getDocumentCache().remove(CK.members(ctx)); } catch (e) { /* 캐시 없음 */ }
+  return { members: forViewer_(me, cached_(CK.members(ctx), () => readMembers_(ctx))) };
 }
 
 /** 주간보고 작성 대상이면 그 사람 조각만 돌려준다 (팀장 등은 주간보고에 없으므로 생략) */
