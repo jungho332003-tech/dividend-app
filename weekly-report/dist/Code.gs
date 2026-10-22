@@ -2260,26 +2260,61 @@ function readHr_(ctx) {
       : r[HCOL.WEEK - 1] instanceof Date ? ymd(r[HCOL.WEEK - 1]) : String(r[HCOL.WEEK - 1]).trim();
     const list = week === thisKey ? out.thisWeek : week === nextKey ? out.nextWeek : week > nextKey ? out.later : null;
     if (!list) return;
-    list.push({
-      id: String(r[0]),
-      author: String(r[HCOL.AUTHOR - 1]),
-      category: String(r[HCOL.CATEGORY - 1]),
-      target: String(r[HCOL.TARGET - 1]),
-      start: start instanceof Date ? ymd(start) : '',
-      end: end instanceof Date ? ymd(end) : '',
-      when: hrPeriod_(start, end),
-      memo: String(r[HCOL.MEMO - 1] || ''),
-      imported: hrImported_(r), // 채용 캘린더에서 가져온 항목
-      ev: String(r[HCOL.EVENT - 1] || ''), // 캘린더에서 눌러 고칠 때 찾는 용도
-      rec: String(r[HCOL.REC_EVENT - 1] || ''),
-      week: week,
-      weekLabel: list === out.later ? getWeekInfo(mondayOf(start), ctx.holidays).label : '',
-    });
+    list.push(hrItem_(r, week, list === out.later ? getWeekInfo(mondayOf(start), ctx.holidays).label : ''));
   });
   const byDate = (a, b) => (a.start || '9').localeCompare(b.start || '9') || Number(a.id) - Number(b.id);
   out.thisWeek.sort(byDate);
   out.nextWeek.sort(byDate);
   out.later.sort(byDate);
+  return out;
+}
+
+/** 인사현황 한 줄 → 화면용 */
+function hrItem_(r, week, weekLabel) {
+  const start = r[HCOL.START - 1], end = r[HCOL.END - 1];
+  return {
+    id: String(r[0]),
+    author: String(r[HCOL.AUTHOR - 1]),
+    category: String(r[HCOL.CATEGORY - 1]),
+    target: String(r[HCOL.TARGET - 1]),
+    start: start instanceof Date ? ymd(start) : '',
+    end: end instanceof Date ? ymd(end) : '',
+    when: hrPeriod_(start, end),
+    memo: String(r[HCOL.MEMO - 1] || ''),
+    imported: hrImported_(r), // 채용 캘린더에서 가져온 항목
+    ev: String(r[HCOL.EVENT - 1] || ''), // 캘린더에서 눌러 고칠 때 찾는 용도
+    rec: String(r[HCOL.REC_EVENT - 1] || ''),
+    week: week,
+    weekLabel: weekLabel || '',
+  };
+}
+
+/**
+ * 지난 내역: 그 달(yyyy-mm)의 인사현황 + 내역이 있는 달 목록. 인사현황 화면에서 누를 때만 읽는다.
+ * 일자가 없는 예전 항목은 주차 칸의 달로 본다.
+ */
+function apiHrHistory(ym) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'weekly');
+  ym = String(ym || '');
+  if (!/^\d{4}-\d{2}$/.test(ym)) throw new Error('조회할 달을 골라 주세요.');
+  const sh = ctx.ss.getSheetByName(HR.SHEET);
+  const out = { ym: ym, months: [], items: [] };
+  if (!sh || sh.getLastRow() < 2) return out;
+  const months = {};
+  sh.getRange(2, 1, sh.getLastRow() - 1, HCOL.SOURCE).getValues().forEach(r => {
+    if (!String(r[0]) || String(r[HCOL.DELETED - 1]).toUpperCase() === 'Y') return;
+    const start = r[HCOL.START - 1];
+    const week = start instanceof Date ? ymd(mondayOf(start))
+      : r[HCOL.WEEK - 1] instanceof Date ? ymd(r[HCOL.WEEK - 1]) : String(r[HCOL.WEEK - 1]).trim();
+    const m = (start instanceof Date ? ymd(start) : week).slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(m)) return;
+    months[m] = (months[m] || 0) + 1;
+    if (m === ym) out.items.push(hrItem_(r, week, ''));
+  });
+  out.months = Object.keys(months).sort().reverse().map(k => ({ ym: k, n: months[k] }));
+  out.items.sort((a, b) => (a.start || '9').localeCompare(b.start || '9') || Number(a.id) - Number(b.id));
   return out;
 }
 

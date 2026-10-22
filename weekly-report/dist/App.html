@@ -238,6 +238,11 @@
   .dd-row svg { color: var(--muted); }
   .later-row em small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); text-align: right; }
   .later-row[disabled] { cursor: default; }
+  .hist-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 10px; }
+  .hist-bar .field-in { width: auto; padding: 6px 10px; }
+  .hist-bar select.field-in { width: auto !important; flex: none; padding-right: 28px; }
+  .hist-bar input.field-in { flex: 1; min-width: 160px; }
+  .hist-month { display: flex; align-items: center; gap: 4px; }
   .dd-empty { color: var(--muted); font-size: 13px; margin: 4px 0; }
   .dd-table td.nm { font-weight: 700; white-space: nowrap; vertical-align: top; }
   .linkish { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
@@ -1533,7 +1538,8 @@
           <div class="mcards">${hrCards(true)}</div>
           <div class="table-wrap desk">${hrTableHtml(true)}</div>
         </section>
-        ${hrLaterHtml()}`;
+        ${hrLaterHtml()}
+        ${hrHistHtml()}`;
     },
 
     budgetList() {
@@ -2148,7 +2154,11 @@
     if (!ev || ev.ro || String(ev.id).startsWith('tmp-')) return false;
     if (ev.kind === 'leave') return canDelLeaveEv(ev);
     if (['event', 'mine', 'recruit'].indexOf(ev.kind) < 0) return false;
-    if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) { const x = hrOfEvent(ev); return !!x && hrCanEdit(x); } // 인사현황 일정 → 인사현황 수정 창
+    if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) { // 인사현황 일정 → 인사현황 수정 창
+      const x = hrOfEvent(ev);
+      if (x) return hrCanEdit(x);
+      return !!D.me.name && can('weekly') && evDay(ev) < D.week.key && /^(입사|휴직|복직|퇴사|인터뷰|기타)\]/.test(String(ev.title).trim()); // 지난 일정은 누를 때 지난 내역에서 찾는다
+    }
     if (!can('calendar')) return false;
     return ev.kind === 'mine' || !!D.me.isAdmin || (!!D.me.name && ev.by === D.me.name);
   }
@@ -3869,7 +3879,55 @@
   function hrCount() { const h = hrData(); return h.thisWeek.length + h.nextWeek.length; }
   function hrCats() { return D.hrCategories || ['입사', '휴직', '복직', '퇴사', '인터뷰', '기타']; }
   function hrCanEdit(x) { return !!D.me.name && (x.author === D.me.name || D.me.isLeader || D.me.isAdmin || ((x.imported || x.author === '채용캘린더') && D.me.recruiter)); }
-  function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek, h.later || []).find(x => x.id === id); }
+  function hrFind(id) { const h = hrData(); return h.thisWeek.concat(h.nextWeek, h.later || [], hrHist ? hrHist.items : []).find(x => x.id === id); }
+
+  /* ---------- 인사현황 지난 내역 (누를 때만 불러온다) ---------- */
+  let hrHist = null, hrHistOpen = false, hrHistYm = '', hrHistCat = '', hrHistQ = '', hrHistBusy = false;
+  const ymOf = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+  function loadHrHist(ym) {
+    hrHistYm = ym; hrHistBusy = true;
+    const draw = () => { const el = $('#hrHist'); if (el) el.outerHTML = hrHistHtml(); };
+    draw();
+    return call('apiHrHistory', ym).then(r => { if (r.ym === hrHistYm) hrHist = r; })
+      .catch(fail).finally(() => { hrHistBusy = false; draw(); });
+  }
+  function hrHistToggle() {
+    hrHistOpen = !hrHistOpen;
+    if (hrHistOpen && !hrHist) return loadHrHist(ymOf(now())); // 이번 달부터 (‹ 로 지난 달)
+    const el = $('#hrHist'); if (el) el.outerHTML = hrHistHtml();
+  }
+  function hrHistMove(n) { const d = parseD(hrHistYm + '-01'); loadHrHist(ymOf(new Date(d.getFullYear(), d.getMonth() + n, 1))); }
+  function hrHistList() {
+    if (!hrHist || hrHist.ym !== hrHistYm) return '';
+    const q = hrHistQ.trim().toLowerCase();
+    const list = hrHist.items.filter(x => (!hrHistCat || x.category === hrHistCat)
+      && (!q || [x.category, x.target, x.memo, x.author].join(' ').toLowerCase().indexOf(q) >= 0));
+    if (!list.length) return `<p class="dd-empty">${hrHist.items.length ? '찾는 내역이 없습니다.' : '이 달에는 인사현황이 없습니다.'}</p>`;
+    return `<div class="dd-list">${list.map(x => `<button type="button" class="dd-row later-row" ${hrCanEdit(x) ? `onclick="openHrForm('${esc(x.id)}')"` : 'disabled'}>
+      <b>${esc(x.category)}</b><span>${esc(x.target)}${x.memo ? ` · ${esc(x.memo)}` : ''}</span><em>${esc(x.when)}<small>${esc(x.author)}</small></em>${hrCanEdit(x) ? ic('chev', 'sm') : ''}</button>`).join('')}</div>`;
+  }
+  function hrHistHtml() {
+    if (!hrHistOpen) return `<section class="panel" id="hrHist"><div class="panel-head"><h2>지난 내역</h2>
+      <button class="btn small" onclick="hrHistToggle()">${ic('calendar', 'sm')}지난 내역 보기</button></div></section>`;
+    const d = parseD((hrHistYm || ymOf(now())) + '-01');
+    const months = hrHist ? hrHist.months : [];
+    const opts = months.some(m => m.ym === hrHistYm) ? months : months.concat([{ ym: hrHistYm, n: 0 }]).sort((a, b) => b.ym.localeCompare(a.ym));
+    return `<section class="panel" id="hrHist">
+      <div class="panel-head"><h2>지난 내역</h2><button class="btn small ghost" onclick="hrHistToggle()">접기</button></div>
+      <div class="hist-bar">
+        <div class="hist-month">
+          <button class="icon-btn" onclick="hrHistMove(-1)" title="이전 달" aria-label="이전 달">‹</button>
+          <select class="field-in" onchange="loadHrHist(this.value)" aria-label="조회할 달">${opts.map(m => `<option value="${m.ym}" ${m.ym === hrHistYm ? 'selected' : ''}>${+m.ym.slice(0, 4)}년 ${+m.ym.slice(5, 7)}월${m.n ? ` (${m.n})` : ''}</option>`).join('')}</select>
+          <button class="icon-btn" onclick="hrHistMove(1)" title="다음 달" aria-label="다음 달">›</button>
+        </div>
+        <select class="field-in" onchange="hrHistCat = this.value; $('#hrHistList').innerHTML = hrHistList()" aria-label="구분">
+          <option value="">구분 전체</option>${hrCats().map(c => `<option ${c === hrHistCat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <input class="field-in" type="search" placeholder="대상·내용 검색" value="${esc(hrHistQ)}" oninput="hrHistQ = this.value; $('#hrHistList').innerHTML = hrHistList()">
+      </div>
+      <p class="report-note">${d.getFullYear()}년 ${d.getMonth() + 1}월 · 눌러서 수정·삭제 (본인 등록분, 팀장·관리자는 전체)</p>
+      <div id="hrHistList">${hrHistBusy ? '<div class="loading">불러오는 중…</div>' : hrHistList()}</div>
+    </section>`;
+  }
 
   /** 시트와 같은 모양: 구분별로 금주·차주를 나란히 (빈 줄 없이) */
   function hrTableHtml(editable) {
@@ -4028,14 +4086,14 @@
       const undo = hrLocal(x, entry);
       closeModal(); render();
       call('apiSaveHr', entry)
-        .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : entry.category === '인터뷰' ? (x ? '수정했습니다. (채용 캘린더에 반영)' : '등록했습니다. (채용 캘린더에만 등록)') : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
+        .then(data => { applyData(data); if (page !== 'calendar') render(); if (hrHist) loadHrHist(hrHistYm); toast(data && data.warning ? data.warning : entry.category === '인터뷰' ? (x ? '수정했습니다. (채용 캘린더에 반영)' : '등록했습니다. (채용 캘린더에만 등록)') : x ? '수정했습니다. (일정에도 반영)' : '등록했습니다. (일정에도 등록)'); })
         .catch(e2 => { undo(); render(); fail(e2); });
     };
     if (x) $('#hDel').onclick = () => {
       const undo = hrLocal(x, null);
       closeModal(); render();
       call('apiDeleteHr', x.id)
-        .then(data => { applyData(data); if (page !== 'calendar') render(); toast('삭제했습니다.'); })
+        .then(data => { applyData(data); if (page !== 'calendar') render(); if (hrHist) loadHrHist(hrHistYm); toast('삭제했습니다.'); })
         .catch(e2 => { undo(); render(); fail(e2); });
     };
   }
@@ -4086,6 +4144,17 @@
     if (ev.kind === 'leave') return openLeaveEdit(ev);
     const hrx = hrOfEvent(ev);
     if (hrx) return openHrForm(hrx.id);
+    if (/^\s*\[?\s*[가-힣*\s]+\]/.test(String(ev.title).replace(/^[^\s)]+\)\s*/, ''))) { // 지난 인사현황 일정
+      toast('인사현황을 찾는 중…');
+      return call('apiHrHistory', evDay(ev).slice(0, 7)).then(r => {
+        hrHist = r; hrHistYm = r.ym;
+        const raw = String(ev.title).trim();
+        const x = r.items.find(y => (y.ev && y.ev === ev.id) || (y.rec && y.rec === ev.id)) || r.items.find(y => raw === `${y.category}] ${y.target}` && y.start === evDay(ev));
+        if (!x) return toast('인사현황에서 이 일정을 찾지 못했습니다. (캘린더에만 있는 일정)');
+        if (!hrCanEdit(x)) return toast('본인이 등록한 인사현황만 고칠 수 있습니다.');
+        openHrForm(x.id);
+      }).catch(fail);
+    }
     const where = evWhere(ev);
     const s = parseD(ev.start), e = parseD(ev.end);
     openModal(`<h3>일정 수정</h3>
