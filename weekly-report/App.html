@@ -2112,6 +2112,9 @@
   function tidyEvents(res) {
     (res && res.events || []).forEach(e => {
       if (e.desc && /<[a-z/][^>]*>|&[a-z#0-9]+;/i.test(e.desc)) e.desc = htmlText(e.desc);
+      // 기타 휴무: 제목에 나온 사유는 설명에서 뺀다
+      const why = e.kind === 'leave' && e.desc && String(e.title).match(/^기타\] .*\(([^)]*)\)$/);
+      if (why) e.desc = String(e.desc).split('\n').filter(l => l.trim() !== why[1].trim()).join('\n').trim();
       if (e.kind !== 'event' || !e.desc) return;
       const m = String(e.desc).match(/(?:^|\n)등록: ([^\s(]+)/);
       if (!m) return;
@@ -2651,6 +2654,12 @@
       const f = $(k === 'leave' ? '#lType' : '#eTitle'); if (f) f.focus();
     };
     if ($('#eRec')) $('#eRec').onchange = e => { eventAlsoRecruit = e.target.checked; where(); };
+    // 기타는 사유가 캘린더 제목에 같이 나간다
+    if ($('#lType')) $('#lType').onchange = e => {
+      const etc = e.target.value === '기타';
+      $('label[for="lMemo"]').textContent = etc ? '사유 (캘린더에 함께 표시)' : '메모 (선택)';
+      $('#lMemo').placeholder = etc ? '예) UFO 대체' : '예) 가족 행사';
+    };
     if (both || rec) $('#eTarget').onclick = e => { const b = e.target.closest('button'); if (b) setTarget(b.dataset.t); };
     if ($('#eKind')) $('#eKind').onclick = e => { const b = e.target.closest('button'); if (b) setKind(b.dataset.k); };
     setTarget(target);
@@ -2696,7 +2705,7 @@
           if (hit(mon, 14)) mm.leaves = (mm.leaves || []).concat(lv);
           if (hit(nextMon, 14)) mm.preLeaves = (mm.preLeaves || []).concat(lv);
         }
-        showNow({ id: tempId, title: `${leave.type}] ${shortName(D.me.name)}`, start: leave.start, end: dkey(addD(parseD(leave.end || leave.start), 1)),
+        showNow({ id: tempId, title: leaveCalTitle(leave.type, D.me.name, leave.memo), start: leave.start, end: dkey(addD(parseD(leave.end || leave.start), 1)),
           allDay: true, location: '', desc: '', kind: 'leave' }, leave.start);
         call('apiAddLeave', leave)
           .then(data => { applyData(data); if (page !== 'calendar') render(); toast(data && data.warning ? data.warning : `${leave.type} 등록 완료`); })
@@ -4047,6 +4056,11 @@
   }
 
   /** "10/2(금) 연차" · "9/30(수)~10/7(수) 정기휴가(메모)" — 서버 leaveText_ 와 같은 모양 */
+  /** 캘린더 휴가 제목: "연차] 정호", 기타는 사유까지 "기타] 정호 (UFO 대체)" */
+  function leaveCalTitle(type, name, memo) {
+    const r = type === '기타' ? String(memo || '').split('\n')[0].replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30) : '';
+    return `${type}] ${shortName(name)}${r ? ` (${r})` : ''}`;
+  }
   function leaveTextOf(l) {
     return `${periodText(l.start, l.end)} ${l.type}${l.memo ? `(${l.memo})` : ''}`;
   }
@@ -4068,7 +4082,7 @@
       m.preLeaves = (m.preLeaves || []).filter(x => x.id !== id);
       if (l) {
         const title = `${l.type}] ${shortName(D.me.name)}`;
-        Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(e => !(e.kind === 'leave' && e.title === title && String(e.start).slice(0, 10) === l.start)); });
+        Object.values(calCache).forEach(c => { if (c && c.events) c.events = c.events.filter(e => !(e.kind === 'leave' && (e.title === title || e.title.indexOf(title + ' (') === 0) && String(e.start).slice(0, 10) === l.start)); });
       }
       calForget(); upcoming = null;
       closeModal(); render();

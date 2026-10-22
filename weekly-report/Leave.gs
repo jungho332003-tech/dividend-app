@@ -18,6 +18,18 @@ const LEAVE = {
   TAG_ONLY: ['출장', '교육', '기타'],
 };
 
+/** 기타 휴무는 제목에 사유를 붙인다: "기타] 정호 (UFO 대체)" — 메모 첫 줄 */
+function leaveReason_(type, memo) {
+  if (type !== '기타') return '';
+  return String(memo || '').split('\n')[0].replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+}
+
+/** 기타] 제목의 괄호 사유는 이름 찾기에서 뺀다 ("기타] 정호 (하은 대신 근무)" → 하은은 휴가 아님) */
+function leaveNameZone_(title) {
+  const t = String(title || '');
+  return /^\s*\[?\s*기타\s*\]/.test(t) ? t.replace(/\([^)]*\)\s*$/, '') : t;
+}
+
 /** 제목에서 휴가 종류 단어 → match 결과처럼 [전체, 단어] (없으면 null) */
 function leaveWord_(title) {
   const t = String(title || '');
@@ -118,7 +130,7 @@ function apiAddLeave(leave) {
   let eventId = '', warning = '';
   if (allowedMenus_(me).indexOf('calendar') >= 0) {
     try {
-      const ev = getTeamCalendar_().createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
+      const ev = getTeamCalendar_().createAllDayEvent(leaveEventTitle_(type, shortName_(me.name, ctx.members.map(m => m.name)), memo), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') });
       eventId = ev.getId();
     } catch (e) {
@@ -129,7 +141,7 @@ function apiAddLeave(leave) {
   let recEventId = '';
   if (me.recruiter && canRecruitCal_(ctx, me)) { // 채용담당 본인 휴가만 (팀장 휴가는 팀 캘린더에만)
     try {
-      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveLabel_(type, shortName_(me.name, ctx.members.map(m => m.name))), start, addDays(end, 1),
+      recEventId = getRecruitCalendar_(ctx).createAllDayEvent(leaveEventTitle_(type, shortName_(me.name, ctx.members.map(m => m.name)), memo), start, addDays(end, 1),
         { description: [memo, `등록: ${me.name} (업무관리 웹앱)`].filter(Boolean).join('\n') }).getId();
     } catch (e) {
       warning = warning || '팀 캘린더에는 넣었지만 채용 캘린더에는 권한이 없어 넣지 못했습니다.';
@@ -254,7 +266,7 @@ function syncLeaveEvents_(ctx, events, from, to, cal, opt) {
     const title = ev.getTitle();
     const word = leaveWord_(title);
     if (!word) return out;
-    const who = leaveNames_(title, names);
+    const who = leaveNames_(leaveNameZone_(title), names);
     const allDay = ev.isAllDayEvent();
     const start = allDay ? ev.getAllDayStartDate() : startOfDay_(ev.getStartTime());
     const end = allDay ? addDays(ev.getAllDayEndDate(), -1) : startOfDay_(ev.getEndTime());
@@ -431,13 +443,26 @@ function teamCalendarSet_(ctx) {
  */
 function leaveTitle_(title, names) {
   const word = leaveWord_(title);
-  const who = leaveNames_(title, names);
+  const who = leaveNames_(leaveNameZone_(title), names);
   if (!word || !who.length) return '';
   const type = leaveType_(word[1], title);
   // "[정기휴가] 윤수아", "출장] 수아"처럼 앞에 종류를 적어 두었으면 그 종류를 쓴다
   const tagged = String(title).match(/^\s*\[?\s*([가-힣]+)\s*\]/);
   const tag = tagged && LEAVE.TYPES.concat(['반차', '반반차', '휴가', '휴무']).indexOf(tagged[1]) >= 0 ? tagged[1] : type;
-  return leaveLabel_(tag, who.map(n => shortName_(n, names)).join(', '));
+  const label = leaveLabel_(tag, who.map(n => shortName_(n, names)).join(', '));
+  if (tag !== '기타') return label;
+  // 기타: 사유도 보여준다 — 괄호 안, 없으면 이름 뒤에 적힌 말
+  const paren = String(title).match(/\(([^)]*)\)\s*$/);
+  let reason = paren ? paren[1] : String(title).replace(/^\s*\[?\s*기타\s*\]/, '');
+  if (!paren) who.forEach(n => { reason = reason.split(n).join(' ').split(shortName_(n, names)).join(' '); });
+  reason = reason.replace(/^[\s,·/-]+|[\s,·/-]+$/g, '').trim();
+  return reason ? `${label} (${reason})` : label;
+}
+
+/** 캘린더에 만드는 휴가 일정 제목 ("기타"는 사유를 괄호로) */
+function leaveEventTitle_(type, who, memo) {
+  const r = leaveReason_(type, memo);
+  return leaveLabel_(type, who) + (r ? ` (${r})` : '');
 }
 
 /** 팀 양식: "연차] 지선" */
@@ -455,7 +480,7 @@ function shortName_(name, names) {
 
 /** 캘린더 화면에서 휴가 일정을 다른 색으로 보여주기 위한 판별 */
 function isLeaveTitle_(title, names) {
-  return !!leaveWord_(title) && !!leaveName_(title, names);
+  return !!leaveWord_(title) && !!leaveName_(leaveNameZone_(title), names);
 }
 
 /**

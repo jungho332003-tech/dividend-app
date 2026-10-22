@@ -100,6 +100,11 @@ function apiCalendar(startIso, endIso, fresh) {
     const events = cal.getEvents(start, end).map(e => {
       const ev = eventJson_(e, isLeaveTitle_(e.getTitle(), names) ? 'leave' : 'event');
       ev.title = leaveTitle_(ev.title, names) || ev.title;
+      // 예전에 만든 "기타] 정호" 는 설명 첫 줄(메모)을 사유로 붙인다
+      if (ev.kind === 'leave' && /^기타\] [^(]+$/.test(ev.title)) {
+        const r = leaveReason_('기타', String(ev.desc || '').split('\n').filter(l => l && l.indexOf('등록: ') !== 0)[0]);
+        if (r) ev.title += ` (${r})`;
+      }
       // "연차] 민경"처럼 휴가 형식인데 [팀원]에 없는 이름이면 휴가 색으로만 보여준다 (주간보고에는 안 들어감)
       if (ev.kind === 'event') { const t = leaveTagTitle_(ev.title); if (t) { ev.kind = 'leave'; ev.title = t; ev.ro = true; } }
       return ev;
