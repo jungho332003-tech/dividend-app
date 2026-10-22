@@ -2182,7 +2182,7 @@
   }
   /** 지난 메모: 날짜순으로 모아 보고, 검색하고, 누르면 그날 일정 화면으로 */
   /* ---------- 내 메모 메뉴: 날짜별 메모를 모아 보고 바로 고친다 ---------- */
-  let memoQuery = '', memoAddDay = null;
+  let memoQuery = '', memoAddDay = null, memoFileUrl = '';
   const memoPageTimers = {};
   PAGES.memo = function () {
     if (!memos) { loadMemos(); return `<div class="head"><div><h1>내 메모</h1></div></div><div class="loading">불러오는 중…</div>`; }
@@ -2207,7 +2207,7 @@
       </section>`).join('');
     return `
       <div class="head">
-        <div><h1>내 메모</h1><p>날짜별 메모 모아 보기 · 나만 볼 수 있습니다</p></div>
+        <div><h1>내 메모</h1><p>날짜별 메모 모아 보기 · 내 구글 드라이브에 저장되어 나만 볼 수 있습니다${memoFileUrl ? ` · <a href="${esc(memoFileUrl)}" target="_blank" rel="noopener">저장 파일 열기</a>` : ''}</p></div>
         <div class="head-actions">
           <input class="field-in" id="memoNewDay" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" value="${today}" style="width:150px" aria-label="메모 날짜">
           <button class="btn primary" onclick="memoPageAdd()">${ic('plus', 'sm')}메모 쓰기</button>
@@ -2282,7 +2282,9 @@
     call('apiMemos').then(m => {
       // 그사이 고친 메모(저장 대기 중)는 지우지 않는다
       const box = $('#memoIn');
-      memos = Object.assign(m || {}, memoTimer && box ? { [box.dataset.day]: box.value } : {});
+      const got = m && m.memos ? m.memos : (m || {}); // { memos, url } (드라이브 파일)
+      if (m && m.url) memoFileUrl = m.url;
+      memos = Object.assign(got, memoTimer && box ? { [box.dataset.day]: box.value } : {});
       memoLocal();
       if (!(box && document.activeElement === box)) {
         if (page === 'calendar') $('#main').innerHTML = PAGES.calendar();

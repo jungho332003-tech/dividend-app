@@ -1709,31 +1709,77 @@ function apiAddEvent(ev) {
 }
 
 /* ---------- 내 메모 (일별, 나만 보기) ----------
- * 접속한 사람의 사용자 속성(UserProperties)에 저장한다 → 스프레드시트에 남지 않고, 관리자도 볼 수 없다.
- * 웹앱이 "접속한 사용자" 권한으로 돌아서 사람마다 따로 저장된다.
- * 구글 제한: 한 날짜 9KB(한글 약 3,000자), 한 사람 전체 500KB(한글 약 17만 자).
+ * 각자 자기 구글 드라이브의 "업무관리 - 내 메모" 파일(JSON)에 저장한다.
+ *  → 웹앱이 "접속한 사용자" 권한으로 돌아서 본인 드라이브에만 생기고, 다른 사람(관리자 포함)은 볼 수 없다.
+ *  → 사용자 속성(500KB 한도)과 달리 오래 많이 써도 된다. 예전에 사용자 속성에 쓴 메모는 처음 열 때 옮긴다.
+ * 파일 ID는 본인 사용자 속성에 기억해 둔다.
  */
 const MEMO_PREFIX = 'memo:';
-const MEMO_MAX_BYTES = 8500;
+const MEMO_FILE_KEY = 'memoFileId';
+const MEMO_FILE_NAME = '업무관리 - 내 메모 (지우지 마세요).json';
+const MEMO_MAX_CHARS = 20000;
+
+/** 내 메모 파일 (없거나 휴지통에 있으면 새로 만든다) */
+function memoFile_() {
+  const props = PropertiesService.getUserProperties();
+  const id = props.getProperty(MEMO_FILE_KEY);
+  if (id) {
+    try { const f = DriveApp.getFileById(id); if (!f.isTrashed()) return f; } catch (e) { /* 지워졌거나 권한 없음 → 새로 */ }
+  }
+  const f = DriveApp.createFile(MEMO_FILE_NAME, '{}', 'application/json');
+  f.setDescription('업무관리 웹앱의 "내 메모"가 저장되는 파일입니다. 지우거나 내용을 고치지 마세요. (나만 볼 수 있습니다)');
+  props.setProperty(MEMO_FILE_KEY, f.getId());
+  return f;
+}
+
+function readMemoFile_(f) {
+  try {
+    const v = JSON.parse(f.getBlob().getDataAsString() || '{}');
+    return v && typeof v === 'object' ? v : {};
+  } catch (e) { return {}; }
+}
+
+/** 예전 버전(사용자 속성)에 쓴 메모 → 파일로 옮긴다. 옮긴 게 있으면 true */
+function migrateMemoProps_(memos) {
+  const props = PropertiesService.getUserProperties();
+  const all = props.getProperties();
+  const keys = Object.keys(all).filter(k => k.indexOf(MEMO_PREFIX) === 0);
+  keys.forEach(k => { const d = k.slice(MEMO_PREFIX.length); if (!memos[d]) memos[d] = all[k]; });
+  return keys;
+}
 
 function apiMemos() {
-  const all = PropertiesService.getUserProperties().getProperties();
-  const out = {};
-  Object.keys(all).forEach(k => { if (k.indexOf(MEMO_PREFIX) === 0) out[k.slice(MEMO_PREFIX.length)] = all[k]; });
-  return out;
+  const lock = LockService.getUserLock();
+  lock.waitLock(20000);
+  try {
+    const f = memoFile_();
+    const memos = readMemoFile_(f);
+    const moved = migrateMemoProps_(memos);
+    if (moved.length) {
+      f.setContent(JSON.stringify(memos));
+      const props = PropertiesService.getUserProperties();
+      moved.forEach(k => props.deleteProperty(k));
+    }
+    return { memos: memos, url: f.getUrl() };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function apiSaveMemo(ymd, text) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) throw new Error('날짜가 올바르지 않습니다.');
   const value = String(text || '').replace(/\s+$/, '');
-  // 구글 사용자 속성은 한 칸 9KB(한글 약 3,000자), 사람마다 전체 500KB까지
-  if (Utilities.newBlob(value).getBytes().length > MEMO_MAX_BYTES) throw new Error('한 날짜 메모가 너무 깁니다. (한글 약 2,800자까지) 나눠서 다른 날짜에 써 주세요.');
-  const props = PropertiesService.getUserProperties();
+  if (value.length > MEMO_MAX_CHARS) throw new Error('한 날짜 메모는 20,000자까지 쓸 수 있습니다.');
+  const lock = LockService.getUserLock();
+  lock.waitLock(20000);
   try {
-    if (value.trim()) props.setProperty(MEMO_PREFIX + ymd, value);
-    else props.deleteProperty(MEMO_PREFIX + ymd);
-  } catch (e) {
-    throw new Error('메모 저장 공간이 가득 찼습니다. 내 메모에서 오래된 메모를 지운 뒤 다시 저장해 주세요.');
+    const f = memoFile_();
+    const memos = readMemoFile_(f);
+    if (value.trim()) memos[ymd] = value; else delete memos[ymd];
+    f.setContent(JSON.stringify(memos));
+    try { PropertiesService.getUserProperties().deleteProperty(MEMO_PREFIX + ymd); } catch (e) { /* 없음 */ }
+  } finally {
+    lock.releaseLock();
   }
   return true;
 }
