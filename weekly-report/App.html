@@ -2138,7 +2138,7 @@
     });
     return res;
   }
-  /** 내 휴가(팀장·관리자는 모든 휴가) 일정이면 지우기 버튼을 단다 */
+  /** 내 휴가(관리자는 모든 휴가) 일정이면 지우기 버튼을 단다 */
   /** 팀 양식의 이름: 성을 뺀 이름 ("안지선" → "지선"). 같은 이름을 쓰는 팀원이 또 있으면 성까지 */
   function shortName(name) {
     const ok = n => /^[가-힣]{3,4}$/.test(n);
@@ -2147,17 +2147,17 @@
     return all.filter(n => ok(n) && n.slice(1) === name.slice(1)).length <= 1 ? name.slice(1) : name;
   }
   function canDelLeaveEv(ev) {
-    // 여러 명이 함께 적힌 휴가 일정("[오전반차] 김지애, 이소영")은 팀장·관리자만 (각자 것은 내 주간업무 휴무 일정에서 지운다)
+    // 여러 명이 함께 적힌 휴가 일정("[오전반차] 김지애, 이소영")은 관리자만 (각자 것은 내 주간업무 휴무 일정에서 지운다)
     const t = String(ev.title).replace(/^(기타\] [^(]+?) \([^)]*\)$/, '$1'); // 기타] 정호 (사유) → 기타] 정호
     const many = t.indexOf(', ') >= 0;
-    return ev.kind === 'leave' && !ev.ro && !String(ev.id).startsWith('tmp-') && (D.me.isLeader || D.me.isAdmin || (!many && D.me.name && (t.indexOf(D.me.name) >= 0 || t.endsWith('] ' + shortName(D.me.name)))));
+    return ev.kind === 'leave' && !ev.ro && !String(ev.id).startsWith('tmp-') && (D.me.isAdmin || (!many && D.me.name && (t.indexOf(D.me.name) >= 0 || t.endsWith('] ' + shortName(D.me.name)))));
   }
   /** 내가 등록한 일정(팀·채용·내 캘린더)과 내 휴가는 눌러서 고치거나 지운다 */
   function canEditEv(ev) {
     if (!ev || ev.ro || String(ev.id).startsWith('tmp-')) return false;
     if (ev.kind === 'leave') {
       if (canDelLeaveEv(ev)) return true;
-      // 여러 명 휴가는 그중 본인 것만 고칠 수 있다 (지우기는 팀장·관리자)
+      // 여러 명 휴가는 그중 본인 것만 고칠 수 있다 (지우기는 관리자)
       const ppl = leavePeople(ev);
       return !ev.ro && !String(ev.id).startsWith('tmp-') && !!D.me.name && ppl.length > 1 && (ppl.indexOf(shortName(D.me.name)) >= 0 || ppl.indexOf(D.me.name) >= 0);
     }
@@ -4207,7 +4207,7 @@
   function openLeaveEdit(ev) {
     const people = leavePeople(ev);
     const many = people.length > 1;
-    const boss = !!(D.me.isLeader || D.me.isAdmin);
+    const boss = !!D.me.isAdmin; // 다른 사람 휴가는 관리자만
     const meShort = D.me.name ? shortName(D.me.name) : '';
     const t = (String(ev.title).match(/^(\S+)\] /) || [])[1] || '';
     const type = LEAVE_TYPES.indexOf(t) >= 0 ? t : '기타';

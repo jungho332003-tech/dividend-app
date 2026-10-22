@@ -180,7 +180,7 @@ function apiDeleteLeave(id) {
   const idx = rows.findIndex(r => String(r[0]) === String(id));
   if (idx < 0) throw new Error('휴가를 찾을 수 없습니다.');
   const name = String(rows[idx][LCOL.NAME - 1]).trim();
-  if (name !== me.name && !me.isLeader && !me.isAdmin) throw new Error('본인 휴가만 지울 수 있습니다.');
+  if (name !== me.name && !me.isAdmin) throw new Error('본인 휴가만 지울 수 있습니다.'); // 다른 사람 휴가는 관리자만 (팀장도 본인 것만)
 
   sh.getRange(idx + 2, LCOL.DELETED).setValue('Y');
   const eventId = String(rows[idx][LCOL.EVENT - 1] || '');
@@ -199,7 +199,7 @@ function apiDeleteLeave(id) {
 
 /**
  * 일정 화면에서 휴가 일정을 지운다. [휴가]에 그 일정으로 등록된 휴가가 있으면 휴가째 지우고(주간보고에서도 빠짐),
- * 캘린더에만 있던 휴가 일정이면 캘린더에서 지운다. 본인 휴가만 (팀장·관리자는 모두).
+ * 캘린더에만 있던 휴가 일정이면 캘린더에서 지운다. 본인 휴가만 (관리자는 모두).
  */
 function apiDeleteLeaveEvent(eventId) {
   const ctx = getContext();
@@ -218,7 +218,7 @@ function apiDeleteLeaveEvent(eventId) {
   const title = ev.getTitle();
   if (!isLeaveTitle_(title, ctx.members.map(m => m.name))) throw new Error('휴가 일정만 여기서 지울 수 있습니다.');
   const who = leaveNames_(title, ctx.members.map(m => m.name));
-  if (!me.isLeader && !me.isAdmin && (who.length !== 1 || who[0] !== me.name)) throw new Error(who.length > 1 ? '여러 명이 함께 적힌 휴가 일정은 팀장·관리자만 지울 수 있습니다.' : '본인 휴가만 지울 수 있습니다.');
+  if (!me.isAdmin && (who.length !== 1 || who[0] !== me.name)) throw new Error(who.length > 1 ? '여러 명이 함께 적힌 휴가 일정은 관리자만 지울 수 있습니다.' : '본인 휴가만 지울 수 있습니다.');
   try { ev.deleteEvent(); } catch (e) { throw new Error('캘린더에서 지울 권한이 없습니다. 팀 캘린더 "일정 변경" 권한을 확인하세요.'); }
   bumpCalendar_();
   return {};
@@ -226,7 +226,7 @@ function apiDeleteLeaveEvent(eventId) {
 
 /**
  * 일정 화면에서 휴가 고치기: 종류·기간·메모. [휴가] 시트·팀 캘린더·채용 캘린더를 같이 고친다.
- * 본인 휴가만 (팀장·관리자는 모두). 여러 명이 함께 적힌 일정은 지우기만 된다.
+ * 본인 휴가만 (관리자는 모두). 여러 명이 함께 적힌 일정은 골라서 고친다.
  */
 function apiUpdateLeaveEvent(eventId, leave) {
   const ctx = getContext();
@@ -262,8 +262,8 @@ function apiUpdateLeaveEvent(eventId, leave) {
   // 여러 명 중 일부만 고르면 그 사람들만 새 일정으로 떼어 낸다
   let sel = Array.isArray(leave.who) && leave.who.length ? leaveNames_(leave.who.join(', '), who) : who.slice();
   if (!sel.length) sel = who.slice();
-  if (!me.isLeader && !me.isAdmin) {
-    if (sel.length !== 1 || sel[0] !== me.name) throw new Error(who.length > 1 ? '여러 명이 함께 적힌 휴가는 본인 것만 고칠 수 있습니다. (팀장·관리자는 모두)' : '본인 휴가만 고칠 수 있습니다.');
+  if (!me.isAdmin) { // 다른 사람 휴가는 관리자만 (팀장도 본인 것만)
+    if (sel.length !== 1 || sel[0] !== me.name) throw new Error(who.length > 1 ? '여러 명이 함께 적힌 휴가는 본인 것만 고칠 수 있습니다.' : '본인 휴가만 고칠 수 있습니다.');
   }
   if (sel.length < who.length) return splitLeave_(ctx, me, { sh, rows, idxs, ev, cal, who, sel, type, start, end, memo, names });
 
