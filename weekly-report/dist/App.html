@@ -416,7 +416,7 @@
   .edit-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
   .items { display: flex; flex-direction: column; gap: 8px; }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
-  .toggle.imp-btn { color: var(--muted); }
+  .toggle.imp-btn { color: var(--muted); width: 38px; padding: 0; font-size: 17px; line-height: 1; }
   .toggle.imp-btn[aria-pressed="true"] { background: #fff4d6; color: #a15c00; border-color: #e0a526; font-weight: 700; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toggle.imp-btn[aria-pressed="true"] { background: #3a2c0a; color: #f5c451; border-color: #b8860b; } }
   :root[data-theme="dark"] .toggle.imp-btn[aria-pressed="true"] { background: #3a2c0a; color: #f5c451; border-color: #b8860b; }
@@ -1416,7 +1416,7 @@
         <div class="report-split">
         <section class="panel">
           <p class="report-title">■ ${esc(D.week.title)}</p>
-          <p class="report-note">${D.me.isLeader ? '굵은 글씨: 담당자가 표시한 중요 업무 · 업무 클릭: 굵게 표시/해제' : '굵은 글씨: 중요 업무 (내 주간업무에서 ☆중요 체크)'}</p>
+          <p class="report-note">${D.me.isLeader ? '굵은 글씨: 담당자가 표시한 중요 업무 · 업무 클릭: 굵게 표시/해제' : '굵은 글씨: 중요 업무 (내 주간업무에서 ☆ 체크)'}</p>
           <div class="mcards">${reportCards()}</div>
           <div class="table-wrap desk">
             <table class="report team">
@@ -3062,7 +3062,7 @@
   function itemsHtml(key) {
     return draft[key].map((it, i) => `
       <div class="item">
-        <button class="toggle imp-btn" data-k="${key}" data-i="${i}" data-f="imp" aria-pressed="${!!it.imp}" title="중요 업무: 팀 주간보고에 굵게 표시됩니다">${it.imp ? '★' : '☆'} 중요</button>
+        <button class="toggle imp-btn" data-k="${key}" data-i="${i}" data-f="imp" aria-pressed="${!!it.imp}" title="중요 업무 (팀 주간보고에 굵게 표시)" aria-label="중요 업무">${it.imp ? '★' : '☆'}</button>
         <textarea class="field-in task-in" rows="1" data-k="${key}" data-i="${i}" data-f="task" placeholder="업무 내용" aria-label="업무 내용">${esc(it.task)}</textarea>
         <input class="field-in date-in" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" data-k="${key}" data-i="${i}" data-f="dueIso" value="${esc(it.dueIso)}" ${it.cont ? 'disabled' : ''} aria-label="기한">
         <button class="toggle" data-k="${key}" data-i="${i}" data-f="cont" aria-pressed="${it.cont}">지속</button>
@@ -3120,7 +3120,7 @@
         const it = draft[t.dataset.k][Number(t.dataset.i)];
         it.imp = !it.imp;
         t.setAttribute('aria-pressed', String(it.imp));
-        t.textContent = `${it.imp ? '★' : '☆'} 중요`;
+        t.textContent = it.imp ? '★' : '☆';
       } else if (t.dataset.f === 'cont') {
         const it = draft[t.dataset.k][Number(t.dataset.i)];
         it.cont = !it.cont;
