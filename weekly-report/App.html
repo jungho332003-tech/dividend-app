@@ -336,8 +336,8 @@
   .report.team td.cm { background: none; }
   .report.team tr.alt td { background: var(--row-alt); }
   .report.team td.nm { vertical-align: middle; text-align: center; }
-  .report.team td.nm b { display: block; font-size: 15.5px; }
-  .report.team td.nm .dot { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--warn-ink); margin: 6px auto 0; }
+  .report.team td.nm b { display: inline; font-size: 15.5px; }
+  .report.team td.nm .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-ink); margin: 0 6px 0 -14px; vertical-align: 1px; }
   .report.team td.note { color: var(--ink); font-weight: 500; }
   .dot-inline { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-ink); vertical-align: 1px; }
   .due-late { color: var(--warn-ink); font-weight: 700; }
@@ -1474,7 +1474,7 @@
           const a = m.thisWeek[i] || {};
           const b = m.nextWeek[i] || {};
           rows += `<tr class="${i === 0 ? 'top' : ''} ${mi % 2 ? 'alt' : ''}">`;
-          if (i === 0) rows += `<td class="nm" rowspan="${n}"><b>${esc(m.name)}</b>${m.done ? '' : '<span class="dot" title="작성완료 미체크" aria-label="미작성"></span>'}</td>`;
+          if (i === 0) rows += `<td class="nm" rowspan="${n}">${m.done ? '' : '<span class="dot" title="작성완료 미체크" aria-label="미작성"></span>'}<b>${esc(m.name)}</b></td>`;
           rows += `${taskCell(m, 'this', i, a, '')}<td class="c">${dueHtml(a, true)}</td>${taskCell(m, 'next', i, b, 'split')}<td class="c">${dueHtml(b, false)}</td>`;
           if (i === 0) {
             rows += `<td rowspan="${n}" class="split note">${esc(noteOf(m))}</td>`;
