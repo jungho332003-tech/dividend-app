@@ -553,7 +553,11 @@
   .ev.holiday { background: none; color: var(--warn-ink); font-weight: 600; }
   /* 여러 날 이어지는 일정: 시작 칸에서 오른쪽 칸들 위로 이어 그린 막대 */
   .cal-day { overflow: visible; }
-  .ev.span { position: relative; z-index: 1; flex: none; max-width: none; }
+  .ev.span { position: relative; z-index: 1; flex: none; max-width: none; text-align: center; font-weight: 700; color: var(--ink); background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
+  .ev.span.leave { background: color-mix(in srgb, var(--warn-ink) 24%, var(--panel)); color: var(--warn-ink); }
+  .ev.span.mine { background: color-mix(in srgb, var(--ink-2) 16%, var(--panel)); }
+  .ev.span.recruit { background: color-mix(in srgb, #16a34a 24%, var(--panel)); }
+  .ev.span.extra { background: color-mix(in srgb, var(--xc) 26%, var(--panel)); }
   .ev.span.cont-l { margin-left: -7px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
   .ev.span.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
   .ev.ev-gap { visibility: hidden; flex: none; }
@@ -2542,7 +2546,7 @@
       const laneHtml = shownLanes.map(lane => {
         const seg = lane.find(g => col >= g.c0 && col <= g.c1);
         if (!seg) return '<span class="ev ev-gap" aria-hidden="true">&nbsp;</span>';
-        if (col !== seg.c0) return '<span class="ev ev-gap" aria-hidden="true">&nbsp;</span>';
+        if (col !== seg.c0) return '<span class="ev ev-gap under" aria-hidden="true">&nbsp;</span>'; // 왼쪽에서 이어진 막대가 지나가는 자리 (지우면 안 됨)
         const n = seg.c1 - seg.c0 + 1;
         const style = `width:calc(${n} * (100% + 15px) - 15px${seg.contL ? ' + 7px' : ''}${seg.contR ? ' + 8px' : ''})`;
         return `<span class="${evCls(seg.ev)} span${seg.contL ? ' cont-l' : ''}${seg.contR ? ' cont-r' : ''}" style="${style}" title="${esc(seg.ev.title)}">${evText(seg.ev)}</span>`;
