@@ -2305,14 +2305,11 @@
     }
     openModal(`<h3>지난 메모 <small class="ph" style="font-size:13px;font-weight:500">${all.length}개</small></h3>
       <div class="hist-bar">
-        <label class="hist-day">날짜
-          <input class="field-in" id="histDay" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" value="${esc(histDay)}" aria-label="날짜로 찾기">
-        </label>
-        <select class="field-in" id="histMonth" aria-label="월별 보기" ${histDay ? 'disabled' : ''}>
+        <select class="field-in" id="histMonth" aria-label="월별 보기">
           <option value="">전체 기간</option>
           ${months.map(m => `<option value="${m}" ${histMonth === m ? 'selected' : ''}>${m.slice(0, 4)}년 ${+m.slice(5, 7)}월</option>`).join('')}
         </select>
-        ${histDay || histMonth ? '<button type="button" class="btn small ghost" id="histAll">전체</button>' : ''}
+        ${histMonth ? '<button type="button" class="btn small ghost" id="histAll">전체 기간</button>' : ''}
       </div>
       ${histDay ? '' : `<input class="field-in" id="memoQ" type="search" placeholder="메모 검색" value="${esc(q)}" style="margin:0 0 10px">`}
       <div class="memo-list">${body}</div>
