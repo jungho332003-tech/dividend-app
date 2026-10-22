@@ -190,6 +190,33 @@ function mailTo_(m) {
   return (m && (m.notify || m.email)) || '';
 }
 
+/* ---------- 알림 메일 받기/끄기 (각자 선택) ----------
+ * 문서 속성 "mailOff:<구글 계정>" = 끈 종류 (쉼표). 기본은 모두 받기.
+ */
+const MAIL_KINDS = {
+  remind: '주간업무 미작성 알림',
+  close: '주간업무 취합 완료 (팀장)',
+  recruit: '채용 안내 (입사 70일 수습평가 · 인터뷰 전날)',
+};
+const MAIL_OFF_PREFIX = 'mailOff:';
+
+/** { 이메일(소문자): [끈 종류] } */
+function mailOffMap_() {
+  const out = {};
+  try {
+    const all = PropertiesService.getDocumentProperties().getProperties();
+    Object.keys(all).forEach(k => {
+      if (k.indexOf(MAIL_OFF_PREFIX) === 0) out[k.slice(MAIL_OFF_PREFIX.length)] = String(all[k] || '').split(',').filter(Boolean);
+    });
+  } catch (e) { /* 못 읽으면 모두 받기 */ }
+  return out;
+}
+
+function wantsMail_(m, kind, offMap) {
+  const off = (offMap || mailOffMap_())[String((m && m.email) || '').toLowerCase()] || [];
+  return off.indexOf(kind) < 0;
+}
+
 function getLeaders(members) {
   return (members || getMembers()).filter(m => m.role === '팀장' && mailTo_(m));
 }
@@ -858,8 +885,9 @@ function menuSendReminder() {
 
 /** 작성완료 미체크 팀원에게 메일 (알림메일 칸이 있으면 그 주소로). 보낸 사람 이름 목록 반환 */
 function sendReminder_(ctx) {
-  const pending = pendingMembers_(ctx);
-  pending.filter(m => mailTo_(m)).forEach(m => {
+  const off = mailOffMap_();
+  const pending = pendingMembers_(ctx).filter(m => mailTo_(m) && wantsMail_(m, 'remind', off)); // 끈 사람은 빼고
+  pending.forEach(m => {
     const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + m.name);
     MailApp.sendEmail({
       to: mailTo_(m),
@@ -871,7 +899,7 @@ function sendReminder_(ctx) {
         `작성 후 "작성완료 체크"를 눌러주세요.`,
     });
   });
-  return pending.filter(m => mailTo_(m)).map(m => m.name);
+  return pending.map(m => m.name);
 }
 
 function pendingMembers_(ctx) {
@@ -880,7 +908,8 @@ function pendingMembers_(ctx) {
 
 /** 마감 시 팀장에게 보고서 링크 + 미작성자 안내 */
 function sendClosingMail_(ctx) {
-  const leaders = getLeaders(ctx.members);
+  const off = mailOffMap_();
+  const leaders = getLeaders(ctx.members).filter(m => wantsMail_(m, 'close', off));
   if (!leaders.length) return;
   const pending = pendingMembers_(ctx).map(m => m.name);
   const report = ctx.ss.getSheetByName(SHEET.REPORT);
@@ -2612,7 +2641,8 @@ const HR_MAIL = {
 function hrMailCheck_(ctx, now) {
   now = now || new Date();
   if (now.getHours() < HR_MAIL.HOUR) return [];
-  const to = ctx.members.filter(m => m.recruit).map(mailTo_).filter(Boolean);
+  const off = mailOffMap_();
+  const to = ctx.members.filter(m => m.recruit && wantsMail_(m, 'recruit', off)).map(mailTo_).filter(Boolean);
   const sh = ctx.ss.getSheetByName(HR.SHEET);
   if (!to.length || !sh || sh.getLastRow() < 2) return [];
   const today = startOfDay_(now);
@@ -3946,7 +3976,34 @@ function baseData_(ctx) {
     teamCalendar: teamCalendarSet_(ctx),
     // 채용담당이고 채용 캘린더가 정해져 있으면 [일정]에서 채용 캘린더를 보고 쓸 수 있다
     recruitCalendar: canRecruitCal_(ctx, me),
+    mail: mailPrefs_(ctx, me),
   };
+}
+
+/** 내 알림 메일: 나에게 해당하는 종류 + 끈 종류 + 받는 주소 */
+function mailPrefs_(ctx, me) {
+  const m = ctx.members.find(x => x.email && x.email.toLowerCase() === me.email) || {};
+  const kinds = [];
+  if (me.writer) kinds.push('remind');
+  if (me.isLeader) kinds.push('close');
+  if (me.recruiter) kinds.push('recruit');
+  return {
+    kinds: kinds.map(k => ({ key: k, label: MAIL_KINDS[k] })),
+    off: mailOffMap_()[me.email] || [],
+    to: mailTo_(m),
+  };
+}
+
+/** 내 알림 메일 끄기/켜기. off: 끌 종류 키 목록 */
+function apiSaveMailPrefs(off) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  if (!me.email || !me.name) throw new Error('[팀원] 시트에 등록된 사람만 설정할 수 있습니다.');
+  const keys = (off || []).map(String).filter((k, i, a) => MAIL_KINDS[k] && a.indexOf(k) === i);
+  const props = PropertiesService.getDocumentProperties();
+  if (keys.length) props.setProperty(MAIL_OFF_PREFIX + me.email, keys.join(','));
+  else props.deleteProperty(MAIL_OFF_PREFIX + me.email);
+  return { mail: mailPrefs_(ctx, me) };
 }
 
 function readMembers_(ctx) {

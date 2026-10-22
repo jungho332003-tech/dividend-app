@@ -435,6 +435,12 @@
   .memo-edit { width: 100%; resize: vertical; min-height: 48px; line-height: 1.55; }
   .memo-item .memo-st { font-size: 12px; color: var(--muted); padding-top: 10px; }
   @media (max-width: 640px) { .memo-item { grid-template-columns: minmax(0, 1fr) 32px; } .memo-date { grid-column: 1 / -1; padding: 0; flex-direction: row; } .memo-item .memo-st { display: none; } }
+  .top-user { border: 0; background: none; font-family: inherit; color: inherit; cursor: pointer; border-radius: 999px; padding: 2px 8px 2px 2px; }
+  .top-user:hover { background: var(--panel-2); }
+  .me-mail { margin-left: auto; color: var(--side-ink, inherit); opacity: .75; }
+  .me-mail:hover { opacity: 1; }
+  .mail-prefs { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 4px; }
+  .mail-pref { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
   .ord { display: flex; align-items: center; gap: 4px; justify-content: center; }
   .ord-in { width: 52px; padding: 5px 4px !important; text-align: center; }
   .ord-btns { display: inline-flex; }
@@ -1078,7 +1084,7 @@
       const i = D.members.findIndex(m => m.name === data.memberPatch.name);
       if (i >= 0) D.members[i] = data.memberPatch; else D.members.push(data.memberPatch);
     }
-    ['members', 'hr', 'budget', 'board', 'rules', 'minutes', 'me', 'week'].forEach(k => { if (data[k]) D[k] = data[k]; });
+    ['members', 'hr', 'budget', 'board', 'rules', 'minutes', 'me', 'week', 'mail'].forEach(k => { if (data[k]) D[k] = data[k]; });
   }
 
   const fmtDue = iso => { const d = new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} (${DAY[d.getDay()]})`; };
@@ -1142,7 +1148,8 @@
     const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
     const initials = esc(D.me.name ? D.me.name.slice(-2) : '?');
     $('#meBox').innerHTML = `<span class="avatar">${initials}</span>
-      <div><b>${esc(D.me.name || '등록되지 않은 사용자')}</b><span class="sub" title="${esc(D.me.email || '')}">${esc(D.me.name ? role : (D.me.email || ''))}</span></div>`;
+      <div><b>${esc(D.me.name || '등록되지 않은 사용자')}</b><span class="sub" title="${esc(D.me.email || '')}">${esc(D.me.name ? role : (D.me.email || ''))}</span></div>
+      ${D.me.name ? `<button type="button" class="icon-btn me-mail" onclick="openMailPrefs()" title="내 알림 메일 설정" aria-label="내 알림 메일 설정">${ic('bell', 'sm')}</button>` : ''}`;
 
     const s = stats();
     const newPosts = D.board.filter(p => daysAgo(p.date) < 3).length;
@@ -1191,7 +1198,7 @@
       <div class="top-right">
         <span class="week-pill">${ic('calendar', 'sm')}${esc(D.week.thisLabel)}</span>
         ${D.me.isAdmin && D.sheetUrl ? `<a class="sheet-link" href="${esc(D.sheetUrl)}" target="_blank" rel="noopener" title="구글 스프레드시트 열기 (관리자)">${ic('ext', 'sm')}<span>스프레드시트</span></a>` : ''}
-        <span class="top-user" title="${esc(D.me.email || '')}"><span class="avatar">${initials}</span><b>${esc(D.me.name || '')}</b></span>
+        <button type="button" class="top-user" onclick="openMailPrefs()" title="${esc(D.me.email || '')} · 내 알림 메일 설정"><span class="avatar">${initials}</span><b>${esc(D.me.name || '')}</b></button>
       </div>`;
   }
 
@@ -2190,6 +2197,25 @@
     return `<textarea class="field-in" id="memoIn" data-day="${day}" placeholder="${memos ? '이 날의 메모 (나만 보입니다)' : '메모를 불러오는 중…'}" ${memos ? '' : 'disabled'}>${esc((memos && memos[day]) || '')}</textarea>`;
   }
   /** 지난 메모: 날짜순으로 모아 보고, 검색하고, 누르면 그날 일정 화면으로 */
+  /* ---------- 내 알림 메일 (받을지 각자 선택) ---------- */
+  function openMailPrefs() {
+    const m = D.mail;
+    if (!D.me.name || !m) return toast('[팀원] 시트에 등록된 사람만 설정할 수 있습니다.');
+    const rows = m.kinds.map(k => `<label class="mail-pref"><input type="checkbox" class="check" data-k="${k.key}" ${m.off.indexOf(k.key) < 0 ? 'checked' : ''}><span>${esc(k.label)}</span></label>`).join('');
+    openModal(`<h3>내 알림 메일</h3>
+      <p class="sub">받을 메일만 체크하세요. 받는 주소: <b>${esc(m.to || '(없음)')}</b>${m.to ? '' : ' — 관리자에게 이메일 등록을 요청하세요'}</p>
+      <div class="mail-prefs">${rows || '<p class="dd-empty">나에게 오는 알림 메일이 없습니다.</p>'}</div>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">닫기</button>${rows ? '<button class="btn primary" id="mpOk">저장</button>' : ''}</div>`);
+    const ok = $('#mpOk');
+    if (!ok) return;
+    ok.onclick = () => {
+      const off = [...document.querySelectorAll('.mail-prefs input')].filter(c => !c.checked).map(c => c.dataset.k);
+      const before = m.off;
+      m.off = off; closeModal(); toast(off.length ? '알림 메일 설정을 저장했습니다. (일부 끔)' : '알림 메일을 모두 받습니다.');
+      call('apiSaveMailPrefs', off).then(applyData).catch(e => { m.off = before; fail(e); });
+    };
+  }
+
   /* ---------- 내 메모 메뉴: 날짜별 메모를 모아 보고 바로 고친다 ---------- */
   let memoQuery = '', memoAddDay = null, memoFileUrl = '', memoYear = '', memoMonth = ''; // 년/월 조회 ('' = 전체)
   const memoPageTimers = {};

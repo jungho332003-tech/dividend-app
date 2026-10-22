@@ -558,7 +558,8 @@ const HR_MAIL = {
 function hrMailCheck_(ctx, now) {
   now = now || new Date();
   if (now.getHours() < HR_MAIL.HOUR) return [];
-  const to = ctx.members.filter(m => m.recruit).map(mailTo_).filter(Boolean);
+  const off = mailOffMap_();
+  const to = ctx.members.filter(m => m.recruit && wantsMail_(m, 'recruit', off)).map(mailTo_).filter(Boolean);
   const sh = ctx.ss.getSheetByName(HR.SHEET);
   if (!to.length || !sh || sh.getLastRow() < 2) return [];
   const today = startOfDay_(now);

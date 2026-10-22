@@ -137,7 +137,34 @@ function baseData_(ctx) {
     teamCalendar: teamCalendarSet_(ctx),
     // 채용담당이고 채용 캘린더가 정해져 있으면 [일정]에서 채용 캘린더를 보고 쓸 수 있다
     recruitCalendar: canRecruitCal_(ctx, me),
+    mail: mailPrefs_(ctx, me),
   };
+}
+
+/** 내 알림 메일: 나에게 해당하는 종류 + 끈 종류 + 받는 주소 */
+function mailPrefs_(ctx, me) {
+  const m = ctx.members.find(x => x.email && x.email.toLowerCase() === me.email) || {};
+  const kinds = [];
+  if (me.writer) kinds.push('remind');
+  if (me.isLeader) kinds.push('close');
+  if (me.recruiter) kinds.push('recruit');
+  return {
+    kinds: kinds.map(k => ({ key: k, label: MAIL_KINDS[k] })),
+    off: mailOffMap_()[me.email] || [],
+    to: mailTo_(m),
+  };
+}
+
+/** 내 알림 메일 끄기/켜기. off: 끌 종류 키 목록 */
+function apiSaveMailPrefs(off) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  if (!me.email || !me.name) throw new Error('[팀원] 시트에 등록된 사람만 설정할 수 있습니다.');
+  const keys = (off || []).map(String).filter((k, i, a) => MAIL_KINDS[k] && a.indexOf(k) === i);
+  const props = PropertiesService.getDocumentProperties();
+  if (keys.length) props.setProperty(MAIL_OFF_PREFIX + me.email, keys.join(','));
+  else props.deleteProperty(MAIL_OFF_PREFIX + me.email);
+  return { mail: mailPrefs_(ctx, me) };
 }
 
 function readMembers_(ctx) {

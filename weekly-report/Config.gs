@@ -181,6 +181,33 @@ function mailTo_(m) {
   return (m && (m.notify || m.email)) || '';
 }
 
+/* ---------- 알림 메일 받기/끄기 (각자 선택) ----------
+ * 문서 속성 "mailOff:<구글 계정>" = 끈 종류 (쉼표). 기본은 모두 받기.
+ */
+const MAIL_KINDS = {
+  remind: '주간업무 미작성 알림',
+  close: '주간업무 취합 완료 (팀장)',
+  recruit: '채용 안내 (입사 70일 수습평가 · 인터뷰 전날)',
+};
+const MAIL_OFF_PREFIX = 'mailOff:';
+
+/** { 이메일(소문자): [끈 종류] } */
+function mailOffMap_() {
+  const out = {};
+  try {
+    const all = PropertiesService.getDocumentProperties().getProperties();
+    Object.keys(all).forEach(k => {
+      if (k.indexOf(MAIL_OFF_PREFIX) === 0) out[k.slice(MAIL_OFF_PREFIX.length)] = String(all[k] || '').split(',').filter(Boolean);
+    });
+  } catch (e) { /* 못 읽으면 모두 받기 */ }
+  return out;
+}
+
+function wantsMail_(m, kind, offMap) {
+  const off = (offMap || mailOffMap_())[String((m && m.email) || '').toLowerCase()] || [];
+  return off.indexOf(kind) < 0;
+}
+
 function getLeaders(members) {
   return (members || getMembers()).filter(m => m.role === '팀장' && mailTo_(m));
 }

@@ -110,8 +110,9 @@ function menuSendReminder() {
 
 /** 작성완료 미체크 팀원에게 메일 (알림메일 칸이 있으면 그 주소로). 보낸 사람 이름 목록 반환 */
 function sendReminder_(ctx) {
-  const pending = pendingMembers_(ctx);
-  pending.filter(m => mailTo_(m)).forEach(m => {
+  const off = mailOffMap_();
+  const pending = pendingMembers_(ctx).filter(m => mailTo_(m) && wantsMail_(m, 'remind', off)); // 끈 사람은 빼고
+  pending.forEach(m => {
     const sh = ctx.ss.getSheetByName(SHEET.INPUT_PREFIX + m.name);
     MailApp.sendEmail({
       to: mailTo_(m),
@@ -123,7 +124,7 @@ function sendReminder_(ctx) {
         `작성 후 "작성완료 체크"를 눌러주세요.`,
     });
   });
-  return pending.filter(m => mailTo_(m)).map(m => m.name);
+  return pending.map(m => m.name);
 }
 
 function pendingMembers_(ctx) {
@@ -132,7 +133,8 @@ function pendingMembers_(ctx) {
 
 /** 마감 시 팀장에게 보고서 링크 + 미작성자 안내 */
 function sendClosingMail_(ctx) {
-  const leaders = getLeaders(ctx.members);
+  const off = mailOffMap_();
+  const leaders = getLeaders(ctx.members).filter(m => wantsMail_(m, 'close', off));
   if (!leaders.length) return;
   const pending = pendingMembers_(ctx).map(m => m.name);
   const report = ctx.ss.getSheetByName(SHEET.REPORT);
