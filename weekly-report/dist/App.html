@@ -417,6 +417,12 @@
   .items { display: flex; flex-direction: column; gap: 8px; }
   .item { display: grid; grid-template-columns: auto minmax(0, 1fr) 142px auto auto; gap: 6px; align-items: start; }
   /* 내 메모 메뉴 */
+  .hist-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0 10px; }
+  .hist-day { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+  .hist-day input { width: 150px; }
+  .hist-bar select { width: auto; flex: 1 1 140px; }
+  .memo-none { text-align: center; padding: 18px 8px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .memo-none p { margin: 0; }
   .memo-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
   .memo-filter select { width: auto; min-width: 110px; }
   .memo-filter .memo-search { flex: 1 1 240px; min-width: 0; margin: 0; }
@@ -2276,18 +2282,53 @@
   document.addEventListener('focusout', e => { const el = e.target; if (el.classList && el.classList.contains('memo-edit')) memoPageSave(el.dataset.day, el.value); });
   window.addEventListener('beforeunload', () => document.querySelectorAll('.memo-edit').forEach(el => { if (memoPageTimers[el.dataset.day]) memoPageSave(el.dataset.day, el.value); }));
 
-  function openMemoHistory(q) {
+  /** 지난 메모 창: 날짜로 바로 찾기 · 월별 보기 · 검색 */
+  let histDay = '', histMonth = '';
+  function openMemoHistory(q, opt) {
     memoFlush();
     q = q || '';
-    const days = Object.keys(memos || {}).filter(d => memos[d] && (!q || memos[d].toLowerCase().indexOf(q.toLowerCase()) >= 0)).sort().reverse();
-    const rows = days.map(d => `<button type="button" class="memo-row" onclick="closeModal();openMemoDay('${d}')">
-        <b>${esc(d.slice(0, 4))}. ${dayLabel(d)}</b><span>${esc(memos[d])}</span>${ic('chev', 'sm')}</button>`).join('');
-    openModal(`<h3>지난 메모 <small class="ph" style="font-size:13px;font-weight:500">${Object.keys(memos || {}).length}개</small></h3>
-      <input class="field-in" id="memoQ" type="search" placeholder="메모 검색" value="${esc(q)}" style="margin:6px 0 10px">
-      <div class="memo-list">${rows || `<p class="dd-empty">${q ? '찾는 메모가 없습니다.' : '아직 쓴 메모가 없습니다.'}</p>`}</div>
-      <div class="modal-actions"><button type="button" class="btn" onclick="closeModal()">닫기</button></div>`);
+    if (opt && 'day' in opt) histDay = opt.day;
+    if (opt && 'month' in opt) histMonth = opt.month;
+    if (!opt) { histDay = ''; histMonth = ''; }
+    const all = Object.keys(memos || {}).filter(d => memos[d]).sort().reverse();
+    const months = [...new Set(all.map(d => d.slice(0, 7)))];
+    const row = d => `<button type="button" class="memo-row" onclick="closeModal();openMemoDay('${d}')">
+        <b>${esc(d.slice(0, 4))}. ${dayLabel(d)}</b><span>${esc(memos[d])}</span>${ic('chev', 'sm')}</button>`;
+    let body;
+    if (histDay) {
+      body = memos && memos[histDay] ? row(histDay)
+        : `<div class="memo-none"><p>${esc(histDay.slice(0, 4))}. ${dayLabel(histDay)}에는 메모가 없습니다.</p>
+            <button type="button" class="btn small primary" onclick="closeModal();openMemoDay('${histDay}')">${ic('pencil', 'sm')}이 날짜에 메모 쓰기</button></div>`;
+    } else {
+      const days = all.filter(d => (!histMonth || d.slice(0, 7) === histMonth) && (!q || memos[d].toLowerCase().indexOf(q.toLowerCase()) >= 0));
+      body = days.map(row).join('') || `<p class="dd-empty">${q || histMonth ? '찾는 메모가 없습니다.' : '아직 쓴 메모가 없습니다.'}</p>`;
+    }
+    openModal(`<h3>지난 메모 <small class="ph" style="font-size:13px;font-weight:500">${all.length}개</small></h3>
+      <div class="hist-bar">
+        <label class="hist-day">날짜
+          <input class="field-in" id="histDay" type="text" data-date inputmode="numeric" maxlength="10" autocomplete="off" value="${esc(histDay)}" aria-label="날짜로 찾기">
+        </label>
+        <select class="field-in" id="histMonth" aria-label="월별 보기" ${histDay ? 'disabled' : ''}>
+          <option value="">전체 기간</option>
+          ${months.map(m => `<option value="${m}" ${histMonth === m ? 'selected' : ''}>${m.slice(0, 4)}년 ${+m.slice(5, 7)}월</option>`).join('')}
+        </select>
+        ${histDay || histMonth ? '<button type="button" class="btn small ghost" id="histAll">전체</button>' : ''}
+      </div>
+      ${histDay ? '' : `<input class="field-in" id="memoQ" type="search" placeholder="메모 검색" value="${esc(q)}" style="margin:0 0 10px">`}
+      <div class="memo-list">${body}</div>
+      <div class="modal-actions"><a class="btn" href="#" onclick="closeModal();go('memo');return false">내 메모에서 모두 보기</a><button type="button" class="btn" onclick="closeModal()">닫기</button></div>`);
     const qi = $('#memoQ');
-    if (qi) { qi.oninput = () => { const v = qi.value; openMemoHistory(v); const n = $('#memoQ'); if (n) { n.focus(); n.setSelectionRange(v.length, v.length); } }; }
+    if (qi) { qi.oninput = () => { const v = qi.value; openMemoHistory(v, {}); const n = $('#memoQ'); if (n) { n.focus(); n.setSelectionRange(v.length, v.length); } }; }
+    const di = $('#histDay');
+    if (di) {
+      const apply = () => { if (!di.value || /^\d{4}-\d{2}-\d{2}$/.test(di.value)) openMemoHistory('', { day: di.value, month: '' }); };
+      di.addEventListener('change', apply);
+      di.addEventListener('input', () => { if (/^\d{4}-\d{2}-\d{2}$/.test(di.value)) apply(); }); // 20260925 다 치면 바로
+    }
+    const mi = $('#histMonth');
+    if (mi) mi.onchange = () => openMemoHistory(q, { day: '', month: mi.value });
+    const al = $('#histAll');
+    if (al) al.onclick = () => openMemoHistory('', { day: '', month: '' });
   }
   function openMemoDay(d) {
     calMonth = new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, 1);
