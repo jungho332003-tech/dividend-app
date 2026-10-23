@@ -687,6 +687,13 @@
   .memo-head small.ph { font-size: 12px; font-weight: 500; }
   .memo-st { margin-left: auto; font-size: 12px; color: var(--muted); }
   #memoIn { width: 100%; min-height: 160px; resize: vertical; line-height: 1.6; }
+  .modal.wide { max-width: 860px; }
+  .memo-big { width: 24px; height: 24px; margin-left: -2px; color: var(--muted); }
+  .memo-head { flex-wrap: nowrap; gap: 4px; }
+  .memo-head h2 { white-space: nowrap; min-width: 0; }
+  .memo-head .btn.ghost { margin-left: 0; padding-left: 6px; padding-right: 4px; white-space: nowrap; }
+  .memo-big:hover { color: var(--accent); }
+  #memoBig { width: 100%; min-height: min(60vh, 560px); resize: vertical; line-height: 1.7; font-size: 15px; margin-top: 4px; }
   .cal-day { position: relative; }
   .cal-day .memo-mark { display: none; position: absolute; top: 8px; right: 8px; color: var(--muted); line-height: 0; }
   .cal-day.has-memo .memo-mark { display: block; }
@@ -1087,6 +1094,7 @@
     userCheck: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/>',
     clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     ext: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+    expand: '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/>',
     pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
     memo: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8"/><path d="M8 17h5"/>',
     copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
@@ -1347,7 +1355,7 @@
             <div class="agenda" id="upcoming">${upcomingHtml()}</div>
           </section>`,
         D.me.name && `<section class="panel memo-box">
-            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}오늘 내 메모 <small class="ph">${dayLabel(dkey(now()))}</small></h2>
+            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}오늘 내 메모 <small class="ph">${dayLabel(dkey(now()))}</small><button type="button" class="icon-btn memo-big" onclick="openMemoBig()" title="크게 보기" aria-label="메모 크게 보기">${ic('expand', 'sm')}</button></h2>
               <span class="memo-st" id="memoSt"></span><button class="btn small ghost" onclick="openMemoHistory()">지난 메모${ic('chev', 'sm')}</button></div>
             ${memoBoxHtml(dkey(now()))}
           </section>`,
@@ -2523,6 +2531,31 @@
       .then(() => { const s2 = $('#memoSt'); if (s2 && $('#memoIn') && $('#memoIn').dataset.day === day) s2.textContent = '저장됨'; })
       .catch(e => { const s2 = $('#memoSt'); if (s2) s2.textContent = ''; fail(e); });
   }
+  /** 크게 보기: 같은 날 메모를 넓은 창에서 쓴다 (쓰는 대로 자동 저장, 작은 칸과 같은 내용) */
+  let memoBigTimer = null;
+  function openMemoBig() {
+    const box = $('#memoIn');
+    if (!box || !memos) return toast('메모를 불러오는 중입니다. 잠시 후 다시 눌러 주세요.');
+    const day = box.dataset.day;
+    memoFlush();
+    openModal(`<h3>${ic('pencil', 'sm')} 내 메모 <small class="ph" style="font-size:14px;font-weight:500">${dayLabel(day)}</small></h3>
+      <p class="sub">나만 보입니다 · 쓰는 대로 자동 저장 <span class="memo-st" id="memoBigSt"></span></p>
+      <textarea class="field-in" id="memoBig" data-day="${day}" placeholder="이 날의 메모">${esc(memos[day] || '')}</textarea>
+      <div class="modal-actions"><button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+    $('#modal').classList.add('wide');
+    const big = $('#memoBig');
+    const save = () => {
+      clearTimeout(memoBigTimer); memoBigTimer = null;
+      const small = $('#memoIn'); if (small && small.dataset.day === day) small.value = big.value; // 작은 칸도 같은 내용으로
+      if ((memos[day] || '') === big.value) return;
+      const st = $('#memoBigSt'); if (st) st.textContent = '· 저장 중…';
+      memoSave(day, big.value);
+      setTimeout(() => { const s2 = $('#memoBigSt'); if (s2) s2.textContent = '· 저장됨'; }, 600);
+    };
+    big.oninput = () => { const st = $('#memoBigSt'); if (st) st.textContent = ''; clearTimeout(memoBigTimer); memoBigTimer = setTimeout(save, 800); };
+    big.onblur = save;
+    big.focus(); big.setSelectionRange(big.value.length, big.value.length);
+  }
   function memoFlush() { const box = $('#memoIn'); if (box && memoTimer) memoSave(box.dataset.day, box.value); }
   document.addEventListener('input', e => {
     if (e.target.id !== 'memoIn') return;
@@ -2611,7 +2644,7 @@
             <div class="agenda">${selEvents.map(agRow).join('') || '<div class="empty">일정이 없습니다.</div>'}</div>
           </section>
           <section class="panel memo-box">
-            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}내 메모 <small class="ph">${dayLabel(calSel)}</small></h2>
+            <div class="panel-head memo-head"><h2>${ic('pencil', 'sm')}내 메모 <small class="ph">${dayLabel(calSel)}</small><button type="button" class="icon-btn memo-big" onclick="openMemoBig()" title="크게 보기" aria-label="메모 크게 보기">${ic('expand', 'sm')}</button></h2>
               <span class="memo-st" id="memoSt"></span><button class="btn small ghost" onclick="openMemoHistory()">지난 메모${ic('chev', 'sm')}</button></div>
             ${memoBoxHtml(calSel)}
           </section>
@@ -4356,12 +4389,17 @@
 
   /* ================= 모달 ================= */
   function openModal(html) {
+    $('#modal').classList.remove('wide');
     $('#modal').innerHTML = `<button type="button" class="icon-btn modal-x" onclick="closeModal()" aria-label="닫기">${ic('x')}</button>` + html;
     $('#scrim').hidden = false;
     const first = $('#modal').querySelector('select, input, textarea, .modal-actions button, form button');
     if (first) first.focus();
   }
-  function closeModal() { $('#scrim').hidden = true; setTimeout(liveRender, 300); }
+  function closeModal() {
+    const big = $('#memoBig'); if (big && big.onblur) big.onblur(); // 크게 보기 메모: 닫을 때 저장
+    $('#modal').classList.remove('wide');
+    $('#scrim').hidden = true; setTimeout(liveRender, 300);
+  }
   $('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeModal(); });
 
   /** "1100 / 52500 교육훈련비" (비어 있는 부분은 뺀다) */
