@@ -1269,7 +1269,7 @@
 
   const PAGE_NAMES = { dash: '대시보드', weekly: '주간업무보고', budget: '예산전용', calendar: '일정', board: '공유게시판', rules: '회사 기준', memo: '내 메모', admin: '관리', none: '접근 권한' };
   const SUB_NAMES = {
-    weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황' })[weeklyTab],
+    weekly: () => ({ mine: '내 주간업무', pre: '다음 주 미리 쓰기', team: '팀 주간보고', hr: '인사현황', min: '회의록' })[D.me.isLeader && (weeklyTab === 'mine' || weeklyTab === 'pre') ? 'team' : weeklyTab],
     budget: () => (budgetTab === 'copy' && D.me.budgetManager ? '월별 정리' : budgetTab === 'setup' && canBudgetSetup() ? '예산 설정' : '신청 내역'),
     admin: () => ({ members: '팀원·권한', menus: '메뉴 권한', mail: '알림 메일', settings: '설정', guide: '접속 안내' })[adminTab],
   };
@@ -1403,9 +1403,12 @@
     weekly() {
       const s = stats();
       const mine = mineMember();
+      // 팀장: 내 주간업무·미리 쓰기 탭 없이 팀 주간보고부터
+      const boss = !!D.me.isLeader;
+      if (boss && (weeklyTab === 'mine' || weeklyTab === 'pre')) weeklyTab = 'team';
       const tabs = `<div class="subtabs" role="tablist">
-        <button role="tab" aria-selected="${weeklyTab === 'mine'}" onclick="setTab('weekly','mine')">내 주간업무 ${mine ? (mine.done ? '<span class="chip ok">완료</span>' : '<span class="chip no">작성 전</span>') : ''}</button>
-        <button role="tab" aria-selected="${weeklyTab === 'pre'}" onclick="setTab('weekly','pre')">다음 주 미리 쓰기 ${mine && mine.pre && mine.pre.exists ? '<span class="chip ok">✓</span>' : ''}</button>
+        ${boss ? '' : `<button role="tab" aria-selected="${weeklyTab === 'mine'}" onclick="setTab('weekly','mine')">내 주간업무 ${mine ? (mine.done ? '<span class="chip ok">완료</span>' : '<span class="chip no">작성 전</span>') : ''}</button>
+        <button role="tab" aria-selected="${weeklyTab === 'pre'}" onclick="setTab('weekly','pre')">다음 주 미리 쓰기 ${mine && mine.pre && mine.pre.exists ? '<span class="chip ok">✓</span>' : ''}</button>`}
         <button role="tab" aria-selected="${weeklyTab === 'team'}" onclick="setTab('weekly','team')">팀 주간보고 <span class="chip plain">${s.done}/${s.total}</span></button>
         <button role="tab" aria-selected="${weeklyTab === 'hr'}" onclick="setTab('weekly','hr')">인사현황 ${hrCount() ? `<span class="chip plain">${hrCount()}</span>` : ''}</button>
         <button role="tab" aria-selected="${weeklyTab === 'min'}" onclick="setTab('weekly','min')">회의록 ${minList().length ? `<span class="chip plain">${minList().length}</span>` : ''}</button>
