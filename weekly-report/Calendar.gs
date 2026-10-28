@@ -166,11 +166,25 @@ function apiCalendar(startIso, endIso, fresh) {
     events.push.apply(events, once(rec.events).filter(e => !same[e.title + '|' + e.start]));
   }
   extras.forEach(x => { events.push.apply(events, once(x.events)); });
+  // 내가 추가로 보는 캘린더 (각자 고른 것, 나만 보임)
+  const ownIds = myCalendarIds_().filter(id => id !== String(ctx.cfg[CFG.CALENDAR] || '').trim() && ids.indexOf(id) < 0);
+  let owns = [];
+  if (ownIds.length) {
+    owns = userCached_('o' + key + ':' + ownIds.join(','), () => ownIds.map((id, i) => {
+      try {
+        const c = CalendarApp.getCalendarById(id);
+        if (!c) return { name: '', ok: false, events: [] };
+        return { name: c.getName(), ok: true, events: c.getEvents(start, end).map(e => Object.assign(eventJson_(e, 'own'), { ocal: i, calName: c.getName() })) };
+      } catch (e) { return { name: '', ok: false, events: [] }; }
+    }), MY_CAL_TTL);
+  }
+  owns.forEach(x => { events.push.apply(events, once(x.events)); });
   const merged = mergeLeaves_(events, ctx.members.map(m => m.name));
   return {
     calendarName: team.name,
     myCalendarName: mine.name,
     extraCalendars: extras.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
+    ownCalendars: owns.map((x, i) => ({ cal: i, name: x.name, ok: x.ok })),
     recruitCalendar: rec ? { name: rec.name, ok: rec.ok } : null,
     // 캘린더에 들어 있는 공휴일은 [공휴일] 시트와 겹치면 뺀다
     events: dropHolidayDupes_(merged),
@@ -331,6 +345,53 @@ function apiAddEvent(ev) {
   }
   bumpCalendar_();
   return warning ? { warning: warning } : true;
+}
+
+/* ---------- 내가 추가로 보는 캘린더 (각자 고름, 나만 보임) ----------
+ * 사용자 속성 "myCals" = [캘린더 ID]. 웹앱이 접속한 사람 권한으로 돌아서, 본인이 볼 수 있는 캘린더만 읽힌다.
+ */
+const MY_CALS_KEY = 'myCals';
+const MY_CALS_MAX = 6;
+
+function myCalendarIds_() {
+  try { return JSON.parse(PropertiesService.getUserProperties().getProperty(MY_CALS_KEY) || '[]') || []; } catch (e) { return []; }
+}
+
+/** 고를 수 있는 캘린더: 내 구글 캘린더 목록 (기본·팀·채용·함께 볼 캘린더는 이미 보이므로 뺀다) */
+function apiMyCalendarChoices() {
+  const ctx = sheetBase_();
+  requireMenu_(currentMember_(ctx.members), 'calendar');
+  const skip = [String(ctx.cfg[CFG.CALENDAR] || '').trim(), recruitCalendarId_(ctx.cfg)].concat(extraCalendarIds_(ctx.cfg)).filter(Boolean);
+  let def = '';
+  try { def = CalendarApp.getDefaultCalendar().getId(); } catch (e) { /* 무시 */ }
+  const chosen = myCalendarIds_();
+  const list = [];
+  try {
+    CalendarApp.getAllCalendars().forEach(c => {
+      const id = c.getId();
+      if (id === def || skip.indexOf(id) >= 0) return;
+      list.push({ id: id, name: c.getName(), on: chosen.indexOf(id) >= 0 });
+    });
+  } catch (e) { /* 목록을 못 읽으면 ID 직접 입력만 */ }
+  // 목록에 없는데 ID로 추가해 둔 캘린더
+  chosen.filter(id => !list.some(x => x.id === id)).forEach(id => {
+    let name = id;
+    try { const c = CalendarApp.getCalendarById(id); if (c) name = c.getName(); } catch (e) { /* 무시 */ }
+    list.push({ id: id, name: name, on: true });
+  });
+  return { list: list, max: MY_CALS_MAX };
+}
+
+/** 고른 캘린더 저장 (볼 수 없는 ID는 알려 준다) */
+function apiSaveMyCalendars(ids) {
+  const ctx = sheetBase_();
+  requireMenu_(currentMember_(ctx.members), 'calendar');
+  const clean = (ids || []).map(x => String(x || '').trim()).filter((v, i, a) => v && a.indexOf(v) === i);
+  if (clean.length > MY_CALS_MAX) throw new Error(`추가로 보는 캘린더는 ${MY_CALS_MAX}개까지입니다.`);
+  const bad = clean.filter(id => { try { return !CalendarApp.getCalendarById(id); } catch (e) { return true; } });
+  if (bad.length) throw new Error(`볼 수 없는 캘린더입니다: ${bad.join(', ')} (구글 캘린더에서 먼저 구독하거나 공유받아야 합니다)`);
+  PropertiesService.getUserProperties().setProperty(MY_CALS_KEY, JSON.stringify(clean));
+  return true;
 }
 
 /* ---------- 내가 등록한 일정 고치기·지우기 ---------- */

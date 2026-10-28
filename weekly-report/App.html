@@ -570,6 +570,8 @@
   .tt.mine { color: var(--ink-2); }
   /* 함께 볼 캘린더 (보기 전용) — 캘린더마다 색 */
   .c0 { --xc: #3b82f6; } .c1 { --xc: #8b5cf6; } .c2 { --xc: #0d9488; } .c3 { --xc: #d97706; } .c4 { --xc: #db2777; } .c5 { --xc: #64748b; }
+  /* 내가 추가로 보는 캘린더 — 다른 색 */
+  .p0 { --xc: #0891b2; } .p1 { --xc: #65a30d; } .p2 { --xc: #c2410c; } .p3 { --xc: #9333ea; } .p4 { --xc: #be123c; } .p5 { --xc: #a16207; }
   .ev.extra { background: color-mix(in srgb, var(--xc) 14%, var(--panel)); color: var(--ink-2); box-shadow: inset 3px 0 0 var(--xc); }
   .lg.extra { background: color-mix(in srgb, var(--xc) 22%, var(--panel)); box-shadow: inset 3px 0 0 var(--xc); }
   .cal-tag { display: inline-block; font-size: 10.5px; font-weight: 700; color: var(--xc); background: color-mix(in srgb, var(--xc) 12%, var(--panel)); border-radius: 4px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
@@ -699,12 +701,14 @@
   .cal-day.has-memo .memo-mark { display: block; }
   .cal-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
   .cal-toggles { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .cal-tg { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+  .cal-tg { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
   .cal-tg .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
   .cal-tg:not(.on) { color: var(--muted); font-weight: 500; text-decoration: line-through; }
   .cal-tg:not(.on) .lg { background: none !important; box-shadow: inset 0 0 0 1.5px var(--line-strong) !important; }
   .cal-tg:hover { border-color: var(--line-strong); }
   .cal-toggles .lg-warn { font-size: 12px; }
+  .cal-tg.add { border-style: dashed; color: var(--muted); font-weight: 500; text-decoration: none; }
+  .cal-tg.add:hover { color: var(--accent); border-color: var(--accent); }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
   .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .lg { width: 12px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -2204,7 +2208,7 @@
     // 내용 먼저, 시간은 뒤에 괄호로 (종일 일정은 시간 없이)
     const del = canDelLeaveEv(ev) ? `<button class="icon-btn ag-del" onclick="event.stopPropagation();deleteLeaveEvent('${esc(ev.id)}')" title="휴가 지우기" aria-label="${esc(ev.title)} 지우기">${ic('x', 'sm')}</button>` : '';
     const edit = canEditEv(ev);
-    return `<div class="ag${del ? ' has-del' : ''}${edit ? ' editable' : ''}"${edit ? ` role="button" tabindex="0" title="눌러서 수정·삭제" onclick="openEvEdit('${esc(ev.id)}')" onkeydown="if(event.key==='Enter'&&event.target===this)openEvEdit('${esc(ev.id)}')"` : ''}>${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${ev.kind === 'extra' ? `<span class="cal-tag c${ev.cal}">${esc(ev.calName || '')}</span>` : ''}${ev.kind === 'recruit' ? '<span class="cal-tag rec">채용</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(ev.desc && /\n|^·/.test(ev.desc) ? '\n' : ' · '))}</div>` : ''}</div></div>`;
+    return `<div class="ag${del ? ' has-del' : ''}${edit ? ' editable' : ''}"${edit ? ` role="button" tabindex="0" title="눌러서 수정·삭제" onclick="openEvEdit('${esc(ev.id)}')" onkeydown="if(event.key==='Enter'&&event.target===this)openEvEdit('${esc(ev.id)}')"` : ''}>${del}<div><div class="tt ${ev.kind}">${ev.kind === 'mine' ? '<span class="only-me">나만</span>' : ''}${ev.kind === 'extra' ? `<span class="cal-tag c${ev.cal}">${esc(ev.calName || '')}</span>` : ''}${ev.kind === 'own' ? `<span class="cal-tag p${ev.ocal}">${esc(ev.calName || '')}</span>` : ''}${ev.kind === 'recruit' ? '<span class="cal-tag rec">채용</span>' : ''}${esc(ev.title)}${ev.allDay ? '' : ` <span class="tm">(${timeText(ev)})</span>`}</div>${ev.location || ev.desc ? `<div class="ds">${esc([ev.location, ev.desc].filter(Boolean).join(ev.desc && /\n|^·/.test(ev.desc) ? '\n' : ' · '))}</div>` : ''}</div></div>`;
   }
   function dayLabel(k) { const d = parseD(k); return `${d.getMonth() + 1}/${d.getDate()} (${DAY[d.getDay()]})`; }
 
@@ -2581,8 +2585,8 @@
     if (!calHide) { try { calHide = JSON.parse(localStorage.getItem(calHideKey()) || '[]'); } catch (e) { calHide = []; } }
     return calHide;
   }
-  const calKeyOf = e => e.kind === 'extra' ? 'x' + e.cal : e.kind;
-  const calShown = e => calHidden().indexOf(calKeyOf(e)) < 0;
+  const calKeyOf = e => e.kind === 'extra' ? 'x' + e.cal : e.kind === 'own' ? 'o' + e.ocal : e.kind;
+  const calShown = e => e.kind === 'holiday' || calHidden().indexOf(calKeyOf(e)) < 0; // 공휴일은 항상
   function calToggle(k) {
     const h = calHidden(), i = h.indexOf(k);
     if (i >= 0) h.splice(i, 1); else h.push(k);
@@ -2590,18 +2594,55 @@
     $('#main').innerHTML = PAGES.calendar();
   }
   function calTogglesHtml(data) {
-    const items = [['event', 'event', D.teamCalendar ? '팀 일정' : '일정']];
-    if (D.teamCalendar) items.push(['mine', 'mine', '내 일정']);
-    items.push(['leave', 'leave', '휴가']);
+    const items = [['event', 'event', D.teamCalendar ? '팀 일정' : '일정'], ['leave', 'leave', '휴가']];
     const warn = [];
     if (data && data.recruitCalendar) { if (data.recruitCalendar.ok) items.push(['recruit', 'recruit rec', '채용']); else warn.push('채용 캘린더: 볼 권한 없음'); }
     (data && data.extraCalendars || []).forEach(x => { if (x.ok) items.push(['x' + x.cal, 'extra c' + x.cal, x.name || `캘린더 ${x.cal + 1}`]); else warn.push(`함께 볼 캘린더 ${x.cal + 1}: 볼 권한 없음`); });
-    items.push(['holiday', 'holiday', '공휴일']);
+    // 내가 추가로 보는 캘린더 (나만)
+    (data && data.ownCalendars || []).forEach(x => { if (x.ok) items.push(['o' + x.cal, 'extra p' + x.cal, x.name]); else warn.push('추가한 캘린더 하나를 볼 수 없습니다'); });
+    if (D.teamCalendar) items.push(['mine', 'mine', '내 일정']); // 내 일정은 맨 오른쪽
     const h = calHidden();
     return `<div class="cal-toggles" role="group" aria-label="보일 캘린더">${items.map(([k, cls, label]) => {
       const on = h.indexOf(k) < 0;
       return `<button type="button" class="cal-tg ${on ? 'on' : ''}" aria-pressed="${on}" onclick="calToggle('${k}')" title="${on ? '눌러서 숨기기' : '눌러서 보이기'}"><i class="lg ${cls}"></i>${esc(label)}</button>`;
-    }).join('')}${warn.map(w => `<span class="lg-warn">${esc(w)}</span>`).join('')}</div>`;
+    }).join('')}<button type="button" class="cal-tg add" onclick="openMyCalendars()" title="내 구글 캘린더 중 함께 볼 것 고르기 (나만 보임)">${ic('plus', 'sm')}캘린더</button>${warn.map(w => `<span class="lg-warn">${esc(w)}</span>`).join('')}</div>`;
+  }
+  /** 내가 추가로 볼 캘린더 고르기: 내 구글 캘린더 목록에서 체크 + ID 직접 추가 */
+  function openMyCalendars() {
+    openModal(`<h3>내가 볼 캘린더 추가</h3><div class="loading" style="padding:24px 0">내 캘린더 목록을 불러오는 중…</div>`);
+    call('apiMyCalendarChoices').then(r => {
+      const list = r.list.slice();
+      const draw = () => {
+        $('#modal').innerHTML = `<button type="button" class="icon-btn modal-x" onclick="closeModal()" aria-label="닫기">${ic('x')}</button>
+          <h3>내가 볼 캘린더 추가</h3>
+          <p class="sub">내 구글 캘린더에 있는 캘린더 중 일정 화면에 같이 볼 것을 고르세요. <b>나만 보이고</b>, 다른 사람 화면에는 나오지 않습니다. (최대 ${r.max}개)</p>
+          <div class="mail-prefs" id="mcList">${list.map((c, i) => `<label class="mail-pref"><input type="checkbox" class="check" data-i="${i}" ${c.on ? 'checked' : ''}><span class="mail-addr"><b>${esc(c.name)}</b><small>${esc(c.id)}</small></span></label>`).join('')
+            || '<p class="dd-empty">고를 수 있는 캘린더가 없습니다. 아래에 캘린더 ID를 넣어 추가하세요.</p>'}</div>
+          <div class="mail-add"><input class="field-in" id="mcNew" placeholder="캘린더 ID 직접 추가 (구글 캘린더 설정 → 캘린더 통합)"><button class="btn" id="mcAdd" type="button">추가</button></div>
+          <div class="msg err" id="mcErr" hidden></div>
+          <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" id="mcOk">저장</button></div>`;
+        $('#mcList').querySelectorAll('input').forEach(c => c.onchange = () => { list[+c.dataset.i].on = c.checked; });
+        const add = () => {
+          const id = $('#mcNew').value.trim();
+          if (!id) return;
+          const hit = list.find(c => c.id === id);
+          if (hit) hit.on = true; else list.push({ id, name: id, on: true });
+          draw();
+        };
+        $('#mcAdd').onclick = add;
+        $('#mcNew').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+        $('#mcOk').onclick = () => {
+          const ids = list.filter(c => c.on).map(c => c.id);
+          if (ids.length > r.max) { $('#mcErr').textContent = `최대 ${r.max}개까지 고를 수 있습니다.`; $('#mcErr').hidden = false; return; }
+          $('#mcOk').disabled = true;
+          call('apiSaveMyCalendars', ids).then(() => {
+            closeModal(); toast(ids.length ? `캘린더 ${ids.length}개를 같이 봅니다. (나만 보임)` : '추가한 캘린더를 모두 뺐습니다.');
+            calCache = {}; calForget(); loadMonth(true);
+          }).catch(e => { $('#mcOk').disabled = false; $('#mcErr').textContent = e.message || String(e); $('#mcErr').hidden = false; });
+        };
+      };
+      draw();
+    }).catch(e => { closeModal(); fail(e); });
   }
   VIEWS.calendar = function () {
     if (!calMonth) calMonth = new Date(now().getFullYear(), now().getMonth(), 1);
@@ -2615,7 +2656,7 @@
     let cells = DAY.map((d, i) => `<div class="dow ${i === 0 ? 'sun' : ''}">${d}</div>`).join('');
     const lay = data ? calSpans(shown, r.start) : { lanes: [], spanOf: new Map() };
     const evText = e => `${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}`;
-    const evCls = e => `ev ${e.kind}${e.kind === 'extra' ? ' c' + e.cal : ''}`;
+    const evCls = e => `ev ${e.kind}${e.kind === 'extra' ? ' c' + e.cal : ''}${e.kind === 'own' ? ' extra p' + e.ocal : ''}`;
     for (let i = 0; i < 42; i++) {
       const d = addD(r.start, i);
       const dk = dkey(d);
