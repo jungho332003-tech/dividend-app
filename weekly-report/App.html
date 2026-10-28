@@ -697,6 +697,14 @@
   .cal-day { position: relative; }
   .cal-day .memo-mark { display: none; position: absolute; top: 8px; right: 8px; color: var(--muted); line-height: 0; }
   .cal-day.has-memo .memo-mark { display: block; }
+  .cal-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+  .cal-toggles { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .cal-tg { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+  .cal-tg .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .cal-tg:not(.on) { color: var(--muted); font-weight: 500; text-decoration: line-through; }
+  .cal-tg:not(.on) .lg { background: none !important; box-shadow: inset 0 0 0 1.5px var(--line-strong) !important; }
+  .cal-tg:hover { border-color: var(--line-strong); }
+  .cal-toggles .lg-warn { font-size: 12px; }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 12px; color: var(--muted); }
   .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .lg { width: 12px; height: 10px; border-radius: 3px; display: inline-block; }
@@ -2566,16 +2574,46 @@
   document.addEventListener('focusout', e => { if (e.target.id === 'memoIn') memoSave(e.target.dataset.day, e.target.value); });
   window.addEventListener('beforeunload', memoFlush);
 
+  /* ---------- 캘린더 켜고 끄기 (구글 캘린더처럼, 이 기기에 기억) ---------- */
+  let calHide = null;
+  const calHideKey = () => `calHide:${D.me.email}`;
+  function calHidden() {
+    if (!calHide) { try { calHide = JSON.parse(localStorage.getItem(calHideKey()) || '[]'); } catch (e) { calHide = []; } }
+    return calHide;
+  }
+  const calKeyOf = e => e.kind === 'extra' ? 'x' + e.cal : e.kind;
+  const calShown = e => calHidden().indexOf(calKeyOf(e)) < 0;
+  function calToggle(k) {
+    const h = calHidden(), i = h.indexOf(k);
+    if (i >= 0) h.splice(i, 1); else h.push(k);
+    try { localStorage.setItem(calHideKey(), JSON.stringify(h)); } catch (e) { /* 저장소 없음 */ }
+    $('#main').innerHTML = PAGES.calendar();
+  }
+  function calTogglesHtml(data) {
+    const items = [['event', 'event', D.teamCalendar ? '팀 일정' : '일정']];
+    if (D.teamCalendar) items.push(['mine', 'mine', '내 일정']);
+    items.push(['leave', 'leave', '휴가']);
+    const warn = [];
+    if (data && data.recruitCalendar) { if (data.recruitCalendar.ok) items.push(['recruit', 'recruit rec', '채용']); else warn.push('채용 캘린더: 볼 권한 없음'); }
+    (data && data.extraCalendars || []).forEach(x => { if (x.ok) items.push(['x' + x.cal, 'extra c' + x.cal, x.name || `캘린더 ${x.cal + 1}`]); else warn.push(`함께 볼 캘린더 ${x.cal + 1}: 볼 권한 없음`); });
+    items.push(['holiday', 'holiday', '공휴일']);
+    const h = calHidden();
+    return `<div class="cal-toggles" role="group" aria-label="보일 캘린더">${items.map(([k, cls, label]) => {
+      const on = h.indexOf(k) < 0;
+      return `<button type="button" class="cal-tg ${on ? 'on' : ''}" aria-pressed="${on}" onclick="calToggle('${k}')" title="${on ? '눌러서 숨기기' : '눌러서 보이기'}"><i class="lg ${cls}"></i>${esc(label)}</button>`;
+    }).join('')}${warn.map(w => `<span class="lg-warn">${esc(w)}</span>`).join('')}</div>`;
+  }
   VIEWS.calendar = function () {
     if (!calMonth) calMonth = new Date(now().getFullYear(), now().getMonth(), 1);
     if (!calSel) calSel = dkey(now());
     const k = dkey(calMonth).slice(0, 7);
     const data = calCache[k];
-    const map = data ? byDay(data.events) : {};
+    const shown = data ? data.events.filter(calShown) : []; // 끈 캘린더는 빼고
+    const map = byDay(shown);
     const r = monthRange(calMonth);
     const todayK = dkey(now());
     let cells = DAY.map((d, i) => `<div class="dow ${i === 0 ? 'sun' : ''}">${d}</div>`).join('');
-    const lay = data ? calSpans(data.events, r.start) : { lanes: [], spanOf: new Map() };
+    const lay = data ? calSpans(shown, r.start) : { lanes: [], spanOf: new Map() };
     const evText = e => `${esc(e.title)}${e.allDay || e.kind === 'holiday' || e.kind === 'leave' ? '' : ` (${hm(parseD(e.start))})`}`;
     const evCls = e => `ev ${e.kind}${e.kind === 'extra' ? ' c' + e.cal : ''}`;
     for (let i = 0; i < 42; i++) {
@@ -2611,7 +2649,7 @@
     const selEvents = map[calSel] || [];
     return `
       <div class="head">
-        <div><h1>일정</h1><p class="one-line">${data && data.calendarName ? esc(data.calendarName) : '구글 캘린더'}${data && data.myCalendarName ? ' + 내 캘린더' : ''}${data && data.recruitCalendar && data.recruitCalendar.ok ? ' + 채용 캘린더' : ''}${data && data.extraCalendars ? data.extraCalendars.filter(x => x.ok).map(x => ' + ' + esc(x.name)).join('') : ''} · 공휴일 포함</p></div>
+        <div class="cal-title"><h1>일정</h1>${calTogglesHtml(data)}</div>
         <div class="head-actions">
           <button class="btn" onclick="loadMonth(true)">${ic('refresh', 'sm')}새로고침</button>
           <button class="btn primary" onclick="openEventForm()">${ic('plus', 'sm')}일정·휴가 추가</button>
@@ -2630,13 +2668,6 @@
             <span>${data ? '' : '불러오는 중…'}</span>
           </div>
           <div class="cal-grid">${cells}</div>
-          <div class="cal-legend">
-            <span><i class="lg event"></i>${D.teamCalendar ? '팀 일정' : '일정'}</span>
-            ${D.teamCalendar ? '<span><i class="lg mine"></i>내 일정 (나만 보기)</span>' : ''}
-            <span><i class="lg leave"></i>휴가</span>
-            ${data && data.recruitCalendar ? (data.recruitCalendar.ok ? '<span><i class="lg recruit rec"></i>채용 캘린더 (채용담당·팀장)</span>' : '<span class="lg-warn">채용 캘린더: 볼 권한이 없습니다</span>') : ''}
-            ${data && data.extraCalendars ? data.extraCalendars.map(x => x.ok ? `<span><i class="lg extra c${x.cal}"></i>${esc(x.name)}</span>` : `<span class="lg-warn">함께 볼 캘린더 ${x.cal + 1}: 볼 권한이 없습니다</span>`).join('') : ''}
-          </div>
         </section>
         <div class="cal-side">
           <section class="panel">
