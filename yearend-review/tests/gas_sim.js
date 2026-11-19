@@ -113,10 +113,10 @@ function makeEnv() {
     },
     DriveApp: { getFolderById: id => { if (id !== 'FOLDER') throw new Error('no folder'); return root; }, getFileById: id => books[id] ? { isTrashed: () => false } : id === 'SSID' ? { getOwner: () => ({ getEmail: () => 'owner@x.com' }), getEditors: () => [], getViewers: () => [], addEditor(e) { state.editors[e] = 1; }, removeEditor() {}, removeViewer() {} } : (state.files[id] || (() => { throw new Error('nf'); })()) },
     ScriptApp: { getService: () => ({ getUrl: () => 'https://webapp' }) },
-    HtmlService: { createHtmlOutputFromFile: () => chain, createHtmlOutput: () => chain },
+    HtmlService: { createHtmlOutputFromFile: () => chain, createHtmlOutput: () => chain, createTemplateFromFile: () => { const t = { evaluate: () => { state.lastTemplate = t; return chain; } }; return t; } },
   };
   vm.createContext(g);
-  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAssignPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, peekCache_, decodePeople_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiCloseYear, apiSetYear, apiPoll, CtxDate: Date };', g);
+  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAssignPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, peekCache_, decodePeople_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiCloseYear, apiSetYear, apiPoll, doGet, CtxDate: Date };', g);
   return { api: g.__api, ss, state, cacheStore, books };
 }
 

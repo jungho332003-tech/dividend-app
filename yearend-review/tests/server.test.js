@@ -42,6 +42,16 @@ function withDefaults(api) {
   ss.getSheetByName('설정').getRange('B4').setValue('FOLDER');
 
   ok('unregistered user has no menus', () => { as('stranger@x.com'); const b = api.apiBootstrap(); assert.strictEqual(b.me.menus.length, 0); assert.strictEqual(b.people.length, 0); });
+  ok('첫 화면 데이터를 페이지에 넣어 보낸다 (왕복 1번 줄이기)', () => {
+    as('kim@x.com');
+    api.doGet();
+    const raw = state.lastTemplate.boot;
+    assert(typeof raw === 'string' && raw.indexOf('<') < 0, "'<'는 바꿔서 넣는다");
+    const boot = JSON.parse(raw);
+    assert.strictEqual(boot.me.name, '김도현'); assert(boot.stamp && boot.year);
+    as('stranger@x.com'); api.doGet();
+    assert.strictEqual(JSON.parse(state.lastTemplate.boot).me.menus.length, 0, '등록 안 된 사람도 페이지는 뜬다');
+  });
   ok('owner is admin', () => { as('owner@x.com'); const b = api.apiBootstrap(); assert(b.me.isAdmin); assert(b.me.menus.includes('admin')); });
 
   ok('응대담당 cannot import', () => { as('kim@x.com'); throwsMsg(() => api.apiImportPeople([{ name: 'x' }]), /총괄 또는 관리자/); });

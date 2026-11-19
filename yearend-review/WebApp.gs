@@ -8,8 +8,16 @@
  */
 
 function doGet() {
-  const team = String(getConfig()[CFG.TEAM] || '연말정산 검토');
-  return HtmlService.createHtmlOutputFromFile('App')
+  // 첫 화면 데이터를 페이지에 같이 넣어 보낸다: 페이지가 뜬 뒤 서버에 한 번 더 묻는 왕복(보통 1초 안팎)이 없어진다
+  const t = HtmlService.createTemplateFromFile('App');
+  let boot = null, team = '연말정산 검토';
+  try {
+    boot = apiBootstrap();
+    team = boot.team || team;
+  } catch (e) { /* 못 만들면 화면이 평소처럼 따로 불러온다 */ }
+  // <script type="application/json"> 안에 넣으므로 '<'는 \u003c로 바꿔 태그가 끊기지 않게 한다
+  t.boot = boot ? JSON.stringify(boot).replace(/</g, '\\u003c') : 'null';
+  return t.evaluate()
     .setTitle(team)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     // 휴대폰 홈 화면에 추가했을 때 앱처럼 보이게

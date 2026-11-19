@@ -1,7 +1,8 @@
 <title>연말정산 검토 관리</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<!-- 글꼴은 화면을 막지 않게 나중에 적용한다 (그동안은 기본 글꼴로 바로 보임) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
 <style>
   :root {
     --bg: #eef1ef;
@@ -678,6 +679,7 @@
   <main class="main" id="main"><div class="loading">불러오는 중…</div></main>
 </div>
 
+<script type="application/json" id="boot"><?!= boot ?></script>
 <div class="scrim" id="scrim" hidden><div class="modal" id="modal" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
 <div class="saving" id="saving" hidden>저장 중…</div>
@@ -1250,15 +1252,35 @@ window.MockApi = (function () {
     D.people = unpackPeople(D.people);
   }
 
+  /** 서버가 페이지에 넣어 보낸 첫 화면 데이터 (없거나 이미 썼으면 null) */
+  let bootUsed = false;
+  function takeBoot() {
+    if (bootUsed) return null;
+    bootUsed = true;
+    try { const el = document.getElementById('boot'); const d = el && JSON.parse(el.textContent); if (el) el.textContent = ''; return d && d.me ? d : null; } catch (e) { return null; }
+  }
+
   function load() {
-    return call('apiBootstrap').then(data => {
+    const boot = takeBoot();
+    return (boot ? Promise.resolve(boot) : call('apiBootstrap')).then(data => {
       const first = !D;
       setData(data);
       // 담당으로 지정된 대상자가 없으면 서류 검토를 전체 목록으로 연다
       if (first && !D.people.some(isMine)) reviewTab = 'all';
       render();
       schedulePoll(POLL_MS);
+      prefetchAdmin();
     }).catch(fail);
+  }
+
+  /** 관리자: 권한 관리 화면 자료(공유 상태 확인이 느림)를 쉬는 동안 미리 받아 둔다 */
+  function prefetchAdmin() {
+    if (A || adminLoading || !can('admin')) return;
+    setTimeout(() => {
+      if (A || adminLoading || !D || !can('admin')) return;
+      adminLoading = true;
+      call('apiAdminData', false).then(d => { adminLoading = false; setAdmin(d); }).catch(() => { adminLoading = false; });
+    }, 2500);
   }
 
   /* ---------- 자동 새로고침: 다른 담당자가 저장한 내용을 1분 30초마다 받아 온다 ----------
