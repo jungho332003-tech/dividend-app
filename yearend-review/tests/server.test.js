@@ -256,10 +256,10 @@ function withDefaults(api) {
     assert.strictEqual(sh.getLastRow(), r2.count + 1);
   });
 
-  ok('일정: 예시 4건, 총괄만 등록·수정·삭제', () => {
+  ok('일정: 예시 없이 시작, 총괄만 등록·수정·삭제', () => {
     as('kim@x.com');
     let b = api.apiBootstrap();
-    assert.strictEqual(b.events.length, 4); assert(b.eventKinds.includes('마감'));
+    assert.strictEqual(b.events.length, 0, '예시 일정은 넣지 않음'); assert(b.eventKinds.includes('마감'));
     throwsMsg(() => api.apiSaveEvent({ title: 'x', start: '2027-01-02' }), /총괄 또는 관리자/);
     as('lead@x.com');
     throwsMsg(() => api.apiSaveEvent({ title: 'x', start: '2027-01-05', end: '2027-01-01' }), /종료일/);
@@ -268,7 +268,12 @@ function withDefaults(api) {
     assert.strictEqual(e.end, '2027-01-21'); assert.strictEqual(e.memo, '3층');
     r = api.apiSaveEvent({ id: e.id, title: '담당자 회의(변경)', start: '2027-01-22', kind: '교육' });
     assert.strictEqual(r.events.find(x => x.id === e.id).end, '2027-01-22');
-    r = api.apiDeleteEvent(e.id); assert.strictEqual(r.events.length, 4);
+    r = api.apiDeleteEvent(e.id); assert.strictEqual(r.events.length, 0);
+    // 예전 설치본의 예시 일정(작성자 '설치 예시')이 시트에 남아 있어도 보이지 않는다
+    const esh = ss.getSheets().find(x => /^일정_\d{4}$/.test(x.getName()));
+    esh.getRange(esh.getLastRow() + 1, 1, 1, 8).setValues([[99, new api.CtxDate('2027-01-15T00:00:00+09:00'), '', '간소화 자료 조회 시작 (예시)', '일정', '', '설치 예시', '']]);
+    api.putCache_('events:' + api.apiBootstrap().year, null);
+    assert(!api.apiSaveEvent({ title: '새 일정', start: '2027-02-01', kind: '일정' }).events.some(x => x.author === '설치 예시'));
   });
 
   ok('연도별 관리: 새 연도 시작(명단·담당 가져오기, 기준 복사), 연도 전환, 연도별 분리', () => {

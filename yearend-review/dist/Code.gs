@@ -1115,21 +1115,12 @@ function setupEventSheet_(ss, year) {
   sh.getRange('E2:E').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(EVENT_KINDS).build());
   [50, 100, 100, 260, 70, 320, 80, 60].forEach((w, i) => sh.setColumnWidth(i + 1, w));
   sh.setFrozenRows(1);
-  // 연말정산 기본 일정 예시 (회사 일정에 맞게 고쳐 쓰도록 표시). 지급명세서 제출 기한은 다음 해 3월 10일
-  const next = Number(year) + 1;
-  const d = s => parseDate_(s);
-  const rows = [
-    [1, d(`${next}-01-15`), '', '간소화 자료 조회 시작 (예시)', '일정', '국세청 연말정산 간소화 서비스 개시일을 확인해 고쳐 주세요', '설치 예시', ''],
-    [2, d(`${next}-01-31`), '', '직원 서류 제출 마감 (예시)', '마감', '', '설치 예시', ''],
-    [3, d(`${next}-02-01`), d(`${next}-02-10`), '1차 검토·보완 요청 (예시)', '일정', '', '설치 예시', ''],
-    [4, d(`${next}-03-10`), '', '근로소득 지급명세서 제출 기한', '마감', '', '설치 예시', ''],
-  ];
-  sh.getRange(2, 1, rows.length, header.length).setValues(rows);
 }
 
 function readEvents_(ss) {
   return dataRows_(yearSheet_(ss, SHEET.EVENTS), ECOL.DELETED)
-    .filter(r => String(r[0]) && cellText_(r[1]) && String(r[ECOL.DELETED - 1]).toUpperCase() !== 'Y')
+    // 예전 설치본이 넣어 둔 예시 일정(작성자 '설치 예시')은 보여주지 않는다
+    .filter(r => String(r[0]) && cellText_(r[1]) && String(r[ECOL.DELETED - 1]).toUpperCase() !== 'Y' && String(r[ECOL.AUTHOR - 1]) !== '설치 예시')
     .map(r => {
       const start = cellText_(r[1]);
       const end = cellText_(r[2]) || start;
