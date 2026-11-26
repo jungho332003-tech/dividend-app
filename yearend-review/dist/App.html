@@ -1271,8 +1271,36 @@
       <label>2차검토 담당자 <select class="field-in" onchange="bulkOwner2=this.value">${opts(bulkOwner2)}</select></label>
       <button class="btn small primary" onclick="bulkAssign()">지정</button>
       <button class="btn small" onclick="picked.clear();refreshList()">선택 해제</button>
+      <button class="btn small danger" style="margin-left:auto" onclick="confirmBulkDelete()">선택 삭제</button>
     </div>`;
   }
+  /** 체크한 대상자 한 번에 삭제 (총괄·관리자) */
+  function confirmBulkDelete() {
+    const targets = D.people.filter(p => picked.has(p.id));
+    if (!targets.length) return toast('삭제할 대상자를 먼저 골라 주세요.');
+    const many = targets.length >= 20;
+    const names = targets.slice(0, 8).map(p => esc(p.name)).join(', ') + (targets.length > 8 ? ` 외 ${targets.length - 8}명` : '');
+    $('#modal').classList.remove('wide');
+    openModal(`<h3>${esc(D.year)}년 귀속 대상자 ${targets.length}명을 삭제할까요?</h3>
+      <p class="sub">${names}</p>
+      <div class="notice">[대상자_${esc(D.year)}] 시트에서 해당 행이 지워집니다. 남긴 응대기록과 첨부파일은 지워지지 않습니다.<br>잘못 지웠으면 스프레드시트의 <b>파일 → 버전 기록</b>에서 되돌릴 수 있습니다.</div>
+      ${many ? `<div class="fld" style="margin-top:12px"><label for="bdConfirm">확인을 위해 <b>삭제</b>라고 입력해 주세요</label><input class="field-in" id="bdConfirm" autocomplete="off"></div>` : ''}
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">취소</button><button class="btn danger" id="bdOk" ${many ? 'disabled' : ''}>${targets.length}명 삭제</button></div>`);
+    if (many) $('#bdConfirm').oninput = e => { $('#bdOk').disabled = e.target.value.trim() !== '삭제'; };
+    $('#bdOk').onclick = () => {
+      const ids = targets.map(p => p.id);
+      const old = D.people.slice();
+      // 화면에서 먼저 빼고 뒤에서 저장
+      D.people = D.people.filter(p => !picked.has(p.id));
+      picked.clear();
+      closeModal(); render();
+      saveInBackground('apiDeletePeople', [ids], {
+        ok: `${ids.length}명을 삭제했습니다.`,
+        undo: () => { D.people = old; ids.forEach(id => picked.add(id)); },
+      });
+    };
+  }
+
   function bulkAssign() {
     const targets = D.people.filter(p => picked.has(p.id));
     const patch = {};

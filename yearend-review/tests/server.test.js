@@ -7,7 +7,7 @@ const throwsMsg = (fn, re) => { let err; try { fn(); } catch (e) { err = e; } as
 
 // 서버는 대상자 목록을 압축해서 보낸다 ({ k, r }). 화면(unpackPeople)처럼 풀어서 비교한다
 function withDefaults(api) {
-  ['apiBootstrap', 'apiImportPeople', 'apiAddPerson', 'apiDeletePerson', 'apiSetYear', 'apiAssignPeople', 'apiPoll'].forEach(name => {
+  ['apiBootstrap', 'apiImportPeople', 'apiAddPerson', 'apiDeletePerson', 'apiDeletePeople', 'apiSetYear', 'apiAssignPeople', 'apiPoll'].forEach(name => {
     const fn = api[name];
     if (!fn) return;
     api[name] = (...args) => { const r = fn(...args); if (r && r.people && !Array.isArray(r.people)) r.people = api.decodePeople_(r.people); return r; };
@@ -567,6 +567,32 @@ function withDefaults(api) {
     assert(!r.conflicts && r.personPatch.verified === true);
     api.apiAddLog('9001', '전화', '통화');
     assert(api.apiBootstrap().logs.some(l => l.body === '통화'));
+  });
+}
+
+/* ---------- 4-1. 체크한 대상자 한 번에 삭제 ---------- */
+{
+  const { api, ss, state } = makeEnv();
+  withDefaults(api);
+  state.user = 'owner@x.com';
+  api.initialize();
+  const mem = ss.getSheetByName('담당자');
+  mem.getRange(2, 1, 2, 6).setValues([[1, '정해린', 'lead@x.com', '총괄', 'N', ''], [2, '김도현', 'kim@x.com', '응대담당', 'N', '']]);
+  state.user = 'lead@x.com';
+  api.apiImportPeople(Array.from({ length: 30 }, (_, i) => ({ empNo: String(5000 + i), name: '삭제시험' + i, owner: '김도현' })));
+  ok('체크한 대상자 한 번에 삭제: 총괄·관리자만, 떨어진 행도 정확히', () => {
+    state.user = 'kim@x.com';
+    throwsMsg(() => api.apiDeletePeople(['5000']), /총괄 또는 관리자/);
+    state.user = 'lead@x.com';
+    const pick = ['5000', '5001', '5002', '5010', '5015', '5016', '5029'];
+    const r = api.apiDeletePeople(pick);
+    assert.strictEqual(r.deleted, 7); assert.strictEqual(r.people.length, 23);
+    const left = r.people.map(p => p.empNo);
+    pick.forEach(e => assert(left.indexOf(e) < 0, e + ' 지워져야 함'));
+    ['5003', '5009', '5011', '5014', '5017', '5028'].forEach(e => assert(left.indexOf(e) >= 0, e + ' 남아야 함'));
+    const all = api.apiDeletePeople(left);
+    assert.strictEqual(all.deleted, 23); assert.strictEqual(all.people.length, 0);
+    assert.strictEqual(ss.getSheetByName('대상자_' + String(ss.getSheetByName('설정').get(3, 2))).getLastRow(), 1, '제목 행만 남음');
   });
 }
 

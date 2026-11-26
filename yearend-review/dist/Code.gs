@@ -819,6 +819,48 @@ function apiDeletePerson(id) {
 }
 
 /**
+ * 총괄·관리자: 명단에서 체크한 대상자를 한 번에 삭제 (행 삭제)
+ * 붙어 있는 행은 묶어서 아래쪽부터 지운다 (2천 명을 모두 골라도 몇 번이면 끝난다).
+ * 응대기록·첨부는 남겨 둔다.
+ */
+function apiDeletePeople(ids) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireOpen_(ctx, me);
+  requireMenu_(me, 'review');
+  if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
+  const want = {};
+  (ids || []).forEach(id => { want[String(id)] = true; });
+  if (!Object.keys(want).length) throw new Error('삭제할 대상자를 골라 주세요.');
+
+  const lock = docLock_();
+  if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
+  let count = 0;
+  try {
+    const sh = peopleSheetOrThrow_(ctx.ss);
+    const all = sh.getDataRange().getValues();
+    const map = colMapFrom_(all[0] || []);
+    const rows = [];
+    all.slice(1).forEach((r, i) => {
+      const id = (map.empNo ? cellText_(r[map.empNo - 1]) : '') || 'r' + (i + 2);
+      if (want[id]) rows.push(i + 2);
+    });
+    if (!rows.length) throw new Error('대상자를 찾을 수 없습니다. 새로고침해 주세요.');
+    // 아래쪽 묶음부터 지워야 위쪽 행 번호가 밀리지 않는다
+    for (let k = rows.length - 1; k >= 0;) {
+      let start = rows[k], n = 1;
+      while (k - n >= 0 && rows[k - n] === start - 1) { start--; n++; }
+      sh.deleteRows(start, n);
+      k -= n;
+    }
+    count = rows.length;
+  } finally {
+    lock.releaseLock();
+  }
+  return Object.assign(refreshPart_('people'), { deleted: count });
+}
+
+/**
  * 총괄·관리자: 시트에서 복사한 내용 붙여넣기. rows: [{empNo, name, ...}]
  * 사원번호가 같으면 붙여넣은 칸만 갱신, 없으면 추가. 시트 요청은 읽기 1번 + 쓰기 1번.
  */

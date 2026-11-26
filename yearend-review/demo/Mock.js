@@ -285,6 +285,12 @@ window.MockApi = (function () {
       people.splice(people.findIndex(p => p.id === id), 1);
       return { people };
     },
+    apiDeletePeople(ids) {
+      const m = meInfo(); if (!lead(m)) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
+      const before = people.length;
+      for (let i = people.length - 1; i >= 0; i--) if (ids.indexOf(people[i].id) >= 0) people.splice(i, 1);
+      return { people: myPeople(m), deleted: before - people.length };
+    },
     apiImportPeople(rows) {
       const m = meInfo(); if (!lead(m)) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
       let added = 0, updated = 0;
@@ -401,7 +407,7 @@ window.MockApi = (function () {
     apiRevokeAccess() { return { log: [{ ok: true, text: '스프레드시트 접근을 해제했습니다.' }, { ok: true, text: '첨부 폴더 접근을 해제했습니다.' }], data: adminData() }; },
   };
   // 마감된 연도: 관리자 말고는 쓰기 막기 (실제 서버의 requireOpen_과 같은 규칙)
-  ['apiSavePerson', 'apiAddPerson', 'apiDeletePerson', 'apiImportPeople', 'apiAssignPeople', 'apiAddLog', 'apiSaveEvent', 'apiDeleteEvent', 'apiSaveNotice', 'apiDeleteNotice', 'apiAddNoticeComment', 'apiSaveRule', 'apiDeleteRule', 'apiUploadFile', 'apiDeleteFile'].forEach(fn => {
+  ['apiSavePerson', 'apiAddPerson', 'apiDeletePerson', 'apiDeletePeople', 'apiImportPeople', 'apiAssignPeople', 'apiAddLog', 'apiSaveEvent', 'apiDeleteEvent', 'apiSaveNotice', 'apiDeleteNotice', 'apiAddNoticeComment', 'apiSaveRule', 'apiDeleteRule', 'apiUploadFile', 'apiDeleteFile'].forEach(fn => {
     const orig = api[fn];
     api[fn] = function () {
       if (closed.indexOf(curYear()) >= 0 && !lead(meInfo())) throw new Error(`${curYear()}년 귀속은 마감되어 조회만 할 수 있습니다.`);

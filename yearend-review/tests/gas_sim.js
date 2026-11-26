@@ -30,6 +30,7 @@ class Sheet {
   }
   appendRow(vals) { OPS.write++; const r = this.getLastRow() + 1; vals.forEach((v, i) => this.set(r, i + 1, v)); }
   deleteRow(r) { this.d.splice(r - 1, 1); }
+  deleteRows(r, n) { this.d.splice(r - 1, n); }
   getProtections() { return this.prot; }
   protect() { const p = { warn: false, eds: [], setDescription() { return p; }, setWarningOnly(w) { p.warn = w; return p; }, isWarningOnly() { return p.warn; }, remove: () => { this.prot = this.prot.filter(x => x !== p); }, addEditor(e) { p.eds.push(e); }, addEditors(l) { p.eds.push(...l); }, removeEditors() { p.eds = []; }, getEditors() { return p.eds.map(e => ({ getEmail: () => e })); }, canDomainEdit() { return false; }, setDomainEdit() {}, setUnprotectedRanges() {} }; this.prot.push(p); return p; }
 }
@@ -123,7 +124,7 @@ function makeEnv(opts = {}) {
     HtmlService: { createHtmlOutputFromFile: () => chain, createHtmlOutput: () => chain, createTemplateFromFile: () => { const t = { evaluate: () => { state.lastTemplate = t; return chain; } }; return t; } },
   };
   vm.createContext(g);
-  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAssignPeople, apiAddPerson, apiDeletePerson, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, peekCache_, decodePeople_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiCloseYear, apiSetYear, apiPoll, doGet, CtxDate: Date };', g);
+  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'dist', 'Code.gs'), 'utf8') + '\n;this.__api = { COLS, initialize, apiBootstrap, apiSavePerson, apiImportPeople, apiAssignPeople, apiAddPerson, apiDeletePerson, apiDeletePeople, apiAddLog, apiSaveNotice, apiDeleteNotice, apiAddNoticeComment, apiMarkRead, apiMarkUnread, apiSaveRule, apiDeleteRule, apiUploadFile, apiDeleteFile, apiAdminData, apiSaveMembers, apiSaveMenuAccess, apiSaveSettings, apiApplyPermissions, apiRevokeAccess, putCache_, cached_, peekCache_, decodePeople_, setupProtections, apiTemplateLink, apiSaveEvent, apiDeleteEvent, apiStartYear, apiCloseYear, apiSetYear, apiPoll, doGet, CtxDate: Date };', g);
   return { api: g.__api, ss, state, cacheStore, books, scriptProps };
 }
 
