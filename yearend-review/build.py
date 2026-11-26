@@ -39,11 +39,11 @@ app = read('App.html')
 assert '<!-- MOCK -->' in app
 write('demo.html', app.replace('<!-- MOCK -->', '<script>\n' + read('demo/Mock.js') + '</script>'))
 
+# appsscript.json은 붙여넣지 않아도 된다: 새 프로젝트 기본값(V8)으로 돌고, 시간대는 코드가 한국 시간으로 고정한다
 files = []
 for file, name, ext, kind, text in [
     ('Code.gs', 'Code', '.gs', 'script', code),
     ('App.html', 'App', '.html', 'html', app),
-    ('appsscript.json', 'appsscript', '.json', 'json', read('appsscript.json')),
 ]:
     files.append({'name': name, 'ext': ext, 'file': file, 'kind': kind, 'code': text,
                   'lines': text.count('\n') + 1, 'size': len(text.encode('utf-8'))})

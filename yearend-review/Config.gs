@@ -112,7 +112,8 @@ function cellText_(v) {
 function parseDate_(v) {
   const s = String(v || '').trim();
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  // 한국 시간 자정으로 만든다 (Apps Script 프로젝트의 시간대 설정과 상관없이)
+  if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00+09:00`);
   return s;
 }
 
@@ -299,8 +300,8 @@ function migrateLegacySheets_(ss, year) {
 
 /** 하반기에는 올해 귀속, 상반기(연말정산 진행 중)에는 작년 귀속 */
 function defaultYear_() {
-  const d = new Date();
-  return d.getMonth() >= 6 ? d.getFullYear() : d.getFullYear() - 1;
+  const [y, mo] = fmt(new Date(), 'yyyy-MM').split('-').map(Number); // 한국 시간 기준
+  return mo >= 7 ? y : y - 1;
 }
 
 function sheetUrl(ss, sh) {
