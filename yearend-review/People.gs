@@ -176,7 +176,7 @@ const EDIT_TTL = 150;
 const editKey_ = id => `edit:${viewYear_()}:${id}`;
 
 function readEditLock_(id) {
-  try { const v = cache_().get(editKey_(id)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+  try { const v = CacheService.getDocumentCache().get(editKey_(id)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
 }
 
 /** 잠그기(이미 내 잠금이면 연장). 다른 사람이 수정 중이면 { lockedBy, since } */
@@ -190,7 +190,7 @@ function apiLockPerson(id, force) {
     const mine = cur && cur.email === me.email;
     if (cur && !mine && !(force && (me.isLeader || me.isAdmin))) return { lockedBy: cur.name, since: cur.since };
     const since = mine ? cur.since : fmt(new Date(), 'HH:mm');
-    cache_().put(editKey_(id), JSON.stringify({ email: me.email, name: me.name || me.email, since: since }), EDIT_TTL);
+    CacheService.getDocumentCache().put(editKey_(id), JSON.stringify({ email: me.email, name: me.name || me.email, since: since }), EDIT_TTL);
     return { ok: true, took: cur && !mine ? cur.name : '' };
   });
 }
@@ -200,7 +200,7 @@ function apiUnlockPerson(id) {
   const me = currentMember_(getContext().members);
   id = String(id);
   const cur = readEditLock_(id);
-  if (cur && cur.email === me.email) { try { cache_().remove(editKey_(id)); } catch (e) { /* 캐시 없음 */ } }
+  if (cur && cur.email === me.email) { try { CacheService.getDocumentCache().remove(editKey_(id)); } catch (e) { /* 캐시 없음 */ } }
   return { ok: true };
 }
 
@@ -215,7 +215,7 @@ function apiSavePerson(id, patch, base) {
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -264,7 +264,7 @@ function apiSavePerson(id, patch, base) {
       if (i >= 0) list[i] = saved; else list.push(saved);
     });
     // 저장이 끝났으니 내 수정 잠금을 푼다 (화면은 저장을 누르며 이미 닫혔다)
-    if (held) { try { cache_().remove(editKey_(String(id))); } catch (e) { /* 캐시 없음 */ } }
+    if (held) { try { CacheService.getDocumentCache().remove(editKey_(String(id))); } catch (e) { /* 캐시 없음 */ } }
     return { personPatch: saved, oldId: String(id) };
   } finally {
     lock.releaseLock();
@@ -298,7 +298,7 @@ function apiDeletePerson(id) {
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -336,7 +336,7 @@ function apiDeletePeople(ids) {
   (ids || []).forEach(id => { want[String(id)] = true; });
   if (!Object.keys(want).length) throw new Error('삭제할 대상자를 골라 주세요.');
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {
@@ -375,7 +375,7 @@ function apiImportPeople(rows) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let added = 0, updated = 0;
   try {
@@ -430,7 +430,7 @@ function apiAssignPeople(ids, patch) {
     if (patch[k] && names.indexOf(patch[k]) < 0) throw new Error(`[담당자] 시트에 없는 이름입니다: ${patch[k]}`);
   });
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {

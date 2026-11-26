@@ -12,7 +12,6 @@
  */
 
 const TZ = 'Asia/Seoul';
-const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
 const SHEET = {
   CONFIG: '설정',
@@ -226,29 +225,10 @@ function getContext() {
   };
 }
 
-/* ---------- 연결된 스프레드시트 ----------
- * 시트에서 「확장 프로그램 → Apps Script」로 만든 프로젝트는 그 시트를 쓴다.
- * script.google.com에서 따로 만든 프로젝트는 initialize가 새 시트를 만들어 그 ID를 스크립트 속성(SHEET_ID)에 적어 두고 쓴다.
- * 이런 프로젝트에는 "문서" 캐시·잠금이 없으므로 스크립트 캐시·잠금으로 대신한다.
- */
+/** 이 스크립트가 붙은 스프레드시트 (한 번 실행 안에서는 다시 찾지 않는다) */
 let BOOK_ = null;
 function book_() {
-  if (BOOK_) return BOOK_;
-  BOOK_ = SpreadsheetApp.getActive();
-  if (!BOOK_) {
-    const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
-    if (id) BOOK_ = SpreadsheetApp.openById(id);
-  }
-  if (!BOOK_) throw new Error('연결된 스프레드시트가 없습니다. Apps Script 편집기에서 initialize 함수를 한 번 실행해 주세요.');
-  return BOOK_;
-}
-
-function cache_() {
-  return CacheService.getDocumentCache() || CacheService.getScriptCache();
-}
-
-function docLock_() {
-  return LockService.getDocumentLock() || LockService.getScriptLock();
+  return BOOK_ || (BOOK_ = SpreadsheetApp.getActive());
 }
 
 /* ---------- 잠금 ---------- */
@@ -257,7 +237,7 @@ const LOCK_BUSY_MSG = '다른 담당자의 저장이 몰려 있습니다. 잠시
 
 /** 문서 잠금 안에서 fn을 실행한다 (여러 담당자가 동시에 저장해도 한 번에 한 사람씩) */
 function withLock_(fn) {
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try { return fn(); } finally { lock.releaseLock(); }
 }
@@ -342,10 +322,6 @@ function sheetUrl(ss, sh) {
   return `${ss.getUrl()}#gid=${sh.getSheetId()}`;
 }
 
-function escapeHtml_(s) {
-  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
 // ===================================================================
 // Setup.gs
 // ===================================================================
@@ -374,14 +350,6 @@ function showWebAppLink() {
 
 /** 1단계: 필요한 시트를 만든다 (이미 있으면 건너뛰고, 빠진 열만 채운다) */
 function initialize() {
-  // 시트에 붙은 프로젝트면 그 시트, 따로 만든 프로젝트면 처음 한 번 새 시트를 만들어 연결한다
-  let created = false;
-  if (!SpreadsheetApp.getActive() && !PropertiesService.getScriptProperties().getProperty('SHEET_ID')) {
-    const made = SpreadsheetApp.create('연말정산 검토');
-    PropertiesService.getScriptProperties().setProperty('SHEET_ID', made.getId());
-    BOOK_ = made;
-    created = true;
-  }
   const ss = book_();
   ss.setSpreadsheetTimeZone(TZ);
 
@@ -423,9 +391,7 @@ function initialize() {
   setupMenuSheet_(ss);
   clearCaches_();
 
-  // 첫 시트(Sheet1/시트1)가 비어 있으면 지운다 (따로 만든 프로젝트에서 새로 만든 시트)
-  if (created) { const blank = ss.getSheets().find(x => x.getLastRow() === 0 && !/_/.test(x.getName()) && x.getName() !== SHEET.CONFIG); if (blank && ss.getSheets().length > 1) ss.deleteSheet(blank); }
-  notify_((created ? `새 스프레드시트를 만들어 연결했습니다: ${ss.getUrl()}\n\n` : '') + '기본 시트를 만들었습니다.\n\n' +
+  notify_('기본 시트를 만들었습니다.\n\n' +
     '1. [담당자] 시트에 이름·이메일·역할을 입력하세요.\n' +
     `2. 기존 검토 시트 내용을 [${SHEET.PEOPLE}_${year}] 시트 2행부터 붙여넣으세요. (열 이름이 같으면 순서가 달라도 됩니다)\n` +
     '3. 웹앱을 배포한 뒤 관리 메뉴에서 "권한 한 번에 적용"을 누르세요.');
@@ -725,7 +691,7 @@ const EDIT_TTL = 150;
 const editKey_ = id => `edit:${viewYear_()}:${id}`;
 
 function readEditLock_(id) {
-  try { const v = cache_().get(editKey_(id)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+  try { const v = CacheService.getDocumentCache().get(editKey_(id)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
 }
 
 /** 잠그기(이미 내 잠금이면 연장). 다른 사람이 수정 중이면 { lockedBy, since } */
@@ -739,7 +705,7 @@ function apiLockPerson(id, force) {
     const mine = cur && cur.email === me.email;
     if (cur && !mine && !(force && (me.isLeader || me.isAdmin))) return { lockedBy: cur.name, since: cur.since };
     const since = mine ? cur.since : fmt(new Date(), 'HH:mm');
-    cache_().put(editKey_(id), JSON.stringify({ email: me.email, name: me.name || me.email, since: since }), EDIT_TTL);
+    CacheService.getDocumentCache().put(editKey_(id), JSON.stringify({ email: me.email, name: me.name || me.email, since: since }), EDIT_TTL);
     return { ok: true, took: cur && !mine ? cur.name : '' };
   });
 }
@@ -749,7 +715,7 @@ function apiUnlockPerson(id) {
   const me = currentMember_(getContext().members);
   id = String(id);
   const cur = readEditLock_(id);
-  if (cur && cur.email === me.email) { try { cache_().remove(editKey_(id)); } catch (e) { /* 캐시 없음 */ } }
+  if (cur && cur.email === me.email) { try { CacheService.getDocumentCache().remove(editKey_(id)); } catch (e) { /* 캐시 없음 */ } }
   return { ok: true };
 }
 
@@ -764,7 +730,7 @@ function apiSavePerson(id, patch, base) {
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -813,7 +779,7 @@ function apiSavePerson(id, patch, base) {
       if (i >= 0) list[i] = saved; else list.push(saved);
     });
     // 저장이 끝났으니 내 수정 잠금을 푼다 (화면은 저장을 누르며 이미 닫혔다)
-    if (held) { try { cache_().remove(editKey_(String(id))); } catch (e) { /* 캐시 없음 */ } }
+    if (held) { try { CacheService.getDocumentCache().remove(editKey_(String(id))); } catch (e) { /* 캐시 없음 */ } }
     return { personPatch: saved, oldId: String(id) };
   } finally {
     lock.releaseLock();
@@ -847,7 +813,7 @@ function apiDeletePerson(id) {
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -885,7 +851,7 @@ function apiDeletePeople(ids) {
   (ids || []).forEach(id => { want[String(id)] = true; });
   if (!Object.keys(want).length) throw new Error('삭제할 대상자를 골라 주세요.');
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {
@@ -924,7 +890,7 @@ function apiImportPeople(rows) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let added = 0, updated = 0;
   try {
@@ -979,7 +945,7 @@ function apiAssignPeople(ids, patch) {
     if (patch[k] && names.indexOf(patch[k]) < 0) throw new Error(`[담당자] 시트에 없는 이름입니다: ${patch[k]}`);
   });
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {
@@ -1193,7 +1159,7 @@ function apiSaveEvent(ev) {
   if (end && end < start) throw new Error('종료일이 시작일보다 빠릅니다.');
   const kind = EVENT_KINDS.indexOf(ev.kind) >= 0 ? ev.kind : '기타';
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
@@ -1340,7 +1306,7 @@ function apiSaveNotice(n) {
   const pinned = !!n.pinned && lead;
   const now = new Date();
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
@@ -1532,7 +1498,7 @@ function apiSaveRule(rule) {
   const editor = me.name || me.email;
   const now = new Date();
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {
@@ -2008,7 +1974,7 @@ function apiStartYear(opts) {
   if (ctx.years.indexOf(year) >= 0 && ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`)) throw new Error(`${year}년은 이미 있습니다.`);
   const from = String(opts.from || ctx.baseYear);
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let carried = 0, copied = 0;
   try {
@@ -2252,7 +2218,7 @@ function splitBytes_(s, max) {
 /** 캐시에 있으면 값, 없으면 null (새로 만들지 않는다) */
 function peekCache_(key) {
   try {
-    const cache = cache_();
+    const cache = CacheService.getDocumentCache();
     const hit = cache.get(key);
     let value = null;
     if (hit && hit.indexOf('CHUNKS:') === 0) {
@@ -2271,10 +2237,10 @@ function peekCache_(key) {
 
 /** 저장(쓰기) 버전: 쓸 때마다 새 값. 캐시를 만드는 동안 바뀌었는지 확인하는 데 쓴다 */
 function verOf_(key) {
-  try { return cache_().get('v:' + key) || ''; } catch (e) { return ''; }
+  try { return CacheService.getDocumentCache().get('v:' + key) || ''; } catch (e) { return ''; }
 }
 function bumpVer_(key) {
-  try { cache_().put('v:' + key, Utilities.getUuid(), 21600); } catch (e) { /* 캐시 없음 */ }
+  try { CacheService.getDocumentCache().put('v:' + key, Utilities.getUuid(), 21600); } catch (e) { /* 캐시 없음 */ }
 }
 
 function cached_(key, build, ttl) {
@@ -2290,7 +2256,7 @@ function cached_(key, build, ttl) {
 
 function putCache_(key, value, ttl) {
   try {
-    const cache = cache_();
+    const cache = CacheService.getDocumentCache();
     const cd = codec_(key);
     const s = JSON.stringify(cd ? cd.enc(value) : value);
     const parts = splitBytes_(s, CHUNK_BYTES);
@@ -2320,7 +2286,7 @@ function patchCache_(key, fn) {
 }
 
 function removeCache_(key) {
-  try { cache_().remove(key); } catch (e) { /* 캐시 없음 */ }
+  try { CacheService.getDocumentCache().remove(key); } catch (e) { /* 캐시 없음 */ }
 }
 
 function dropCache_(key) {
@@ -2333,7 +2299,7 @@ function clearCaches_() {
     const keys = [CK.ctx, 'menus', 'access'];
     const years = yearsWith_(findYears_(), baseYear_());
     years.forEach(y => ['people', 'logs', 'notices', 'rules', 'files', 'events'].forEach(k => keys.push(`${k}:${y}`)));
-    cache_().removeAll(keys);
+    CacheService.getDocumentCache().removeAll(keys);
   } catch (e) { /* 캐시 없음 */ }
 }
 
@@ -2416,7 +2382,7 @@ function partsFor_(me) {
 function stampOf_(year) {
   const keys = POLL_PARTS_.map(p => `v:${p}:${year}`);
   let got = {};
-  try { got = cache_().getAll(keys); } catch (e) { /* 캐시 없음 */ }
+  try { got = CacheService.getDocumentCache().getAll(keys); } catch (e) { /* 캐시 없음 */ }
   const out = { year: year };
   POLL_PARTS_.forEach((p, i) => { out[p] = got[keys[i]] || ''; });
   return out;

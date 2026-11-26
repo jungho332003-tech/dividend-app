@@ -68,8 +68,7 @@ function makeBook(name, id) {
   };
 }
 
-// opts.standalone: script.google.com에서 따로 만든 프로젝트 (연결된 시트·문서 캐시·문서 잠금이 없음)
-function makeEnv(opts = {}) {
+function makeEnv() {
   const sheets = [];
   let sid = 1;
   const books = {};
@@ -81,9 +80,7 @@ function makeEnv(opts = {}) {
     setSpreadsheetTimeZone() {}, getOwner: () => ({ getEmail: () => 'owner@x.com' }),
     deleteSheet: sh => { const i = sheets.indexOf(sh); if (i >= 0) sheets.splice(i, 1); },
   };
-  if (opts.standalone) sheets.push(new Sheet('시트1', sid++)); // 새로 만든 스프레드시트의 빈 첫 시트
   const scriptProps = {};
-  let ssCreated = false;
   const cacheStore = {};
   const userProps = {};
   const state = { user: 'owner@x.com', files: {}, fseq: 0, editors: {}, trashed: [] };
@@ -109,15 +106,15 @@ function makeEnv(opts = {}) {
   const g = {
     console,
     SpreadsheetApp: {
-      getActive: () => (opts.standalone ? null : ss), getUi: () => ({ alert() {}, createMenu: () => chain, showModalDialog() {} }),
+      getActive: () => ss, getUi: () => ({ alert() {}, createMenu: () => chain, showModalDialog() {} }),
       newDataValidation: () => chain, ProtectionType: { SHEET: 'S', RANGE: 'R' }, BorderStyle: {}, flush() {},
-      create: n => { if (opts.standalone && !ssCreated) { ssCreated = true; return ss; } const id = 'BOOK' + (Object.keys(books).length + 1); books[id] = makeBook(n, id); return books[id]; },
+      create: n => { const id = 'BOOK' + (Object.keys(books).length + 1); books[id] = makeBook(n, id); return books[id]; },
       openById: id => (id === 'SSID' ? ss : books[id]),
     },
     Session: { getActiveUser: () => ({ getEmail: () => state.user }), getEffectiveUser: () => ({ getEmail: () => state.user }) },
-    CacheService: { getDocumentCache: () => (opts.standalone ? null : cacheObj), getScriptCache: () => cacheObj },
+    CacheService: { getDocumentCache: () => cacheObj },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => scriptProps[k] ?? null, setProperty: (k, v) => { scriptProps[k] = v; } }), getUserProperties: () => ({ getProperty: k => (userProps[state.user] || {})[k] ?? null, setProperty: (k, v) => { (userProps[state.user] = userProps[state.user] || {})[k] = v; } }) },
-    LockService: { getDocumentLock: () => (opts.standalone ? null : lockObj), getScriptLock: () => lockObj },
+    LockService: { getDocumentLock: () => lockObj },
     Utilities: {
       formatDate: (d, tz, p) => { const k = new Date(d.getTime() + 9 * 3600e3); const pad = n => String(n).padStart(2, '0'); return p.replace('yyyy', k.getUTCFullYear()).replace('MM', pad(k.getUTCMonth() + 1)).replace('dd', pad(k.getUTCDate())).replace('HH', pad(k.getUTCHours())).replace('mm', pad(k.getUTCMinutes())); },
       getUuid: () => 'u' + Math.random().toString(36).slice(2) + Date.now().toString(36),

@@ -266,7 +266,7 @@ function apiStartYear(opts) {
   if (ctx.years.indexOf(year) >= 0 && ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`)) throw new Error(`${year}년은 이미 있습니다.`);
   const from = String(opts.from || ctx.baseYear);
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let carried = 0, copied = 0;
   try {

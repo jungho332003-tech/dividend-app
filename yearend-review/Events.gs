@@ -55,7 +55,7 @@ function apiSaveEvent(ev) {
   if (end && end < start) throw new Error('종료일이 시작일보다 빠릅니다.');
   const kind = EVENT_KINDS.indexOf(ev.kind) >= 0 ? ev.kind : '기타';
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {

@@ -101,7 +101,7 @@ function apiSaveRule(rule) {
   const editor = me.name || me.email;
   const now = new Date();
 
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {

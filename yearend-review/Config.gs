@@ -3,7 +3,6 @@
  */
 
 const TZ = 'Asia/Seoul';
-const DAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
 const SHEET = {
   CONFIG: '설정',
@@ -217,29 +216,10 @@ function getContext() {
   };
 }
 
-/* ---------- 연결된 스프레드시트 ----------
- * 시트에서 「확장 프로그램 → Apps Script」로 만든 프로젝트는 그 시트를 쓴다.
- * script.google.com에서 따로 만든 프로젝트는 initialize가 새 시트를 만들어 그 ID를 스크립트 속성(SHEET_ID)에 적어 두고 쓴다.
- * 이런 프로젝트에는 "문서" 캐시·잠금이 없으므로 스크립트 캐시·잠금으로 대신한다.
- */
+/** 이 스크립트가 붙은 스프레드시트 (한 번 실행 안에서는 다시 찾지 않는다) */
 let BOOK_ = null;
 function book_() {
-  if (BOOK_) return BOOK_;
-  BOOK_ = SpreadsheetApp.getActive();
-  if (!BOOK_) {
-    const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
-    if (id) BOOK_ = SpreadsheetApp.openById(id);
-  }
-  if (!BOOK_) throw new Error('연결된 스프레드시트가 없습니다. Apps Script 편집기에서 initialize 함수를 한 번 실행해 주세요.');
-  return BOOK_;
-}
-
-function cache_() {
-  return CacheService.getDocumentCache() || CacheService.getScriptCache();
-}
-
-function docLock_() {
-  return LockService.getDocumentLock() || LockService.getScriptLock();
+  return BOOK_ || (BOOK_ = SpreadsheetApp.getActive());
 }
 
 /* ---------- 잠금 ---------- */
@@ -248,7 +228,7 @@ const LOCK_BUSY_MSG = '다른 담당자의 저장이 몰려 있습니다. 잠시
 
 /** 문서 잠금 안에서 fn을 실행한다 (여러 담당자가 동시에 저장해도 한 번에 한 사람씩) */
 function withLock_(fn) {
-  const lock = docLock_();
+  const lock = LockService.getDocumentLock();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try { return fn(); } finally { lock.releaseLock(); }
 }
@@ -333,6 +313,3 @@ function sheetUrl(ss, sh) {
   return `${ss.getUrl()}#gid=${sh.getSheetId()}`;
 }
 
-function escapeHtml_(s) {
-  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}

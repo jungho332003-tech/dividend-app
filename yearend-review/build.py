@@ -1,12 +1,12 @@
 """
 한 파일 설치본 만들기: python3 build.py
   dist/Code.gs          스크립트 9개를 하나로 합친 파일
-  dist/App.html         웹앱 화면 (그대로 복사)
+  dist/App.html         웹앱 화면 (압축본. node와 npm install이 되어 있으면 tools/minify.mjs로 압축, 아니면 그대로 복사)
   dist/appsscript.json
   dist/demo.html        예시 데이터로 바로 열어보는 화면 (App.html + demo/Mock.js)
-  dist/install.html     설치 코드 복사 페이지 (3개 파일을 차례로 복사)
+  dist/install.html     설치 코드 복사 페이지 (Code.gs, App.html 2개)
 """
-import json, os, shutil
+import json, os, shutil, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ORDER = ['Config', 'Setup', 'People', 'Events', 'Notice', 'Rules', 'Files', 'Admin', 'WebApp']
@@ -32,10 +32,16 @@ code = ''.join(parts)
 
 os.makedirs(os.path.join(HERE, 'dist'), exist_ok=True)
 write('Code.gs', code)
-for name in ['App.html', 'appsscript.json']:
-    shutil.copyfile(os.path.join(HERE, name), os.path.join(HERE, 'dist', name))
+shutil.copyfile(os.path.join(HERE, 'appsscript.json'), os.path.join(HERE, 'dist', 'appsscript.json'))
 
-app = read('App.html')
+# 화면은 압축해서 내보낸다 (원본 App.html은 읽기 쉽게 둔다). 압축 도구가 없으면 그대로 복사
+try:
+    subprocess.run(['node', os.path.join(HERE, 'tools', 'minify.mjs'), os.path.join(HERE, 'App.html'), os.path.join(HERE, 'dist', 'App.html')],
+                   check=True, cwd=HERE, capture_output=True, text=True)
+except (OSError, subprocess.CalledProcessError) as e:
+    print('압축 건너뜀 (cd yearend-review && npm install 후 다시 실행하면 압축됩니다):', getattr(e, 'stderr', '') or e)
+    shutil.copyfile(os.path.join(HERE, 'App.html'), os.path.join(HERE, 'dist', 'App.html'))
+app = read('dist/App.html')
 assert '<!-- MOCK -->' in app
 write('demo.html', app.replace('<!-- MOCK -->', '<script>\n' + read('demo/Mock.js') + '</script>'))
 

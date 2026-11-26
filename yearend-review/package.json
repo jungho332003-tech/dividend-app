@@ -1,0 +1,9 @@
+{
+  "name": "yearend-review-build",
+  "private": true,
+  "description": "dist/App.html 압축용 (python3 build.py가 tools/minify.mjs를 부른다)",
+  "devDependencies": {
+    "csso": "^5.0.5",
+    "terser": "^5.31.0"
+  }
+}
