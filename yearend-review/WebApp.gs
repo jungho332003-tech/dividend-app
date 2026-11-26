@@ -95,7 +95,7 @@ function splitBytes_(s, max) {
 /** 캐시에 있으면 값, 없으면 null (새로 만들지 않는다) */
 function peekCache_(key) {
   try {
-    const cache = CacheService.getDocumentCache();
+    const cache = cache_();
     const hit = cache.get(key);
     let value = null;
     if (hit && hit.indexOf('CHUNKS:') === 0) {
@@ -114,10 +114,10 @@ function peekCache_(key) {
 
 /** 저장(쓰기) 버전: 쓸 때마다 새 값. 캐시를 만드는 동안 바뀌었는지 확인하는 데 쓴다 */
 function verOf_(key) {
-  try { return CacheService.getDocumentCache().get('v:' + key) || ''; } catch (e) { return ''; }
+  try { return cache_().get('v:' + key) || ''; } catch (e) { return ''; }
 }
 function bumpVer_(key) {
-  try { CacheService.getDocumentCache().put('v:' + key, Utilities.getUuid(), 21600); } catch (e) { /* 캐시 없음 */ }
+  try { cache_().put('v:' + key, Utilities.getUuid(), 21600); } catch (e) { /* 캐시 없음 */ }
 }
 
 function cached_(key, build, ttl) {
@@ -133,7 +133,7 @@ function cached_(key, build, ttl) {
 
 function putCache_(key, value, ttl) {
   try {
-    const cache = CacheService.getDocumentCache();
+    const cache = cache_();
     const cd = codec_(key);
     const s = JSON.stringify(cd ? cd.enc(value) : value);
     const parts = splitBytes_(s, CHUNK_BYTES);
@@ -163,7 +163,7 @@ function patchCache_(key, fn) {
 }
 
 function removeCache_(key) {
-  try { CacheService.getDocumentCache().remove(key); } catch (e) { /* 캐시 없음 */ }
+  try { cache_().remove(key); } catch (e) { /* 캐시 없음 */ }
 }
 
 function dropCache_(key) {
@@ -176,7 +176,7 @@ function clearCaches_() {
     const keys = [CK.ctx, 'menus', 'access'];
     const years = yearsWith_(findYears_(), baseYear_());
     years.forEach(y => ['people', 'logs', 'notices', 'rules', 'files', 'events'].forEach(k => keys.push(`${k}:${y}`)));
-    CacheService.getDocumentCache().removeAll(keys);
+    cache_().removeAll(keys);
   } catch (e) { /* 캐시 없음 */ }
 }
 
@@ -187,7 +187,7 @@ function refreshPart_(part) {
   const key = CK[part];
   bumpVer_(key);
   const v0 = verOf_(key);
-  const value = READERS[part](SpreadsheetApp.getActive());
+  const value = READERS[part](book_());
   putCache_(key, value);
   if (verOf_(key) !== v0) removeCache_(key); // 읽는 사이 다른 저장이 있었으면 캐시는 버린다
   const out = {};
@@ -226,7 +226,7 @@ function canSee_(me, p) {
 /** 범위가 제한된 사람이 볼 수 있는 사원번호(또는 행 id) 모음. 전체면 null */
 function visibleEmpNos_(me) {
   if (me.isLeader || me.isAdmin || me.scope === SCOPE_ALL) return null;
-  const people = cached_(CK.people, () => readPeople_(SpreadsheetApp.getActive()));
+  const people = cached_(CK.people, () => readPeople_(book_()));
   return new Set(people.filter(p => canSee_(me, p)).map(p => p.empNo || p.id));
 }
 
@@ -259,7 +259,7 @@ function partsFor_(me) {
 function stampOf_(year) {
   const keys = POLL_PARTS_.map(p => `v:${p}:${year}`);
   let got = {};
-  try { got = CacheService.getDocumentCache().getAll(keys); } catch (e) { /* 캐시 없음 */ }
+  try { got = cache_().getAll(keys); } catch (e) { /* 캐시 없음 */ }
   const out = { year: year };
   POLL_PARTS_.forEach((p, i) => { out[p] = got[keys[i]] || ''; });
   return out;

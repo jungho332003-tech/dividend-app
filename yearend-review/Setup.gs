@@ -22,7 +22,15 @@ function showWebAppLink() {
 
 /** 1단계: 필요한 시트를 만든다 (이미 있으면 건너뛰고, 빠진 열만 채운다) */
 function initialize() {
-  const ss = SpreadsheetApp.getActive();
+  // 시트에 붙은 프로젝트면 그 시트, 따로 만든 프로젝트면 처음 한 번 새 시트를 만들어 연결한다
+  let created = false;
+  if (!SpreadsheetApp.getActive() && !PropertiesService.getScriptProperties().getProperty('SHEET_ID')) {
+    const made = SpreadsheetApp.create('연말정산 검토');
+    PropertiesService.getScriptProperties().setProperty('SHEET_ID', made.getId());
+    BOOK_ = made;
+    created = true;
+  }
+  const ss = book_();
   ss.setSpreadsheetTimeZone(TZ);
 
   if (!ss.getSheetByName(SHEET.CONFIG)) {
@@ -63,16 +71,23 @@ function initialize() {
   setupMenuSheet_(ss);
   clearCaches_();
 
-  SpreadsheetApp.getUi().alert('기본 시트를 만들었습니다.\n\n' +
+  // 첫 시트(Sheet1/시트1)가 비어 있으면 지운다 (따로 만든 프로젝트에서 새로 만든 시트)
+  if (created) { const blank = ss.getSheets().find(x => x.getLastRow() === 0 && !/_/.test(x.getName()) && x.getName() !== SHEET.CONFIG); if (blank && ss.getSheets().length > 1) ss.deleteSheet(blank); }
+  notify_((created ? `새 스프레드시트를 만들어 연결했습니다: ${ss.getUrl()}\n\n` : '') + '기본 시트를 만들었습니다.\n\n' +
     '1. [담당자] 시트에 이름·이메일·역할을 입력하세요.\n' +
     `2. 기존 검토 시트 내용을 [${SHEET.PEOPLE}_${year}] 시트 2행부터 붙여넣으세요. (열 이름이 같으면 순서가 달라도 됩니다)\n` +
     '3. 웹앱을 배포한 뒤 관리 메뉴에서 "권한 한 번에 적용"을 누르세요.');
 }
 
+/** 시트 화면에서 실행하면 알림 창, 편집기에서 실행하면 실행 로그에 남긴다 */
+function notify_(msg) {
+  try { SpreadsheetApp.getUi().alert(msg); } catch (e) { console.log(msg); }
+}
+
 /** 2단계: 시트 보호만 다시 적용 (웹앱 관리 메뉴의 "권한 한 번에 적용"도 같은 일을 한다) */
 function setupProtections() {
   applyProtections_(getContext());
-  SpreadsheetApp.getUi().alert('시트 보호를 적용했습니다.\n담당자에게 스프레드시트를 "편집자"로 공유해야 웹앱에서 저장할 수 있습니다.');
+  notify_('시트 보호를 적용했습니다.\n담당자에게 스프레드시트를 "편집자"로 공유해야 웹앱에서 저장할 수 있습니다.');
 }
 
 /**
@@ -153,7 +168,7 @@ function sameEditors_(p, editors) {
 function ownerEmail_() {
   return cached_(CK.owner, () => {
     try {
-      const o = SpreadsheetApp.getActive().getOwner();
+      const o = book_().getOwner();
       return o ? o.getEmail().toLowerCase() : '';
     } catch (e) { return ''; /* 공유 드라이브 등 소유자 조회 불가 */ }
   }, 21600);

@@ -85,7 +85,7 @@ function registerFiles_(area, ref, refLabel, files, me, memo) {
 }
 
 function registerRows_(area, ref, refLabel, list, me, memo) {
-  const sh = SpreadsheetApp.getActive().getSheetByName(FILES.SHEET);
+  const sh = book_().getSheetByName(FILES.SHEET);
   const last = sh.getLastRow();
   const have = new Set(last >= 2 ? sh.getRange(2, 1, last - 1, 1).getValues().map(([v]) => String(v)) : []);
   const now = new Date();

@@ -142,7 +142,7 @@ function baseYear_() {
 }
 
 function getConfig() {
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.CONFIG);
+  const sh = book_().getSheetByName(SHEET.CONFIG);
   const map = {};
   if (!sh) return map;
   dataRows_(sh, 2).forEach(([k, v]) => {
@@ -152,7 +152,7 @@ function getConfig() {
 }
 
 function setConfigValue(key, value) {
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.CONFIG);
+  const sh = book_().getSheetByName(SHEET.CONFIG);
   const keys = sh.getRange(1, 1, sh.getLastRow(), 1).getValues();
   for (let i = 0; i < keys.length; i++) {
     if (String(keys[i][0]).trim() === key) {
@@ -169,7 +169,7 @@ function setConfigValue(key, value) {
  * 담당자가 비어 있는 대상자는 열람범위와 상관없이 모두에게 보인다.
  */
 function getMembers() {
-  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.MEMBERS);
+  const sh = book_().getSheetByName(SHEET.MEMBERS);
   return dataRows_(sh, 6)
     .filter(r => String(r[1]).trim())
     .map(r => ({
@@ -207,7 +207,7 @@ function getContext() {
   });
   const baseYear = String(base.cfg[CFG.YEAR] || defaultYear_());
   return {
-    ss: SpreadsheetApp.getActive(),
+    ss: book_(),
     cfg: base.cfg,
     baseYear: baseYear,                     // 관리자가 정한 기본(진행 중) 연도
     years: yearsWith_(base.years, baseYear), // 관리하는 연도 목록 (최근 연도 먼저)
@@ -217,13 +217,38 @@ function getContext() {
   };
 }
 
+/* ---------- 연결된 스프레드시트 ----------
+ * 시트에서 「확장 프로그램 → Apps Script」로 만든 프로젝트는 그 시트를 쓴다.
+ * script.google.com에서 따로 만든 프로젝트는 initialize가 새 시트를 만들어 그 ID를 스크립트 속성(SHEET_ID)에 적어 두고 쓴다.
+ * 이런 프로젝트에는 "문서" 캐시·잠금이 없으므로 스크립트 캐시·잠금으로 대신한다.
+ */
+let BOOK_ = null;
+function book_() {
+  if (BOOK_) return BOOK_;
+  BOOK_ = SpreadsheetApp.getActive();
+  if (!BOOK_) {
+    const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+    if (id) BOOK_ = SpreadsheetApp.openById(id);
+  }
+  if (!BOOK_) throw new Error('연결된 스프레드시트가 없습니다. Apps Script 편집기에서 initialize 함수를 한 번 실행해 주세요.');
+  return BOOK_;
+}
+
+function cache_() {
+  return CacheService.getDocumentCache() || CacheService.getScriptCache();
+}
+
+function docLock_() {
+  return LockService.getDocumentLock() || LockService.getScriptLock();
+}
+
 /* ---------- 잠금 ---------- */
 
 const LOCK_BUSY_MSG = '다른 담당자의 저장이 몰려 있습니다. 잠시 후 다시 저장해 주세요.';
 
 /** 문서 잠금 안에서 fn을 실행한다 (여러 담당자가 동시에 저장해도 한 번에 한 사람씩) */
 function withLock_(fn) {
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try { return fn(); } finally { lock.releaseLock(); }
 }
@@ -246,7 +271,7 @@ function requireOpen_(ctx, me) {
 /** 시트 이름(대상자_2026 …)에서 연도 목록을 찾는다 */
 function findYears_() {
   const set = {};
-  SpreadsheetApp.getActive().getSheets().forEach(sh => {
+  book_().getSheets().forEach(sh => {
     const m = /^대상자_(\d{4})$/.exec(sh.getName());
     if (m) set[m[1]] = true;
   });

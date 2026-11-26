@@ -103,7 +103,7 @@ function apiSaveNotice(n) {
   const pinned = !!n.pinned && lead;
   const now = new Date();
 
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let id;
   try {

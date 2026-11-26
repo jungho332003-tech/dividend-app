@@ -178,7 +178,7 @@ function apiSavePerson(id, patch, base) {
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
 
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -256,7 +256,7 @@ function apiDeletePerson(id) {
   requireOpen_(ctx, me);
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('대상자 삭제는 총괄 또는 관리자만 할 수 있습니다.');
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   try {
     const sh = peopleSheetOrThrow_(ctx.ss);
@@ -280,7 +280,7 @@ function apiImportPeople(rows) {
   requireMenu_(me, 'review');
   if (!me.isLeader && !me.isAdmin) throw new Error('붙여넣기는 총괄 또는 관리자만 할 수 있습니다.');
 
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let added = 0, updated = 0;
   try {
@@ -335,7 +335,7 @@ function apiAssignPeople(ids, patch) {
     if (patch[k] && names.indexOf(patch[k]) < 0) throw new Error(`[담당자] 시트에 없는 이름입니다: ${patch[k]}`);
   });
 
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let count = 0;
   try {

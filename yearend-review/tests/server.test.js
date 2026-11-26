@@ -539,4 +539,35 @@ function withDefaults(api) {
   });
 }
 
+/* ---------- 4. script.google.com에서 따로 만든 프로젝트 (연결된 시트 없음) ---------- */
+{
+  const { api, ss, state, scriptProps, cacheStore } = makeEnv({ standalone: true });
+  withDefaults(api);
+  const as = u => { state.user = u; };
+  ok('따로 만든 프로젝트: initialize가 새 시트를 만들어 연결한다', () => {
+    as('owner@x.com');
+    api.initialize();
+    assert.strictEqual(scriptProps.SHEET_ID, 'SSID');
+    assert(ss.getSheetByName('설정') && ss.getSheetByName('담당자'));
+    assert(!ss.getSheetByName('시트1'), '빈 첫 시트는 지움');
+    api.initialize(); // 두 번 실행해도 새로 만들지 않음
+    assert.strictEqual(scriptProps.SHEET_ID, 'SSID');
+  });
+  ok('따로 만든 프로젝트: 웹앱 첫 화면·저장·캐시·잠금이 그대로 동작', () => {
+    const mem = ss.getSheetByName('담당자');
+    mem.getRange(2, 1, 2, 6).setValues([[1, '정해린', 'lead@x.com', '총괄', 'N', ''], [2, '김도현', 'kim@x.com', '응대담당', 'N', '']]);
+    as('lead@x.com');
+    api.apiImportPeople([{ empNo: '9001', name: '홍길동', owner: '김도현' }]);
+    as('kim@x.com');
+    api.doGet();
+    const boot = JSON.parse(state.lastTemplate.boot);
+    assert.strictEqual(boot.me.name, '김도현');
+    assert(Object.keys(cacheStore).some(k => k.startsWith('people:')), '스크립트 캐시에 저장');
+    const r = api.apiSavePerson('9001', { verified: true }, { __name: '홍길동', verified: false });
+    assert(!r.conflicts && r.personPatch.verified === true);
+    api.apiAddLog('9001', '전화', '통화');
+    assert(api.apiBootstrap().logs.some(l => l.body === '통화'));
+  });
+}
+
 console.log(`\n${pass} passed${process.exitCode ? ' (with failures)' : ''}`);

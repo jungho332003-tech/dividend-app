@@ -40,7 +40,7 @@ function getMenuAccess_() {
   return cached_('menus', () => {
     const access = {};
     ROLES.forEach(r => { access[r] = {}; MENUS.forEach(m => { access[r][m.key] = true; }); });
-    const sh = SpreadsheetApp.getActive().getSheetByName(MENU_SHEET);
+    const sh = book_().getSheetByName(MENU_SHEET);
     if (!sh) return access;
     const v = sh.getDataRange().getValues();
     if (v.length < 2) return access;
@@ -266,7 +266,7 @@ function apiStartYear(opts) {
   if (ctx.years.indexOf(year) >= 0 && ctx.ss.getSheetByName(`${SHEET.PEOPLE}_${year}`)) throw new Error(`${year}년은 이미 있습니다.`);
   const from = String(opts.from || ctx.baseYear);
 
-  const lock = LockService.getDocumentLock();
+  const lock = docLock_();
   if (!lock.tryLock(30000)) throw new Error(LOCK_BUSY_MSG);
   let carried = 0, copied = 0;
   try {
