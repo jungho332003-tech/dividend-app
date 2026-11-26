@@ -1632,7 +1632,7 @@ window.MockApi = (function () {
     return reviewBase()
       .filter(p => reviewStatus === 'all' || pStatus(p) === reviewStatus)
       .filter(p => !reviewEmp || empState(p) === reviewEmp)
-      .filter(p => !q || [p.empNo, p.name, p.dept, p.phone, p.email, p.missing, p.note1, p.note2].join(' ').toLowerCase().includes(q))
+      .filter(p => !q || [p.empNo, p.name, p.dept, p.phone, p.email, p.missing, p.note1, show2nd(p) ? p.note2 : ''].join(' ').toLowerCase().includes(q))
       .sort(reviewCompare);
   }
   // 열 제목을 누르면 오름차순 → 내림차순 → 원래 순서(No.). 빈 칸은 방향과 관계없이 맨 아래
@@ -1833,6 +1833,16 @@ window.MockApi = (function () {
       ${longs.map(c => fieldHtml(p, c)).join('')}`;
   }
 
+  /**
+   * 2차 검토 칸을 보여줄지: 총괄·관리자는 항상, 1차 담당자(응대담당)는 안 보임,
+   * 2차 검토 담당자는 1차 검증이 끝난 뒤부터 (이미 2차 내용이 있으면 계속 보임)
+   */
+  function show2nd(p) {
+    if (isLead()) return true;
+    if (D.me.role === '응대담당') return false;
+    return !!(p.verified || p.review2 || String(p.note2 || '').trim() || String(p.fix2 || '').trim());
+  }
+
   function personFiles(p) {
     return D.files.filter(f => f.area === 'person' && f.ref === (p.empNo || p.id));
   }
@@ -1850,7 +1860,9 @@ window.MockApi = (function () {
     const editable = D.cols.some(c => canEdit(p, c, draftOwner) && c.who !== 'assign') || (isLead() && !ro());
     const canTake = !p.owner && D.me.name && !isLead() && !draftOwner && !ro();
     // 응대담당에게는 담당(담당자·2차검토 담당자) 칸을 보여주지 않는다
-    const groups = GROUP_ORDER.filter(g => D.cols.some(c => c.g === g) && !(g === '담당' && D.me.role === '응대담당' && !isLead()));
+    const show2 = show2nd(p);
+    const wait2 = !show2 && !isLead() && D.me.role !== '응대담당';
+    const groups = GROUP_ORDER.filter(g => D.cols.some(c => c.g === g) && !(g === '담당' && D.me.role === '응대담당' && !isLead()) && (g !== '2차 검토' || show2 || wait2));
     const logs = D.logs.filter(l => l.empNo === p.empNo);
     const files = personFiles(p);
     $('#modal').classList.add('wide');
@@ -1862,7 +1874,7 @@ window.MockApi = (function () {
         ${ro() ? `<div class="notice">🔒 ${esc(D.year)}년 귀속은 마감되어 조회만 할 수 있습니다.</div>` : ''}
         ${!ro() && !editable && !canTake ? `<div class="notice">보기만 할 수 있습니다. 1차 담당자(${esc(p.owner || '미지정')})·2차 검토 담당자(${esc(p.owner2 || '미지정')})·총괄이 입력합니다. 응대기록은 누구나 남길 수 있습니다.</div>` : ''}
         ${groupHtml(p, '기본 정보')}
-        ${groups.map(g => groupHtml(p, g)).join('')}
+        ${groups.map(g => g === '2차 검토' && !show2 ? '<div class="sec">2차 검토<span>1차 검증 후</span></div><div class="hint">1차 담당자가 「서류확인 및 검증」을 체크하면 2차 검토 칸이 나타납니다.</div>' : groupHtml(p, g)).join('')}
 
         <div class="sec">증빙 첨부<span>${files.length}개</span></div>
         <div id="pFiles">${filesView(files) || '<div class="hint">올린 파일이 없습니다.</div>'}</div>
