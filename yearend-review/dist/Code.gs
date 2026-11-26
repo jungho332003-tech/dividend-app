@@ -716,6 +716,43 @@ function cellValue_(col, now, value) {
   return String(value == null ? '' : value).trim();
 }
 
+/* ---------- 수정 중 잠금 ----------
+ * 한 사람이 대상자 입력 화면을 열면 그 사람 이름으로 잠그고, 다른 사람은 그 화면을 열 수 없다.
+ * 화면이 열려 있는 동안 40초마다 연장하고, 닫거나 저장하면 바로 푼다.
+ * 창을 띄운 채 브라우저를 꺼도 EDIT_TTL(150초) 뒤 저절로 풀린다. 총괄·관리자는 넘겨받을 수 있다.
+ */
+const EDIT_TTL = 150;
+const editKey_ = id => `edit:${viewYear_()}:${id}`;
+
+function readEditLock_(id) {
+  try { const v = cache_().get(editKey_(id)); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+}
+
+/** 잠그기(이미 내 잠금이면 연장). 다른 사람이 수정 중이면 { lockedBy, since } */
+function apiLockPerson(id, force) {
+  const ctx = getContext();
+  const me = currentMember_(ctx.members);
+  requireMenu_(me, 'review');
+  id = String(id);
+  return withLock_(() => {
+    const cur = readEditLock_(id);
+    const mine = cur && cur.email === me.email;
+    if (cur && !mine && !(force && (me.isLeader || me.isAdmin))) return { lockedBy: cur.name, since: cur.since };
+    const since = mine ? cur.since : fmt(new Date(), 'HH:mm');
+    cache_().put(editKey_(id), JSON.stringify({ email: me.email, name: me.name || me.email, since: since }), EDIT_TTL);
+    return { ok: true, took: cur && !mine ? cur.name : '' };
+  });
+}
+
+/** 내 잠금이면 푼다 */
+function apiUnlockPerson(id) {
+  const me = currentMember_(getContext().members);
+  id = String(id);
+  const cur = readEditLock_(id);
+  if (cur && cur.email === me.email) { try { cache_().remove(editKey_(id)); } catch (e) { /* 캐시 없음 */ } }
+  return { ok: true };
+}
+
 /**
  * 바뀐 칸만 저장한다 (1차·2차 담당자가 동시에 고쳐도 서로 덮어쓰지 않게)
  * base: 화면에서 고치기 전에 보던 값 { 키: 값, __name: 성명 }.
@@ -739,6 +776,9 @@ function apiSavePerson(id, patch, base) {
     // 사원번호 없는 대상자(행 번호로 찾음)는 행이 밀렸을 수 있으니 이름까지 확인한다
     if (base && base.__name != null && String(base.__name) !== cur.name) throw new Error('대상자 정보가 바뀌었습니다. 새로고침한 뒤 다시 저장해 주세요.');
     if (!canSee_(me, cur)) throw new Error('열람 범위 밖의 대상자입니다. 관리자에게 열람 범위를 요청하세요.');
+    // 다른 사람이 수정 화면을 열어 둔 대상자는 저장하지 않는다
+    const held = readEditLock_(String(id));
+    if (held && held.email !== me.email) throw new Error(`${held.name}님이 ${held.since}부터 수정 중이라 저장하지 않았습니다. 수정이 끝난 뒤 다시 저장해 주세요.`);
 
     const keys = Object.keys(patch || {}).filter(k => COLS.some(c => c.k === k));
     if (!keys.length) return { personPatch: cur };
@@ -772,6 +812,8 @@ function apiSavePerson(id, patch, base) {
       const i = list.findIndex(p => p.id === String(id));
       if (i >= 0) list[i] = saved; else list.push(saved);
     });
+    // 저장이 끝났으니 내 수정 잠금을 푼다 (화면은 저장을 누르며 이미 닫혔다)
+    if (held) { try { cache_().remove(editKey_(String(id))); } catch (e) { /* 캐시 없음 */ } }
     return { personPatch: saved, oldId: String(id) };
   } finally {
     lock.releaseLock();

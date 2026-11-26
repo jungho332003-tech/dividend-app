@@ -863,7 +863,8 @@ window.MockApi = (function () {
   const curYear = () => viewYears[me] || settings.year;
   const applyYear = () => { const st = stores[curYear()]; people = st.people; logs = st.logs; events = st.events; };
   const years = () => Object.keys(stores).sort((a, b) => b - a);
-  let closed = ['2025']; // 예시: 지난 연도는 마감된 상태
+  let closed = ['2025'];
+  const editLocks = {}; // 수정 중 잠금 (실제 서버는 150초 뒤 자동 해제) // 예시: 지난 연도는 마감된 상태
   const yNotices = () => sortNotices().filter(n => !n.year || n.year === curYear());
   const yRules = () => rules.filter(r => !r.year || r.year === curYear());
 
@@ -923,6 +924,8 @@ window.MockApi = (function () {
     delay: { apiAssignPeople: 800, apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
+    // 예시 화면에서 보는 사람을 바꾸면 앞사람의 수정 중 잠금은 비운다 (실제로는 각자 다른 브라우저)
+    clearLocks: () => { Object.keys(editLocks).forEach(k => delete editLocks[k]); },
     now: () => NOW,
 
     apiBootstrap() {
@@ -941,10 +944,20 @@ window.MockApi = (function () {
       };
     },
 
+    apiLockPerson(id, force) {
+      const m = meInfo(); const k = curYear() + ':' + id; const cur = editLocks[k];
+      if (cur && cur.email !== m.email && !(force && lead(m))) return { lockedBy: cur.name, since: cur.since };
+      const took = cur && cur.email !== m.email ? cur.name : '';
+      editLocks[k] = { email: m.email, name: m.name, since: cur && !took ? cur.since : stamp().slice(11, 16) };
+      return { ok: true, took };
+    },
+    apiUnlockPerson(id) { const m = meInfo(); const k = curYear() + ':' + id; if (editLocks[k] && editLocks[k].email === m.email) delete editLocks[k]; return { ok: true }; },
     apiSavePerson(id, patch, base) {
       const m = meInfo(); need(m, 'review');
       const cur = people.find(p => p.id === id);
       if (!cur) throw new Error('대상자를 찾을 수 없습니다.');
+      const held = editLocks[curYear() + ':' + id];
+      if (held && held.email !== m.email) throw new Error(`${held.name}님이 ${held.since}부터 수정 중이라 저장하지 않았습니다. 수정이 끝난 뒤 다시 저장해 주세요.`);
       if (!canSee(m, cur)) throw new Error('열람 범위 밖의 대상자입니다.');
       // 실제 서버와 같은 규칙: 화면을 연 뒤 다른 사람이 같은 칸을 먼저 고쳤으면 저장하지 않는다
       if (base) {
@@ -959,6 +972,7 @@ window.MockApi = (function () {
         if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'lead' ? '총괄·관리자' : c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
       });
       Object.assign(cur, patch, { updated: stamp(), editor: m.name });
+      if (held) delete editLocks[curYear() + ':' + id];
       cur.id = cur.empNo || id;
       return { personPatch: cur, oldId: id };
     },
@@ -1847,13 +1861,58 @@ window.MockApi = (function () {
     return D.files.filter(f => f.area === 'person' && f.ref === (p.empNo || p.id));
   }
 
-  function openPerson(id) {
+  function openPerson(id, force) {
     const p = D.people.find(x => x.id === id);
     if (!p) return toast('대상자를 찾을 수 없습니다. 새로고침해 주세요.');
+    releaseEdit();
     curPerson = p;
     draftOwner = '';
     drawPerson();
+    lockForEdit(p, force);
   }
+
+  /* ---------- 수정 중 잠금: 한 사람이 수정하는 동안 다른 사람은 이 대상자 화면을 열 수 없다 ---------- */
+  let editLock = null;   // { id, timer }
+  const canChange = p => !ro() && (isLead() || (!p.owner && !!D.me.name) || D.cols.some(c => c.who !== 'assign' && canEdit(p, c, '')));
+  function lockForEdit(p, force) {
+    if (!canChange(p)) return; // 고칠 수 있는 칸이 없으면 잠그지 않는다 (보기만)
+    const ok = $('#pOk');
+    if (ok) { ok.disabled = true; ok.textContent = '확인 중…'; }
+    const mine = { id: p.id, timer: null };
+    editLock = mine;
+    call('apiLockPerson', p.id, !!force).then(r => {
+      if (editLock !== mine) { if (r && r.ok) call('apiUnlockPerson', p.id).catch(() => {}); return; } // 그사이 닫음
+      if (r && r.lockedBy) { editLock = null; return showEditLocked(p, r); }
+      if (ok) { ok.disabled = false; ok.textContent = '저장'; }
+      if (r && r.took) toast(`${r.took}님의 수정을 넘겨받았습니다.`);
+      mine.timer = setInterval(() => heartbeat(mine), 40000);
+    }).catch(() => { if (editLock === mine && ok) { ok.disabled = false; ok.textContent = '저장'; } }); // 확인 못 해도 입력은 막지 않는다 (저장 때 서버가 다시 확인)
+  }
+  function heartbeat(mine) {
+    if (editLock !== mine) return clearInterval(mine.timer);
+    call('apiLockPerson', mine.id, false).then(r => {
+      if (editLock !== mine || !r || !r.lockedBy) return;
+      // 총괄·관리자가 넘겨받았으면 더는 저장할 수 없다
+      clearInterval(mine.timer); editLock = null;
+      const ok = $('#pOk'); if (ok) ok.disabled = true;
+      const e = $('#pErr'); if (e) { e.textContent = `${r.lockedBy}님이 수정을 넘겨받았습니다. 지금 입력한 내용은 저장할 수 없습니다.`; e.hidden = false; }
+    }).catch(() => {});
+  }
+  function showEditLocked(p, r) {
+    $('#modal').classList.remove('wide');
+    openModal(`<h3>🔒 ${esc(r.lockedBy)}님이 수정 중입니다</h3>
+      <p class="sub">${esc(p.name)}(${esc(p.empNo)}) — ${esc(r.since)}부터 수정하고 있습니다. 같은 대상자를 동시에 고치지 않도록 수정이 끝난 뒤 열 수 있습니다.</p>
+      <div class="modal-actions">${isLead() ? `<button class="btn" style="margin-right:auto" onclick="openPerson('${esc(p.id)}', true)" title="창을 띄워 둔 채 자리를 비운 경우 등">넘겨받아 열기</button>` : ''}<button class="btn primary" onclick="closeModal()">닫기</button></div>`);
+  }
+  /** 수정 화면을 닫으면 잠금을 푼다 (저장할 때는 서버가 저장 후 푼다) */
+  function releaseEdit(keepForSave) {
+    const l = editLock;
+    if (!l) return;
+    editLock = null;
+    clearInterval(l.timer);
+    if (!keepForSave) call('apiUnlockPerson', l.id).catch(() => {});
+  }
+  window.addEventListener('pagehide', () => releaseEdit());
 
   function drawPerson() {
     const p = curPerson;
@@ -1921,6 +1980,7 @@ window.MockApi = (function () {
     Object.keys(patch).forEach(k => { base[k] = before[k]; });
     Object.assign(p, patch);
     if (patch.empNo !== undefined) p.id = patch.empNo || before.id;
+    releaseEdit(true); // 잠금은 서버가 저장을 마친 뒤 푼다 (그 전에 다른 사람이 열지 못하게)
     closeModal();
     render();
     saveInBackground('apiSavePerson', [before.id, patch, base], {
@@ -2941,7 +3001,7 @@ window.MockApi = (function () {
     const first = $('#modal').querySelector('select:not([disabled]), input:not([disabled]):not([type=checkbox]), textarea:not([disabled])');
     if (first && !wide) first.focus();
   }
-  function closeModal() { $('#scrim').hidden = true; }
+  function closeModal() { $('#scrim').hidden = true; releaseEdit(); }
   $('#scrim').addEventListener('click', e => { if (e.target.id === 'scrim') closeModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#scrim').hidden) closeModal(); });
 
@@ -2961,7 +3021,7 @@ window.MockApi = (function () {
     bar.hidden = false;
     bar.innerHTML = `<b>예시 화면</b><span>모든 이름·사번·금액은 예시 데이터입니다.</span>
       <label>보는 사람 <select id="demoUser">${MockApi.users().map(u => `<option value="${esc(u.email)}" ${u.email === D.me.email ? 'selected' : ''}>${esc(u.name)} (${esc(u.role)})</option>`).join('')}</select></label>`;
-    $('#demoUser').onchange = e => { MockApi.setUser(e.target.value); A = null; reviewTab = 'mine'; D = null; load(); };
+    $('#demoUser').onchange = e => { if (MockApi.clearLocks) MockApi.clearLocks(); MockApi.setUser(e.target.value); A = null; reviewTab = 'mine'; D = null; load(); };
   }
 
   load();

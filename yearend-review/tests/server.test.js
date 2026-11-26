@@ -575,6 +575,41 @@ function withDefaults(api) {
   });
 }
 
+/* ---------- 4-2. 수정 중 잠금: 한 사람이 수정 중이면 다른 사람은 열 수 없음 ---------- */
+{
+  const { api, ss, state } = makeEnv();
+  withDefaults(api);
+  state.user = 'owner@x.com';
+  api.initialize();
+  const mem = ss.getSheetByName('담당자');
+  mem.getRange(2, 1, 3, 6).setValues([[1, '정해린', 'lead@x.com', '총괄', 'N', ''], [2, '김도현', 'kim@x.com', '응대담당', 'N', ''], [3, '최유나', 'choi@x.com', '2차검토', 'N', '']]);
+  state.user = 'lead@x.com';
+  api.apiImportPeople([{ empNo: '7100', name: '잠금시험', owner: '김도현', owner2: '최유나' }]);
+  ok('수정 중 잠금: 먼저 연 사람만 수정, 닫거나 저장하면 풀림, 총괄은 넘겨받기', () => {
+    state.user = 'kim@x.com';
+    assert(api.apiLockPerson('7100').ok, '김도현이 먼저 엶');
+    assert(api.apiLockPerson('7100').ok, '같은 사람은 다시 열기·연장 가능');
+    state.user = 'choi@x.com';
+    const r = api.apiLockPerson('7100');
+    assert.strictEqual(r.lockedBy, '김도현', '다른 사람은 열 수 없음');
+    assert(api.apiLockPerson('7100', true).lockedBy, '담당자는 넘겨받기 불가');
+    throwsMsg(() => api.apiSavePerson('7100', { note2: 'x' }), /김도현님이 .*수정 중/);
+    state.user = 'kim@x.com';
+    api.apiUnlockPerson('7100');
+    state.user = 'choi@x.com';
+    assert(api.apiLockPerson('7100').ok, '닫으면 다른 사람이 열 수 있음');
+    assert.strictEqual(api.apiSavePerson('7100', { note2: '2차' }, { __name: '잠금시험', note2: '' }).personPatch.note2, '2차');
+    state.user = 'kim@x.com';
+    assert(api.apiLockPerson('7100').ok, '저장하면 잠금이 풀림');
+    state.user = 'lead@x.com';
+    const t = api.apiLockPerson('7100', true);
+    assert(t.ok && t.took === '김도현', '총괄은 넘겨받기');
+    state.user = 'kim@x.com';
+    assert.strictEqual(api.apiLockPerson('7100').lockedBy, '정해린', '넘겨준 사람은 다시 열 수 없음');
+    throwsMsg(() => api.apiSavePerson('7100', { note1: '늦은 저장' }), /정해린님이 .*수정 중/);
+  });
+}
+
 /* ---------- 4-1. 체크한 대상자 한 번에 삭제 ---------- */
 {
   const { api, ss, state } = makeEnv();

@@ -176,7 +176,8 @@ window.MockApi = (function () {
   const curYear = () => viewYears[me] || settings.year;
   const applyYear = () => { const st = stores[curYear()]; people = st.people; logs = st.logs; events = st.events; };
   const years = () => Object.keys(stores).sort((a, b) => b - a);
-  let closed = ['2025']; // 예시: 지난 연도는 마감된 상태
+  let closed = ['2025'];
+  const editLocks = {}; // 수정 중 잠금 (실제 서버는 150초 뒤 자동 해제) // 예시: 지난 연도는 마감된 상태
   const yNotices = () => sortNotices().filter(n => !n.year || n.year === curYear());
   const yRules = () => rules.filter(r => !r.year || r.year === curYear());
 
@@ -236,6 +237,8 @@ window.MockApi = (function () {
     delay: { apiAssignPeople: 800, apiUploadFile: 900, apiApplyPermissions: 1200, apiSavePerson: 700, apiAddLog: 600, apiSaveNotice: 700, apiSaveRule: 700, apiAddNoticeComment: 500, apiDeleteFile: 600 },
     users: () => staff.map(p => ({ email: p.email, name: p.name, role: p.role + (p.admin ? '·관리자' : '') })),
     setUser: email => { me = email; },
+    // 예시 화면에서 보는 사람을 바꾸면 앞사람의 수정 중 잠금은 비운다 (실제로는 각자 다른 브라우저)
+    clearLocks: () => { Object.keys(editLocks).forEach(k => delete editLocks[k]); },
     now: () => NOW,
 
     apiBootstrap() {
@@ -254,10 +257,20 @@ window.MockApi = (function () {
       };
     },
 
+    apiLockPerson(id, force) {
+      const m = meInfo(); const k = curYear() + ':' + id; const cur = editLocks[k];
+      if (cur && cur.email !== m.email && !(force && lead(m))) return { lockedBy: cur.name, since: cur.since };
+      const took = cur && cur.email !== m.email ? cur.name : '';
+      editLocks[k] = { email: m.email, name: m.name, since: cur && !took ? cur.since : stamp().slice(11, 16) };
+      return { ok: true, took };
+    },
+    apiUnlockPerson(id) { const m = meInfo(); const k = curYear() + ':' + id; if (editLocks[k] && editLocks[k].email === m.email) delete editLocks[k]; return { ok: true }; },
     apiSavePerson(id, patch, base) {
       const m = meInfo(); need(m, 'review');
       const cur = people.find(p => p.id === id);
       if (!cur) throw new Error('대상자를 찾을 수 없습니다.');
+      const held = editLocks[curYear() + ':' + id];
+      if (held && held.email !== m.email) throw new Error(`${held.name}님이 ${held.since}부터 수정 중이라 저장하지 않았습니다. 수정이 끝난 뒤 다시 저장해 주세요.`);
       if (!canSee(m, cur)) throw new Error('열람 범위 밖의 대상자입니다.');
       // 실제 서버와 같은 규칙: 화면을 연 뒤 다른 사람이 같은 칸을 먼저 고쳤으면 저장하지 않는다
       if (base) {
@@ -272,6 +285,7 @@ window.MockApi = (function () {
         if (!canEdit(m, cur, c, patch)) throw new Error(`[${c.l}] 칸은 ${c.who === 'lead' ? '총괄·관리자' : c.who === 'second' ? '2차검토 담당자' : c.who === 'assign' ? '총괄' : '담당자'}만 고칠 수 있습니다.`);
       });
       Object.assign(cur, patch, { updated: stamp(), editor: m.name });
+      if (held) delete editLocks[curYear() + ':' + id];
       cur.id = cur.empNo || id;
       return { personPatch: cur, oldId: id };
     },
