@@ -590,9 +590,17 @@ function withDefaults(api) {
     const left = r.people.map(p => p.empNo);
     pick.forEach(e => assert(left.indexOf(e) < 0, e + ' 지워져야 함'));
     ['5003', '5009', '5011', '5014', '5017', '5028'].forEach(e => assert(left.indexOf(e) >= 0, e + ' 남아야 함'));
+    // 시트 행이 데이터만큼만 있을 때(업로드로 늘어난 시트) 전부 지우기: 실제 구글 시트는 고정 행만 남기는 삭제를 막는다
+    const shY = ss.getSheetByName('대상자_' + String(ss.getSheetByName('설정').get(3, 2)));
+    shY.maxRows = shY.getLastRow();
     const all = api.apiDeletePeople(left);
     assert.strictEqual(all.deleted, 23); assert.strictEqual(all.people.length, 0);
-    assert.strictEqual(ss.getSheetByName('대상자_' + String(ss.getSheetByName('설정').get(3, 2))).getLastRow(), 1, '제목 행만 남음');
+    assert.strictEqual(shY.getLastRow(), 1, '제목 행만 남음');
+    assert(shY.getMaxRows() >= 2, '빈 행 하나는 남김');
+    // 한 명만 남았을 때 한 명 삭제도 같은 문제가 없어야 함
+    api.apiImportPeople([{ empNo: '6000', name: '마지막' }]);
+    shY.maxRows = shY.getLastRow();
+    assert.strictEqual(api.apiDeletePerson('6000').people.length, 0);
   });
 }
 

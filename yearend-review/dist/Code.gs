@@ -811,11 +811,21 @@ function apiDeletePerson(id) {
     const sh = peopleSheetOrThrow_(ctx.ss);
     const row = findPersonRow_(sh, colMap_(sh), String(id));
     if (row < 0) throw new Error('대상자를 찾을 수 없습니다.');
+    keepOneRow_(sh, 1);
     sh.deleteRow(row);
   } finally {
     lock.releaseLock();
   }
   return refreshPart_('people');
+}
+
+/**
+ * 구글 시트는 고정 행(제목)만 남기고 나머지 행을 모두 지우는 것을 막는다
+ * ("고정되지 않은 행을 모두 삭제할 수는 없습니다"). 그럴 때는 맨 아래에 빈 행을 하나 덧붙여 둔다.
+ */
+function keepOneRow_(sh, deleting) {
+  const max = sh.getMaxRows();
+  if (max - deleting <= sh.getFrozenRows() || max - deleting < 1) sh.insertRowsAfter(max, 1);
 }
 
 /**
@@ -846,6 +856,7 @@ function apiDeletePeople(ids) {
       if (want[id]) rows.push(i + 2);
     });
     if (!rows.length) throw new Error('대상자를 찾을 수 없습니다. 새로고침해 주세요.');
+    keepOneRow_(sh, rows.length);
     // 아래쪽 묶음부터 지워야 위쪽 행 번호가 밀리지 않는다
     for (let k = rows.length - 1; k >= 0;) {
       let start = rows[k], n = 1;

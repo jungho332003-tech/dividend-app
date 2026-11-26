@@ -16,25 +16,29 @@ function a1ToRC(a1) {
 // 시트 호출 횟수 (최적화 측정용)
 const OPS = { read: 0, write: 0, meta: 0 };
 class Sheet {
-  constructor(name, id) { this.name = name; this.id = id; this.d = []; this.prot = []; }
+  constructor(name, id) { this.name = name; this.id = id; this.d = []; this.prot = []; this.maxRows = 1000; this.frozen = 0; }
   getName() { return this.name; }
   getSheetId() { return this.id; }
   getLastRow() { OPS.meta++; for (let r = this.d.length; r > 0; r--) if ((this.d[r - 1] || []).some(v => v !== '' && v != null)) return r; return 0; }
   getLastColumn() { OPS.meta++; let m = 0; this.d.forEach(row => { for (let c = row.length; c > 0; c--) if (row[c - 1] !== '' && row[c - 1] != null) { m = Math.max(m, c); break; } }); return m; }
-  getMaxRows() { return Math.max(1000, this.d.length); }
+  getMaxRows() { return this.maxRows; }
+  getFrozenRows() { return this.frozen; }
+  setFrozenRows(n) { this.frozen = n; return this; }
+  insertRowsAfter(after, n) { this.d.splice(after, 0, ...Array.from({ length: n }, () => [])); this.maxRows += n; return this; }
   get(r, c) { return (this.d[r - 1] || [])[c - 1] ?? ''; }
-  set(r, c, v) { while (this.d.length < r) this.d.push([]); const row = this.d[r - 1]; while (row.length < c) row.push(''); row[c - 1] = v; }
+  set(r, c, v) { if (r > this.maxRows) this.maxRows = r; /* 시트가 늘어난다 */ while (this.d.length < r) this.d.push([]); const row = this.d[r - 1]; while (row.length < c) row.push(''); row[c - 1] = v; }
   getRange(a, b, nr, nc) {
     if (typeof a === 'string') [a, b, nr, nc] = a1ToRC(a);
     return new Range(this, a, b, nr || 1, nc || 1);
   }
   appendRow(vals) { OPS.write++; const r = this.getLastRow() + 1; vals.forEach((v, i) => this.set(r, i + 1, v)); }
-  deleteRow(r) { this.d.splice(r - 1, 1); }
-  deleteRows(r, n) { this.d.splice(r - 1, n); }
+  // 실제 시트처럼: 고정되지 않은 행을 모두 지울 수는 없다
+  deleteRow(r) { this.deleteRows(r, 1); }
+  deleteRows(r, n) { if (this.maxRows - n <= this.frozen || this.maxRows - n < 1) throw new Error('고정되지 않은 행을 모두 삭제할 수는 없습니다.'); this.d.splice(r - 1, n); this.maxRows -= n; }
   getProtections() { return this.prot; }
   protect() { const p = { warn: false, eds: [], setDescription() { return p; }, setWarningOnly(w) { p.warn = w; return p; }, isWarningOnly() { return p.warn; }, remove: () => { this.prot = this.prot.filter(x => x !== p); }, addEditor(e) { p.eds.push(e); }, addEditors(l) { p.eds.push(...l); }, removeEditors() { p.eds = []; }, getEditors() { return p.eds.map(e => ({ getEmail: () => e })); }, canDomainEdit() { return false; }, setDomainEdit() {}, setUnprotectedRanges() {} }; this.prot.push(p); return p; }
 }
-['setColumnWidth', 'setFrozenRows', 'setFrozenColumns', 'setRowHeight', 'hideColumns', 'hideSheet'].forEach(k => { Sheet.prototype[k] = function () { return this; }; });
+['setColumnWidth', 'setFrozenColumns', 'setRowHeight', 'hideColumns', 'hideSheet'].forEach(k => { Sheet.prototype[k] = function () { return this; }; });
 Sheet.prototype.clear = function () { this.d = []; return this; };
 Sheet.prototype.setName = function (n) { this.name = n; return this; };
 // getDataRange는 실제 시트에서 크기 조회 없이 한 번에 읽으므로 크기 조회로 세지 않는다
