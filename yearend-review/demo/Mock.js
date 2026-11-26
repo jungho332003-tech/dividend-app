@@ -325,7 +325,7 @@ window.MockApi = (function () {
       stores[y] = { people: carried, logs: [], events: [] };
       let copied = 0;
       if (o.copyRules) rules.filter(r => r.year === (o.from || settings.year)).forEach(r => { rules.push(Object.assign({}, r, { id: String(++seq), year: y, history: [{ date: stamp().slice(0, 10), editor: m.name, note: `${r.year}년 기준에서 복사` }] })); copied++; });
-      if (o.makeBase !== false) settings.year = y;
+      if (o.makeBase !== false && Number(y) > Number(settings.year)) settings.year = y;
       viewYears[me] = y;
       return { carried: carried.length, copied, data: adminData() };
     },

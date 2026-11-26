@@ -311,7 +311,8 @@ function apiStartYear(opts) {
       }
     }
 
-    if (opts.makeBase !== false) setConfigValue(CFG.YEAR, Number(year));
+    // 지난 연도(예: 진행 중 2026년에 2025년 추가)는 기본 연도로 바꾸지 않는다
+    if (opts.makeBase !== false && Number(year) > Number(ctx.baseYear)) setConfigValue(CFG.YEAR, Number(year));
     try { applyProtections_(getContext()); } catch (e) { /* 보호는 권한 한 번에 적용에서 다시 걸 수 있다 */ }
   } finally {
     lock.releaseLock();

@@ -570,4 +570,21 @@ function withDefaults(api) {
   });
 }
 
+/* ---------- 5. 지난 연도 자료 넣기 (진행 중 연도 앞에 연도 추가) ---------- */
+{
+  const { api, ss, state } = makeEnv();
+  withDefaults(api);
+  state.user = 'owner@x.com';
+  api.initialize();
+  ok('지난 연도를 만들어도 기본 연도는 그대로', () => {
+    const base = String(ss.getSheetByName('설정').get(3, 2));
+    const past = String(Number(base) - 1);
+    const r = api.apiStartYear({ year: past, from: base, carry: false, copyRules: false, makeBase: true });
+    assert.strictEqual(String(r.data.settings.year), base, '기본 연도 유지');
+    assert(ss.getSheetByName('대상자_' + past), '지난 연도 시트 생성');
+    const next = String(Number(base) + 1);
+    assert.strictEqual(String(api.apiStartYear({ year: next, from: base, makeBase: true }).data.settings.year), next, '다음 연도는 기본 연도로');
+  });
+}
+
 console.log(`\n${pass} passed${process.exitCode ? ' (with failures)' : ''}`);

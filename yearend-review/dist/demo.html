@@ -1012,7 +1012,7 @@ window.MockApi = (function () {
       stores[y] = { people: carried, logs: [], events: [] };
       let copied = 0;
       if (o.copyRules) rules.filter(r => r.year === (o.from || settings.year)).forEach(r => { rules.push(Object.assign({}, r, { id: String(++seq), year: y, history: [{ date: stamp().slice(0, 10), editor: m.name, note: `${r.year}년 기준에서 복사` }] })); copied++; });
-      if (o.makeBase !== false) settings.year = y;
+      if (o.makeBase !== false && Number(y) > Number(settings.year)) settings.year = y;
       viewYears[me] = y;
       return { carried: carried.length, copied, data: adminData() };
     },
@@ -1371,7 +1371,7 @@ window.MockApi = (function () {
     document.title = D.team;
     $('#brandTeam').textContent = D.team;
     const yearSel = D.years.length > 1
-      ? `<select class="year-sel" id="yearSel" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${isClosedYear(y) ? ' (마감)' : y === D.baseYear ? '' : ' (지난 연도)'}</option>`).join('')}</select>`
+      ? `<select class="year-sel" id="yearSel" aria-label="귀속연도 선택">${D.years.map(y => `<option value="${esc(y)}" ${y === D.year ? 'selected' : ''}>${esc(y)}년 귀속${isClosedYear(y) ? ' (마감)' : Number(y) < Number(D.baseYear) ? ' (지난 연도)' : ''}</option>`).join('')}</select>`
       : `${esc(D.year)}년 귀속`;
     $('#brandYear').innerHTML = yearSel;
     const role = (D.me.role || (D.me.isAdmin ? '' : '조회')) + (D.me.isAdmin ? (D.me.role ? ' · 관리자' : '관리자') : '');
@@ -2732,14 +2732,21 @@ window.MockApi = (function () {
         }).join('')}</div>
         <p class="hint" style="margin:0 0 12px">새 귀속연도를 시작하면 [대상자_연도]·[응대기록_연도]·[일정_연도] 시트를 새로 만듭니다. 지난 연도 자료는 그대로 남고, 왼쪽 위 연도 선택으로 언제든 볼 수 있습니다. 공지·기준·첨부도 연도별로 나뉘어 보입니다.</p>
         <form class="form" id="yForm" novalidate>
-          <div class="fld"><label for="yYear">새 귀속연도</label><input class="field-in" id="yYear" inputmode="numeric" value="${Number(st.years[0]) + 1}" style="max-width:160px"></div>
+          <div class="fld"><label for="yYear">새 귀속연도</label><input class="field-in" id="yYear" inputmode="numeric" value="${Number(st.years[0]) + 1}" style="max-width:160px" oninput="yearFormHint()"></div>
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="yCarry" checked> ${esc(st.year)}년 대상자 명단 가져오기 (기본 정보·담당자만, 진행 체크·특이사항은 비움)</label>
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="yRules" checked> ${esc(st.year)}년 연말정산 기준 복사 (새 연도에서 고쳐 쓰기)</label>
           <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" class="check" id="yBase" checked> 새 연도를 기본 연도로 지정</label>
+          <p class="hint" id="yPastHint" hidden>지난 연도 자료를 넣는 용도로 보고 ${esc(st.year)}년 명단·기준을 가져오지 않고, 기본 연도도 ${esc(st.year)}년 그대로 둡니다. 만든 뒤 연도 선택에서 바꿔 업로드하세요.</p>
           <div class="msg err" id="yErr" hidden></div>
           <div><button class="btn primary" id="yOk">새 연도 시작</button></div>
         </form>
       </section>`;
+  }
+  /** 지금 기본 연도보다 앞선 연도(지난 자료 넣기)를 입력하면 가져오기·기본 연도 지정을 끈다 */
+  function yearFormHint() {
+    const y = Number($('#yYear').value.trim()), past = /^\d{4}$/.test(String(y)) && y < Number(A.settings.year);
+    ['yCarry', 'yRules', 'yBase'].forEach(id => { const el = $('#' + id); el.disabled = past; if (past) el.checked = false; else if (el.dataset.past) el.checked = true; el.dataset.past = past ? '1' : ''; });
+    $('#yPastHint').hidden = !past;
   }
   function confirmCloseYear(y, close) {
     openModal(close
